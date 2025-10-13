@@ -72,11 +72,6 @@ func (h *Handler) HandleEvent(evt interface{}, client *whatsmeow.Client) {
 
 // handleMessage processes incoming messages
 func (h *Handler) handleMessage(evt *events.Message, client *whatsmeow.Client) {
-	// Skip messages sent before bot started
-	if evt.Info.Timestamp.Before(h.botStartTime) {
-		return
-	}
-
 	msg := evt.Message
 	if msg == nil {
 		return
@@ -97,17 +92,25 @@ func (h *Handler) handleMessage(evt *events.Message, client *whatsmeow.Client) {
 		Timestamp:   evt.Info.Timestamp.In(h.timezone),
 	}
 
-	// Save to database
+	// Save to database (ALWAYS save, even if message is from before bot started)
 	if err := h.saveMessage(message, evt.Info.Chat, client); err != nil {
 		h.logger.Error("Failed to save message", "error", err)
 	}
 
-	// Check for @everyone mentions (before command processing)
+	// Skip command processing for messages sent before bot started
+	if evt.Info.Timestamp.Before(h.botStartTime) {
+		h.logger.Debug("Message saved but skipping command processing (sent before bot started)",
+			"timestamp", evt.Info.Timestamp,
+			"bot_start_time", h.botStartTime)
+		return
+	}
+
+	// Check for @everyone mentions (only for new messages)
 	if h.containsEveryoneMention(content) && evt.Info.IsGroup {
 		h.handleEveryoneCommand(evt.Info.Chat, client)
 	}
 
-	// Process commands if from authorized users
+	// Process commands if from authorized users (only for new messages)
 	if h.isAuthorized(evt.Info) && h.isCommand(content) {
 		h.handleCommand(content, evt.Info, client)
 	}
@@ -120,11 +123,71 @@ func (h *Handler) extractMessageContent(msg *waE2E.Message) string {
 	}
 
 	if extMsg := msg.GetExtendedTextMessage(); extMsg != nil {
-		return extMsg.GetText()
+		baseText := extMsg.GetText()
+
+		// Check if this message is replying to another message
+		if contextInfo := extMsg.GetContextInfo(); contextInfo != nil {
+			if quotedMsg := contextInfo.GetQuotedMessage(); quotedMsg != nil {
+				quotedText := h.extractQuotedMessageText(quotedMsg)
+				if baseText != "" && quotedText != "" {
+					return baseText + " [respondendo a] '" + quotedText + "'"
+				}
+				if baseText != "" {
+					return baseText
+				}
+				if quotedText != "" {
+					return "[respondendo a] '" + quotedText + "'"
+				}
+			}
+		}
+
+		return baseText
 	}
 
 	// Handle other message types as needed
 	return ""
+}
+
+// extractQuotedMessageText extracts text from a quoted message
+func (h *Handler) extractQuotedMessageText(msg *waE2E.Message) string {
+	if msg.GetConversation() != "" {
+		return msg.GetConversation()
+	}
+
+	if extMsg := msg.GetExtendedTextMessage(); extMsg != nil {
+		return extMsg.GetText()
+	}
+
+	if imgMsg := msg.GetImageMessage(); imgMsg != nil {
+		if caption := imgMsg.GetCaption(); caption != "" {
+			return "[Image] " + caption
+		}
+		return "[Image]"
+	}
+
+	if videoMsg := msg.GetVideoMessage(); videoMsg != nil {
+		if caption := videoMsg.GetCaption(); caption != "" {
+			return "[Video] " + caption
+		}
+		return "[Video]"
+	}
+
+	if audioMsg := msg.GetAudioMessage(); audioMsg != nil {
+		return "[Audio]"
+	}
+
+	if docMsg := msg.GetDocumentMessage(); docMsg != nil {
+		if title := docMsg.GetTitle(); title != "" {
+			return "[Document] " + title
+		}
+		return "[Document]"
+	}
+
+	if stickerMsg := msg.GetStickerMessage(); stickerMsg != nil {
+		return "[Sticker]"
+	}
+
+	return "[Unknown message type]"
 }
 
 // getSenderName gets the sender name for a message
@@ -415,29 +478,26 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, info types
 
 // Helper methods for sending messages
 func (h *Handler) handleInfoCommand(info types.MessageInfo, client *whatsmeow.Client) {
-	infoText := `Bot mantido por *Matheus Araújo*!
-
+	infoText := `
+ℹ️ *ProfetaBOT:*
 Resume mensagens via Google Gemini 2.5 Flash
 
 *Comandos:*
 - --resuma <número> → Resume mensagens do chat atual
 - -r <número> → Forma abreviada
-- --resumir-grupo <id> <número> → Resume mensagens de um grupo específico (via DM)
-- -rg <id> <número> → Forma abreviada
-- --listar-grupos → Lista grupos disponíveis para resumo
-- -lg → Forma abreviada
 - --info → Informações do bot
 - --version → Versão do bot
 
 *Opções de Resumo:*
-- --curto ou -c → Resumo curto
-- --medio ou -m → Resumo médio (padrão)
+- --curto ou -c → Resumo curto (padrão)
+- --medio ou -m → Resumo médio
 - --longo ou -l → Resumo longo
 - --clt → Personalidade CLT
 
 *Exemplos:*
-- --resuma 50 --longo → Resumo longo 50 mensagens
-- -r 20 -c → Resumo curto 20 mensagens
+- -r 15 → Resumo curto de 15 mensagens
+- --resuma 50 --longo → Resumo longo de 50 mensagens
+- -r 5000 --clt → Resumo com personalidade CLT de 5000 mensagens
 `
 
 	h.sendMessage(client, info.Chat, infoText)
@@ -448,7 +508,7 @@ func (h *Handler) handleHelpCommand(info types.MessageInfo, client *whatsmeow.Cl
 }
 
 func (h *Handler) handleVersionCommand(info types.MessageInfo, client *whatsmeow.Client) {
-	h.sendMessage(client, info.Chat, "🤖 WhatsApp Summarizer Bot v2.0 - Refactored Edition")
+	h.sendMessage(client, info.Chat, "ℹ️ ProfetaBOT v2.0")
 }
 
 // handleListGroupsCommand lists all groups the bot has messages from that are common with the user
