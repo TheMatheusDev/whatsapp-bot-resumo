@@ -106,8 +106,16 @@ func (h *Handler) handleMessage(evt *events.Message, client *whatsmeow.Client) {
 	}
 
 	// Check for @everyone mentions (only for new messages)
-	if h.containsEveryoneMention(content) && evt.Info.IsGroup {
-		h.handleEveryoneCommand(evt.Info.Chat, client)
+	// Extract only the current message text (without quoted message) for @everyone check
+	currentMessageText := h.extractCurrentMessageText(msg)
+	if h.containsEveryoneMention(currentMessageText) && evt.Info.IsGroup {
+		// Check if user is authorized to use @everyone
+		senderName := h.getSenderName(evt.Info)
+		if h.isEveryoneAdmin(senderName) {
+			h.handleEveryoneCommand(evt.Info.Chat, client)
+		} else {
+			h.logger.Info("Unauthorized @everyone attempt", "sender", senderName)
+		}
 	}
 
 	// Process commands if from authorized users (only for new messages)
@@ -188,6 +196,20 @@ func (h *Handler) extractQuotedMessageText(msg *waE2E.Message) string {
 	}
 
 	return "[Unknown message type]"
+}
+
+// extractCurrentMessageText extracts only the current message text without quoted message info
+// This is used for command processing and mention detection
+func (h *Handler) extractCurrentMessageText(msg *waE2E.Message) string {
+	if msg.GetConversation() != "" {
+		return msg.GetConversation()
+	}
+
+	if extMsg := msg.GetExtendedTextMessage(); extMsg != nil {
+		return extMsg.GetText()
+	}
+
+	return ""
 }
 
 // getSenderName gets the sender name for a message
@@ -283,6 +305,27 @@ func (h *Handler) isAuthorized(info types.MessageInfo) bool {
 	}
 
 	// Group not whitelisted
+	return false
+}
+
+// isEveryoneAdmin checks if the user is authorized to use @everyone
+func (h *Handler) isEveryoneAdmin(senderName string) bool {
+	// If no admins configured, allow everyone (backward compatibility)
+	if len(h.config.WhatsApp.EveryoneAdmins) == 0 {
+		return true
+	}
+
+	// Normalize sender name for comparison (lowercase and trim)
+	normalizedSender := strings.ToLower(strings.TrimSpace(senderName))
+
+	// Check if sender is in the admin list
+	for _, admin := range h.config.WhatsApp.EveryoneAdmins {
+		normalizedAdmin := strings.ToLower(strings.TrimSpace(admin))
+		if normalizedSender == normalizedAdmin {
+			return true
+		}
+	}
+
 	return false
 }
 

@@ -39,6 +39,7 @@ type WhatsAppConfig struct {
 	GroupWhitelist []string `json:"group_whitelist"`
 	UserBlacklist  []string `json:"user_blacklist"`
 	GroupBlacklist []string `json:"group_blacklist"`
+	EveryoneAdmins []string `json:"everyone_admins"`
 }
 
 // BotConfig holds bot behavior configuration
@@ -78,6 +79,7 @@ func Load() (*Config, error) {
 			GroupWhitelist: getEnvSlice("GROUP_WHITELIST", []string{}),
 			UserBlacklist:  getEnvSlice("USER_BLACKLIST", []string{}),
 			GroupBlacklist: getEnvSlice("GROUP_BLACKLIST", []string{}),
+			EveryoneAdmins: getEnvSlice("EVERYONE_ADMINS", []string{}),
 		},
 		Bot: BotConfig{
 			Timezone:      getEnv("TIMEZONE", "GMT-3"),
