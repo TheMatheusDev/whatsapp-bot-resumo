@@ -57,7 +57,7 @@ func (c *Cache) SetGroupName(chatID, name string) {
 		CachedAt: time.Now(),
 	}
 
-	c.logger.Debug("Cached group name", "chat_id", chatID, "name", name)
+	c.logger.Debug("Cached group name", "chat_id", chatID, "|", name)
 }
 
 // Clear clears all cache entries
