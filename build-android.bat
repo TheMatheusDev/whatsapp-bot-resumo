@@ -12,7 +12,9 @@ set CGO_ENABLED=1
 set GOOS=android
 set GOARCH=arm64
 
-echo Verificando se o compilador existe...
+REM Apaga o binário antigo se existir
+if exist ./out/whatsapp-summarizer-android-arm64 del /f /q ./out/whatsapp-summarizer-android-arm64
+
 if exist "%CC%" (
     echo Compilador encontrado!
 ) else (
