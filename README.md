@@ -173,7 +173,7 @@ Com a nova estrutura, contribuições são mais fáceis:
 
 ### Comandos de Resumo:
 
-- `--resuma <num>` ou `-r <num>`: Resume últimas N mensagens
+- `--resuma <num>` ou `-r <num>`: Resume últimas N mensagens do chat atual
 - `--info` ou `-i`: Informações do bot
 - `--help` ou `-h`: Ajuda
 - `--version` ou `-v`: Versão
@@ -185,9 +185,20 @@ Com a nova estrutura, contribuições são mais fáceis:
 - `--longo` ou `-l`: Resumo longo
 - `--clt`: Usa personalidade CLT
 
+### Exemplos de Uso:
+
+```
+# Resumir chat atual
+-r 50 --longo
+
+# Resumir com personalidade CLT
+-r 200 --clt
+```
+
 ### Funcionalidades Especiais:
 
-- `@everyone`, `@todos` ou `@here`: Menciona todos os membros do grupo
+- **Menção @everyone**:
+  - `@everyone`, `@todos` ou `@here`: Menciona todos os membros do grupo
   - Funciona automaticamente quando detectado em qualquer mensagem
   - Disponível apenas em grupos
   - Registra a ação no banco de dados
@@ -195,8 +206,10 @@ Com a nova estrutura, contribuições são mais fáceis:
 ## 🔒 Segurança
 
 - API keys via variáveis de ambiente
-- Whitelist de usuários/grupos
+- **Mensagens Diretas (DM)**: Abertas para todos - qualquer pessoa pode usar comandos via DM
+- **Grupos**: Whitelist obrigatória - apenas grupos autorizados podem usar comandos
 - Validação de entrada
+- Privacidade: usuários só veem grupos que são membros
 - Rate limiting (planejado)
 
 ---

@@ -246,6 +246,42 @@ func (s *Service) GetDirectMessages(chatID string, count int) ([]types.Message, 
 	return messages, nil
 }
 
+// GetAllGroups retrieves a list of all groups with their message counts
+func (s *Service) GetAllGroups() ([]types.GroupSummary, error) {
+	query := `
+		SELECT chat_id, COUNT(*) as message_count
+		FROM group_messages
+		WHERE sender NOT LIKE 'ProfetaBOT [VOCÊ]%'
+		GROUP BY chat_id
+		ORDER BY message_count DESC
+	`
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		s.logger.Error("Failed to query groups", "error", err)
+		return nil, fmt.Errorf("failed to query groups: %w", err)
+	}
+	defer rows.Close()
+
+	var groups []types.GroupSummary
+	for rows.Next() {
+		var group types.GroupSummary
+		err := rows.Scan(&group.ChatID, &group.MessageCount)
+		if err != nil {
+			s.logger.Error("Failed to scan group row", "error", err)
+			return nil, fmt.Errorf("failed to scan group row: %w", err)
+		}
+		groups = append(groups, group)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	s.logger.Debug("Retrieved groups", "count", len(groups))
+	return groups, nil
+}
+
 // Ping checks if the database connection is alive
 func (s *Service) Ping() error {
 	return s.db.Ping()

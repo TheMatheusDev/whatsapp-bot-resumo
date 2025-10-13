@@ -31,6 +31,13 @@ type GroupInfo struct {
 	CachedAt time.Time `json:"cached_at"`
 }
 
+// GroupSummary represents a summary of a group's message count
+type GroupSummary struct {
+	ChatID       string `json:"chat_id"`
+	Name         string `json:"name"`
+	MessageCount int    `json:"message_count"`
+}
+
 // AIService defines the interface for AI operations
 type AIService interface {
 	SummarizeMessages(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
@@ -44,6 +51,7 @@ type DatabaseService interface {
 	SaveDirectMessage(msg Message, groupName string) error
 	GetGroupMessages(chatID string, count int) ([]Message, error)
 	GetDirectMessages(chatID string, count int) ([]Message, error)
+	GetAllGroups() ([]GroupSummary, error)
 
 	// Connection management
 	Close() error

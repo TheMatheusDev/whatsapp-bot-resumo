@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -21,27 +22,56 @@ import (
 	"whatsapp-summarizer/pkg/types"
 )
 
-// SimpleLogger implements types.Logger interface
-type SimpleLogger struct{}
+// SimpleLogger implements types.Logger interface with file and console output
+type SimpleLogger struct {
+	logger  *log.Logger
+	logFile *os.File
+}
+
+// NewSimpleLogger creates a new logger that writes to both console and file
+func NewSimpleLogger() (*SimpleLogger, error) {
+	// Create or open log file
+	logFile, err := os.OpenFile("bot_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open log file: %w", err)
+	}
+
+	// Create multi-writer for both console and file
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+
+	logger := log.New(multiWriter, "", log.LstdFlags)
+
+	return &SimpleLogger{
+		logger:  logger,
+		logFile: logFile,
+	}, nil
+}
 
 func (l *SimpleLogger) Debug(msg string, fields ...interface{}) {
-	log.Printf("[DEBUG] %s %v", msg, fields)
+	l.logger.Printf("[DEBUG] %s %v", msg, fields)
 }
 
 func (l *SimpleLogger) Info(msg string, fields ...interface{}) {
-	log.Printf("[INFO] %s %v", msg, fields)
+	l.logger.Printf("[INFO] %s %v", msg, fields)
 }
 
 func (l *SimpleLogger) Warn(msg string, fields ...interface{}) {
-	log.Printf("[WARN] %s %v", msg, fields)
+	l.logger.Printf("[WARN] %s %v", msg, fields)
 }
 
 func (l *SimpleLogger) Error(msg string, fields ...interface{}) {
-	log.Printf("[ERROR] %s %v", msg, fields)
+	l.logger.Printf("[ERROR] %s %v", msg, fields)
 }
 
 func (l *SimpleLogger) Fatal(msg string, fields ...interface{}) {
-	log.Fatalf("[FATAL] %s %v", msg, fields)
+	l.logger.Fatalf("[FATAL] %s %v", msg, fields)
+}
+
+func (l *SimpleLogger) Close() error {
+	if l.logFile != nil {
+		return l.logFile.Close()
+	}
+	return nil
 }
 
 // Bot implements the types.Bot interface
@@ -60,8 +90,14 @@ type Bot struct {
 
 // NewBot creates a new bot instance with dependency injection
 func NewBot() (*Bot, error) {
-	// Create logger
-	logger := &SimpleLogger{}
+	// Create logger with file output
+	logger, err := NewSimpleLogger()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create logger: %w", err)
+	}
+
+	logger.Info("Bot starting up...")
+	logger.Info("Logs will be saved to bot_debug.log")
 
 	// Load configuration
 	cfg, err := config.Load()
@@ -188,6 +224,13 @@ func (b *Bot) Stop() error {
 	// Clear cache
 	if b.cache != nil {
 		b.cache.Clear()
+	}
+
+	// Close logger file
+	if simpleLogger, ok := b.logger.(*SimpleLogger); ok {
+		if err := simpleLogger.Close(); err != nil {
+			log.Printf("Failed to close logger: %v", err)
+		}
 	}
 
 	b.running = false

@@ -206,30 +206,20 @@ func (h *Handler) saveMessage(message wstypes.Message, chat types.JID, client *w
 
 // isAuthorized checks if the user is authorized to use bot commands
 func (h *Handler) isAuthorized(info types.MessageInfo) bool {
-	senderJID := info.Sender.User
-
-	// Owner is always authorized
-	if senderJID == h.config.WhatsApp.OwnerJID {
+	// For direct messages (DMs), everyone is authorized
+	if !info.IsGroup {
 		return true
 	}
 
-	// Check user whitelist
-	for _, allowedUser := range h.config.WhatsApp.UserWhitelist {
-		if senderJID == allowedUser {
+	// For groups, check if the group is whitelisted
+	chatID := info.Chat.User
+	for _, allowedGroup := range h.config.WhatsApp.GroupWhitelist {
+		if chatID == allowedGroup {
 			return true
 		}
 	}
 
-	// Check if in whitelisted group
-	if info.IsGroup {
-		chatID := info.Chat.User
-		for _, allowedGroup := range h.config.WhatsApp.GroupWhitelist {
-			if chatID == allowedGroup {
-				return true
-			}
-		}
-	}
-
+	// Group not whitelisted
 	return false
 }
 
@@ -250,6 +240,10 @@ func (h *Handler) handleCommand(content string, info types.MessageInfo, client *
 	switch command {
 	case "--resuma", "-r":
 		h.handleSummarizeCommand(parts[1:], info, client)
+	case "--resumir-grupo", "-rg":
+		h.handleSummarizeGroupCommand(parts[1:], info, client)
+	case "--listar-grupos", "-lg":
+		h.handleListGroupsCommand(info, client)
 	case "--info", "-i":
 		h.handleInfoCommand(info, client)
 	case "--help", "-h":
@@ -426,8 +420,12 @@ func (h *Handler) handleInfoCommand(info types.MessageInfo, client *whatsmeow.Cl
 Resume mensagens via Google Gemini 2.5 Flash
 
 *Comandos:*
-- --resuma <número> → Resume mensagens
+- --resuma <número> → Resume mensagens do chat atual
 - -r <número> → Forma abreviada
+- --resumir-grupo <id> <número> → Resume mensagens de um grupo específico (via DM)
+- -rg <id> <número> → Forma abreviada
+- --listar-grupos → Lista grupos disponíveis para resumo
+- -lg → Forma abreviada
 - --info → Informações do bot
 - --version → Versão do bot
 
@@ -437,10 +435,9 @@ Resume mensagens via Google Gemini 2.5 Flash
 - --longo ou -l → Resumo longo
 - --clt → Personalidade CLT
 
-*Exemplo:*
+*Exemplos:*
 - --resuma 50 --longo → Resumo longo 50 mensagens
 - -r 20 -c → Resumo curto 20 mensagens
-- -r 5000 --clt → Resumo longo 5000 mensagens com personalidade CLT
 `
 
 	h.sendMessage(client, info.Chat, infoText)
@@ -452,6 +449,250 @@ func (h *Handler) handleHelpCommand(info types.MessageInfo, client *whatsmeow.Cl
 
 func (h *Handler) handleVersionCommand(info types.MessageInfo, client *whatsmeow.Client) {
 	h.sendMessage(client, info.Chat, "🤖 WhatsApp Summarizer Bot v2.0 - Refactored Edition")
+}
+
+// handleListGroupsCommand lists all groups the bot has messages from that are common with the user
+func (h *Handler) handleListGroupsCommand(info types.MessageInfo, client *whatsmeow.Client) {
+	// Get all groups from database
+	allGroups, err := h.dbService.GetAllGroups()
+	if err != nil {
+		h.logger.Error("Failed to get groups", "error", err)
+		h.sendErrorMessage(client, info.Chat, "Erro ao listar grupos")
+		return
+	}
+
+	if len(allGroups) == 0 {
+		h.sendMessage(client, info.Chat, "ℹ️ Nenhum grupo encontrado no banco de dados")
+		return
+	}
+
+	// Filter groups to only those the user is a member of
+	var commonGroups []wstypes.GroupSummary
+	// Get the user's phone number (the part before @)
+	// When coming from DM, info.Sender is like 5585123456789@s.whatsapp.net
+	// When in groups, participants are like 5585123456789@lid
+	// We need to compare just the phone number part
+	userPhoneNumber := info.Sender.User
+
+	h.logger.Info("Listing groups for user",
+		"user_full_jid", info.Sender.String(),
+		"user_phone", userPhoneNumber,
+		"user_server", info.Sender.Server,
+		"total_groups", len(allGroups))
+
+	for _, group := range allGroups {
+		groupJID := types.NewJID(group.ChatID, types.GroupServer)
+
+		// Get group info to check if user is a member
+		groupInfo, err := client.GetGroupInfo(groupJID)
+		if err != nil {
+			h.logger.Debug("Failed to get group info", "group_id", group.ChatID, "error", err)
+			continue
+		}
+
+		h.logger.Debug("Checking group",
+			"group_id", group.ChatID,
+			"group_name", groupInfo.Name,
+			"participants_count", len(groupInfo.Participants))
+
+		// Check if user is a participant in this group
+		isUserInGroup := false
+		for _, participant := range groupInfo.Participants {
+			// Get just the phone number from participant JID
+			// participant.JID could be like 5585123456789@lid or 5585123456789@s.whatsapp.net
+			participantPhone := participant.JID.User
+
+			h.logger.Debug("Checking participant",
+				"participant_full_jid", participant.JID.String(),
+				"participant_phone", participantPhone,
+				"user_phone", userPhoneNumber,
+				"matches", participantPhone == userPhoneNumber)
+
+			// Compare just the phone numbers, ignoring the server part
+			if participantPhone == userPhoneNumber {
+				isUserInGroup = true
+				break
+			}
+		}
+
+		h.logger.Info("Group check result",
+			"group_id", group.ChatID,
+			"group_name", groupInfo.Name,
+			"user_in_group", isUserInGroup)
+
+		if isUserInGroup {
+			// Update group name in summary
+			group.Name = groupInfo.Name
+			commonGroups = append(commonGroups, group)
+			// Update cache with correct name
+			h.cache.SetGroupName(group.ChatID, groupInfo.Name)
+		}
+	}
+
+	h.logger.Info("Groups filtering complete",
+		"total_groups", len(allGroups),
+		"common_groups", len(commonGroups))
+
+	if len(commonGroups) == 0 {
+		h.sendMessage(client, info.Chat, "ℹ️ Você não está em nenhum grupo em comum com o bot que tenha mensagens registradas")
+		return
+	}
+
+	// Build message with common groups
+	var groupList strings.Builder
+	groupList.WriteString(fmt.Sprintf("📋 *Grupos em comum (%d):*\n\n", len(commonGroups)))
+
+	for i, group := range commonGroups {
+		groupName := group.Name
+		if groupName == "" || groupName == group.ChatID {
+			groupName = group.ChatID
+		}
+
+		groupList.WriteString(fmt.Sprintf("%d. *%s*\n", i+1, groupName))
+		groupList.WriteString(fmt.Sprintf("   ID: `%s`\n", group.ChatID))
+		groupList.WriteString(fmt.Sprintf("   Mensagens: %d\n\n", group.MessageCount))
+	}
+
+	groupList.WriteString("\n💡 *Para resumir um grupo:*\n")
+	groupList.WriteString("Use: `-rg <id_do_grupo> <quantidade>`\n")
+	groupList.WriteString("Exemplo: `-rg 120363123456789012 50`")
+
+	h.sendMessage(client, info.Chat, groupList.String())
+}
+
+// handleSummarizeGroupCommand handles summarizing a specific group via DM
+func (h *Handler) handleSummarizeGroupCommand(args []string, info types.MessageInfo, client *whatsmeow.Client) {
+	if len(args) < 2 {
+		h.sendErrorMessage(client, info.Chat, "Uso: --resumir-grupo <id_do_grupo> <quantidade> [opções]\nExemplo: -rg 120363123456789012 50 --curto")
+		return
+	}
+
+	groupChatID := args[0]
+
+	// Parse message count
+	count, err := strconv.Atoi(args[1])
+	if err != nil || count <= 0 {
+		h.sendErrorMessage(client, info.Chat, "Número de mensagens inválido")
+		return
+	}
+
+	// Validate count limits
+	if count <= 3 {
+		h.sendErrorMessage(client, info.Chat, "ℹ️ Se acha o engraçadinho, hein?")
+		return
+	}
+
+	if count <= 10 {
+		h.sendErrorMessage(client, info.Chat, "ℹ️ Não faz sentido resumir tão poucas mensagens...")
+		return
+	}
+
+	if count > 9000 {
+		h.sendErrorMessage(client, info.Chat, "ℹ️ Você só pode ta de brincadeira, né?! Escolha um número menor!")
+		return
+	}
+
+	// Parse options
+	opts := wstypes.SummarizeOptions{
+		Count: count,
+		Style: "short", // default
+		Clt:   false,   // default
+	}
+
+	for _, arg := range args[2:] {
+		switch strings.ToLower(arg) {
+		case "--curto", "-c":
+			opts.Style = "short"
+		case "--medio", "-m":
+			opts.Style = "medium"
+		case "--longo", "-l":
+			opts.Style = "long"
+		case "--clt":
+			opts.Clt = true
+		}
+	}
+
+	// Start summarization in goroutine
+	go h.performGroupSummarization(groupChatID, opts, info, client)
+}
+
+// performGroupSummarization performs the actual summarization for a specific group
+func (h *Handler) performGroupSummarization(groupChatID string, opts wstypes.SummarizeOptions, info types.MessageInfo, client *whatsmeow.Client) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*3)
+	defer cancel()
+
+	// Get group name for display
+	groupName := groupChatID
+	if cachedName, exists := h.cache.GetGroupName(groupChatID); exists {
+		groupName = cachedName
+	}
+
+	// Send initial "reading messages..." message
+	loadingMessage := fmt.Sprintf("ℹ️ Lendo %d mensagens do grupo *%s*...", opts.Count, groupName)
+	msgResp, err := client.SendMessage(context.Background(), info.Chat, &waE2E.Message{
+		Conversation: proto.String(loadingMessage),
+	})
+	if err != nil {
+		h.logger.Error("Failed to send loading message", "error", err)
+		h.sendErrorMessage(client, info.Chat, "Erro ao enviar mensagem")
+		return
+	}
+
+	// Get messages from database for the specified group
+	messages, err := h.dbService.GetGroupMessages(groupChatID, opts.Count)
+	if err != nil {
+		h.logger.Error("Failed to get group messages", "error", err, "group_id", groupChatID)
+		// Edit the loading message to show error
+		editMsg := client.BuildEdit(info.Chat, msgResp.ID, &waE2E.Message{
+			Conversation: proto.String("❌ Erro ao buscar mensagens do grupo"),
+		})
+		client.SendMessage(context.Background(), info.Chat, editMsg)
+		return
+	}
+
+	if len(messages) == 0 {
+		// Edit the loading message to show no messages found
+		editMsg := client.BuildEdit(info.Chat, msgResp.ID, &waE2E.Message{
+			Conversation: proto.String(fmt.Sprintf("ℹ️ Nenhuma mensagem encontrada para o grupo %s", groupName)),
+		})
+		client.SendMessage(context.Background(), info.Chat, editMsg)
+		return
+	}
+
+	// Generate summary
+	summary, err := h.aiService.SummarizeMessages(ctx, messages, opts)
+	if err != nil {
+		h.logger.Error("Failed to generate summary", "error", err)
+		// Edit the loading message to show error
+		errorMsg := "❌ Erro ao gerar resumo"
+		if ctx.Err() == context.DeadlineExceeded {
+			errorMsg = "⏱️ Timeout ao gerar resumo - tente com menos mensagens"
+		}
+		editMsg := client.BuildEdit(info.Chat, msgResp.ID, &waE2E.Message{
+			Conversation: proto.String(errorMsg),
+		})
+		client.SendMessage(context.Background(), info.Chat, editMsg)
+		return
+	}
+
+	// Edit the loading message with the final summary
+	finalSummary := fmt.Sprintf("ℹ️ Resumo do grupo *%s* por IA:\n\n%s", groupName, summary)
+	editMsg := client.BuildEdit(info.Chat, msgResp.ID, &waE2E.Message{
+		Conversation: proto.String(finalSummary),
+	})
+
+	_, err = client.SendMessage(context.Background(), info.Chat, editMsg)
+	if err != nil {
+		h.logger.Error("Failed to edit message with summary", "error", err)
+		// Fallback: send summary as new message
+		h.sendMessage(client, info.Chat, finalSummary)
+	}
+
+	h.logger.Info("Group summary completed via DM",
+		"requester", info.Sender.User,
+		"group_id", groupChatID,
+		"group_name", groupName,
+		"message_count", len(messages))
 }
 
 func (h *Handler) sendMessage(client *whatsmeow.Client, chat types.JID, message string) {
