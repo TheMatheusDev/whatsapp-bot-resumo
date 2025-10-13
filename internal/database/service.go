@@ -118,13 +118,13 @@ func (s *Service) prepareStatements() error {
 
 	// Filter out bot messages when retrieving messages for summarization
 	// This excludes all messages sent by the bot itself (ProfetaBOT [VOCÊ])
-	// Order by ASC to get oldest messages first (chronological order)
-	s.getGroupStmt, err = s.db.Prepare(`SELECT id, chat_id, sender, message, message_type, timestamp FROM group_messages WHERE chat_id = ? AND sender NOT LIKE 'ProfetaBOT [VOCÊ]%' ORDER BY timestamp ASC LIMIT ?`)
+	// Order by DESC to get the most recent messages first
+	s.getGroupStmt, err = s.db.Prepare(`SELECT id, chat_id, sender, message, message_type, timestamp FROM group_messages WHERE chat_id = ? AND sender NOT LIKE 'ProfetaBOT [VOCÊ]%' ORDER BY timestamp DESC LIMIT ?`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare getGroupStmt: %w", err)
 	}
 
-	s.getDirectStmt, err = s.db.Prepare(`SELECT id, chat_id, sender, message, message_type, timestamp FROM direct_messages WHERE chat_id = ? AND sender NOT LIKE 'ProfetaBOT [VOCÊ]%' ORDER BY timestamp ASC LIMIT ?`)
+	s.getDirectStmt, err = s.db.Prepare(`SELECT id, chat_id, sender, message, message_type, timestamp FROM direct_messages WHERE chat_id = ? AND sender NOT LIKE 'ProfetaBOT [VOCÊ]%' ORDER BY timestamp DESC LIMIT ?`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare getDirectStmt: %w", err)
 	}
@@ -204,7 +204,12 @@ func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, e
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
-	// Messages are already in chronological order (oldest to newest) from the query
+	// Reverse messages to be in chronological order (oldest to newest)
+	// Query returns DESC (newest first), but we want ASC (oldest first) for AI context
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+
 	s.logger.Debug("Retrieved group messages (bot messages filtered out)", "chat_id", chatID, "count", len(messages))
 	return messages, nil
 }
@@ -241,7 +246,12 @@ func (s *Service) GetDirectMessages(chatID string, count int) ([]types.Message, 
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
-	// Messages are already in chronological order (oldest to newest) from the query
+	// Reverse messages to be in chronological order (oldest to newest)
+	// Query returns DESC (newest first), but we want ASC (oldest first) for AI context
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+
 	s.logger.Debug("Retrieved direct messages (bot messages filtered out)", "chat_id", chatID, "count", len(messages))
 	return messages, nil
 }
