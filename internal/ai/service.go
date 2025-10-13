@@ -2,7 +2,9 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -152,6 +154,9 @@ func (s *Service) generateContent(ctx context.Context, prompt string) (string, e
 		return "", fmt.Errorf("failed to generate content: %w", err)
 	}
 
+	// Save the entire API response to a file for debugging
+	s.saveAPIResponse(resp)
+
 	// Extract response content
 	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
 		return "", fmt.Errorf("empty response from Gemini API")
@@ -169,6 +174,46 @@ func (s *Service) generateContent(ctx context.Context, prompt string) (string, e
 
 	s.logger.Info("Successfully generated summary", "length", len(content))
 	return content, nil
+}
+
+// saveAPIResponse saves the Gemini API response to a file for debugging
+func (s *Service) saveAPIResponse(resp *genai.GenerateContentResponse) {
+	// Create a file to save the response
+	file, err := os.Create("APIresponse.txt")
+	if err != nil {
+		s.logger.Error("Failed to create APIresponse.txt", "error", err)
+		return
+	}
+	defer file.Close()
+
+	// Write timestamp
+	fmt.Fprintf(file, "=== Gemini API Response - %s ===\n\n", time.Now().Format(time.RFC3339))
+
+	// Write the full response as JSON for complete inspection
+	responseJSON, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		s.logger.Error("Failed to marshal response to JSON", "error", err)
+		fmt.Fprintf(file, "Error marshaling response: %v\n", err)
+		return
+	}
+
+	fmt.Fprintf(file, "Full Response (JSON):\n%s\n\n", string(responseJSON))
+
+	// Write detailed breakdown
+	fmt.Fprintf(file, "=== Detailed Breakdown ===\n")
+	fmt.Fprintf(file, "Number of Candidates: %d\n", len(resp.Candidates))
+
+	for i, candidate := range resp.Candidates {
+		fmt.Fprintf(file, "\n--- Candidate %d ---\n", i)
+		fmt.Fprintf(file, "Number of Parts: %d\n", len(candidate.Content.Parts))
+
+		for j, part := range candidate.Content.Parts {
+			fmt.Fprintf(file, "\nPart %d:\n", j)
+			fmt.Fprintf(file, "Text: %s\n", part.Text)
+		}
+	}
+
+	s.logger.Info("API response saved to APIresponse.txt")
 }
 
 // Close closes the Gemini client
