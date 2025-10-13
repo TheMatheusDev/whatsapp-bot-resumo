@@ -1,0 +1,189 @@
+package whatsapp
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/mdp/qrterminal/v3"
+	"go.mau.fi/whatsmeow"
+	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
+	"go.mau.fi/whatsmeow/store/sqlstore"
+	"go.mau.fi/whatsmeow/types"
+	waLog "go.mau.fi/whatsmeow/util/log"
+	"google.golang.org/protobuf/proto"
+
+	wstypes "whatsapp-summarizer/pkg/types"
+)
+
+// Service implements the WhatsAppService interface
+type Service struct {
+	client       *whatsmeow.Client
+	container    *sqlstore.Container
+	logger       wstypes.Logger
+	eventHandler func(interface{})
+	connected    bool
+}
+
+// NewService creates a new WhatsApp service
+func NewService(container *sqlstore.Container, logger wstypes.Logger, eventHandler func(interface{})) (*Service, error) {
+	if container == nil {
+		return nil, fmt.Errorf("sqlstore container is required")
+	}
+
+	return &Service{
+		container:    container,
+		logger:       logger,
+		eventHandler: eventHandler,
+	}, nil
+}
+
+// Initialize initializes the WhatsApp client
+func (s *Service) Initialize(ctx context.Context) error {
+	deviceStore, err := s.container.GetFirstDevice(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get device store: %w", err)
+	}
+
+	clientLog := waLog.Stdout("WhatsApp", "WARN", true)
+	s.client = whatsmeow.NewClient(deviceStore, clientLog)
+
+	// Add event handler
+	if s.eventHandler != nil {
+		s.client.AddEventHandler(s.eventHandler)
+	}
+
+	s.logger.Info("WhatsApp client initialized")
+	return nil
+}
+
+// Connect connects to WhatsApp
+func (s *Service) Connect(ctx context.Context) error {
+	if s.client == nil {
+		return fmt.Errorf("client not initialized")
+	}
+
+	if s.client.Store.ID == nil {
+		// No ID stored, new login
+		s.logger.Info("No stored session, starting new login")
+		return s.performNewLogin(ctx)
+	}
+
+	// Already logged in, just connect
+	s.logger.Info("Using existing session, connecting...")
+	err := s.client.Connect()
+	if err != nil {
+		return fmt.Errorf("failed to connect with existing session: %w", err)
+	}
+
+	s.connected = true
+	s.logger.Info("Connected to WhatsApp successfully")
+	return nil
+}
+
+// performNewLogin handles the QR code login process
+func (s *Service) performNewLogin(ctx context.Context) error {
+	qrChan, err := s.client.GetQRChannel(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get QR channel: %w", err)
+	}
+
+	err = s.client.Connect()
+	if err != nil {
+		return fmt.Errorf("failed to connect for QR login: %w", err)
+	}
+
+	s.logger.Info("Waiting for QR code scan...")
+	for evt := range qrChan {
+		switch evt.Event {
+		case "code":
+			s.logger.Info("QR code received, please scan with WhatsApp")
+			fmt.Println("Scan this QR code with WhatsApp:")
+			qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
+		case "success":
+			s.logger.Info("QR code login successful")
+			s.connected = true
+			return nil
+		case "timeout":
+			return fmt.Errorf("QR code login timeout")
+		default:
+			s.logger.Debug("QR login event", "event", evt.Event)
+		}
+	}
+
+	return fmt.Errorf("QR code login failed")
+}
+
+// SendMessage sends a text message to a chat
+func (s *Service) SendMessage(ctx context.Context, chatID types.JID, message string) error {
+	if s.client == nil {
+		return fmt.Errorf("client not initialized")
+	}
+
+	if !s.connected {
+		return fmt.Errorf("not connected to WhatsApp")
+	}
+
+	msg := &waE2E.Message{
+		Conversation: proto.String(message),
+	}
+
+	_, err := s.client.SendMessage(ctx, chatID, msg)
+	if err != nil {
+		s.logger.Error("Failed to send message", "error", err, "chat_id", chatID.String())
+		return fmt.Errorf("failed to send message: %w", err)
+	}
+
+	s.logger.Debug("Message sent successfully", "chat_id", chatID.String())
+	return nil
+}
+
+// SendEditMessage sends an edit to an existing message
+func (s *Service) SendEditMessage(ctx context.Context, chatID types.JID, messageID types.MessageID, newContent string) error {
+	if s.client == nil {
+		return fmt.Errorf("client not initialized")
+	}
+
+	if !s.connected {
+		return fmt.Errorf("not connected to WhatsApp")
+	}
+
+	editMsg := s.client.BuildEdit(chatID, messageID, &waE2E.Message{
+		Conversation: proto.String(newContent),
+	})
+
+	_, err := s.client.SendMessage(ctx, chatID, editMsg)
+	if err != nil {
+		s.logger.Error("Failed to send edit message", "error", err, "chat_id", chatID.String())
+		return fmt.Errorf("failed to send edit message: %w", err)
+	}
+
+	s.logger.Debug("Edit message sent successfully", "chat_id", chatID.String())
+	return nil
+}
+
+// Disconnect disconnects from WhatsApp
+func (s *Service) Disconnect() {
+	if s.client != nil {
+		s.client.Disconnect()
+		s.connected = false
+		s.logger.Info("Disconnected from WhatsApp")
+	}
+}
+
+// IsConnected returns the connection status
+func (s *Service) IsConnected() bool {
+	return s.connected && s.client != nil && s.client.IsConnected()
+}
+
+// GetClient returns the underlying WhatsApp client (for handlers that need direct access)
+func (s *Service) GetClient() *whatsmeow.Client {
+	return s.client
+}
+
+// AddEventHandler adds an event handler to the client
+func (s *Service) AddEventHandler(handler func(interface{})) {
+	if s.client != nil {
+		s.client.AddEventHandler(handler)
+	}
+}

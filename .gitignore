@@ -1,0 +1,42 @@
+# Binarios compilados
+whatsapp-summarizer-android-arm64
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Base de datos SQLite
+*.db
+work.db
+
+# Archivos de configuración con datos sensibles
+.env
+config.local.go
+
+# Logs
+*.log
+
+# Archivos temporales del sistema
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+
+# Archivos de Go
+*.test
+*.out
+
+# Carpetas de despliegue específicas
+OrangePiDeploy/
+
+# Archivos de backup
+*.bak
+*.backup
+
+# Archivos de caché
+.cache/
+*.txt
+
+Media/
+code/config.go
+out/
