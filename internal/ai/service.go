@@ -176,10 +176,10 @@ func (s *Service) generateContent(ctx context.Context, prompt string) (string, e
 
 // saveAPIResponse saves the Gemini API response to a file for debugging
 func (s *Service) saveAPIResponse(resp *genai.GenerateContentResponse) {
-	// Create a file to save the response
-	file, err := os.Create("APIresponse.txt")
+	// Open file in append mode, create if doesn't exist
+	file, err := os.OpenFile("APIresponse.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		s.logger.Error("Failed to create APIresponse.txt", "error", err)
+		s.logger.Error("Failed to open APIresponse.txt", "error", err)
 		return
 	}
 	defer file.Close()
