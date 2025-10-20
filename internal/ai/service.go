@@ -72,7 +72,12 @@ func (s *Service) SummarizeMessages(ctx context.Context, messages []types.Messag
 	systemPrompt := s.buildSystemPrompt(opts)
 
 	// Build the user prompt
-	userPrompt := fmt.Sprintf("Resuma as seguintes mensagens:\n%s", messagesStr)
+	var userPrompt string
+	if opts.Question != "" {
+		userPrompt = fmt.Sprintf("Responda a pergunta a seguir primeiro baseado nas msgs: \"%s\"\n\nEntão resuma as msgs:\n%s", opts.Question, messagesStr)
+	} else {
+		userPrompt = fmt.Sprintf("Resuma as seguintes mensagens:\n%s", messagesStr)
+	}
 
 	// Combine prompts
 	fullPrompt := fmt.Sprintf("%s\n\n%s", systemPrompt, userPrompt)
@@ -122,7 +127,13 @@ func (s *Service) buildSystemPrompt(opts types.SummarizeOptions) string {
 		lengthPrompt = "O resumo deve ser de tamanho médio e equilibrado."
 	}
 
-	return fmt.Sprintf("%s\n%s", personality, lengthPrompt)
+	// Add question-specific instructions if a question is provided
+	var questionPrompt string
+	if opts.Question != "" {
+		questionPrompt = "\n\nALÉM DO RESUMO, você deve responder à pergunta fornecida pelo usuário. A resposta deve ser baseada nas mensagens fornecidas. Estruture sua resposta da seguinte forma:\n1. Primeiro, forneça o resumo das mensagens\n2. Depois, responda especificamente à pergunta do usuário\n\nSepare claramente o resumo da resposta à pergunta usando uma linha ou marcador visual."
+	}
+
+	return fmt.Sprintf("%s\n%s%s", personality, lengthPrompt, questionPrompt)
 }
 
 // generateContent calls the Gemini API to generate content

@@ -348,6 +348,8 @@ func (h *Handler) handleCommand(content string, info types.MessageInfo, client *
 		h.handleSummarizeCommand(parts[1:], info, client)
 	case "-clt", "!clt", "--clt", "/clt":
 		h.handleSummarizeCltCommand(parts[1:], info, client)
+	case "--pergunte", "-p", "!pergunte", "!p", "/pergunte", "/p":
+		h.handleAskQuestionCommand(parts[1:], info, client)
 	case "--resumir-grupo", "-rg", "!resumir-grupo", "!rg", "/resumir-grupo", "/rg":
 		h.handleSummarizeGroupCommand(parts[1:], info, client)
 	case "--listar-grupos", "-lg", "!listar-grupos", "!lg", "/listar-grupos", "/lg":
@@ -458,6 +460,79 @@ func (h *Handler) handleSummarizeCltCommand(args []string, info types.MessageInf
 	go h.performSummarization(opts, info, client)
 }
 
+// handleAskQuestionCommand handles the --pergunte/-p command
+func (h *Handler) handleAskQuestionCommand(args []string, info types.MessageInfo, client *whatsmeow.Client) {
+	if len(args) < 2 {
+		h.sendErrorMessage(client, info.Chat, "Uso: -p <número> [opções] <pergunta>\n\nOpções: --clt, --curto, --medio, --longo\n\nExemplos:\n• -p 50 Quem foi o usuário mais ativo?\n• -p 100 --clt Qual foi o assunto principal?\n• -p 200 --longo --clt Houve conflitos?")
+		return
+	}
+
+	// Parse message count
+	count, err := strconv.Atoi(args[0])
+	if err != nil || count <= 0 {
+		h.sendErrorMessage(client, info.Chat, "Número de mensagens inválido")
+		return
+	}
+
+	// Validate count limits
+	if count <= 3 {
+		h.sendErrorMessage(client, info.Chat, "ℹ️ Se acha o engraçadinho, hein?")
+		return
+	}
+
+	if count <= 10 {
+		h.sendErrorMessage(client, info.Chat, "ℹ️ Não faz sentido resumir tão poucas mensagens...")
+		return
+	}
+
+	if count > 9000 {
+		h.sendErrorMessage(client, info.Chat, "ℹ️ Você só pode ta de brincadeira, né?! Escolha um número menor!")
+		return
+	}
+
+	// Parse options and extract question
+	// Check for flags in the remaining args
+	var questionParts []string
+	useClt := false
+	style := "short" // default to medium for questions since they need more context
+
+	for _, arg := range args[1:] {
+		argLower := strings.ToLower(arg)
+		switch argLower {
+		case "--clt":
+			useClt = true
+		case "--curto", "-c":
+			style = "short"
+		case "--medio", "-m":
+			style = "medium"
+		case "--longo", "-l":
+			style = "long"
+		default:
+			// Not a flag, it's part of the question
+			questionParts = append(questionParts, arg)
+		}
+	}
+
+	// Join the remaining args as the question
+	question := strings.Join(questionParts, " ")
+
+	if question == "" {
+		h.sendErrorMessage(client, info.Chat, "ℹ️ Você precisa fazer uma pergunta!")
+		return
+	}
+
+	// Parse options - start with defaults
+	opts := wstypes.SummarizeOptions{
+		Count:    count,
+		Style:    style,
+		Clt:      useClt,
+		Question: question,
+	}
+
+	// Start summarization in goroutine
+	go h.performSummarization(opts, info, client)
+}
+
 // performSummarization performs the actual summarization
 func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, info types.MessageInfo, client *whatsmeow.Client) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*3)
@@ -481,8 +556,15 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, info types
 		if senderName == "" {
 			senderName = info.Sender.User
 		}
-		ownerMessage := fmt.Sprintf("ℹ️ %s requisitou um %s resumo de %d mensagens em %s",
-			senderName, opts.Style, opts.Count, groupName)
+
+		var ownerMessage string
+		if opts.Question != "" {
+			ownerMessage = fmt.Sprintf("ℹ️ %s requisitou um %s resumo de %d mensagens em %s\n❓ Pergunta: %s",
+				senderName, opts.Style, opts.Count, groupName, opts.Question)
+		} else {
+			ownerMessage = fmt.Sprintf("ℹ️ %s requisitou um %s resumo de %d mensagens em %s",
+				senderName, opts.Style, opts.Count, groupName)
+		}
 
 		ownerJID, err := types.ParseJID(h.config.WhatsApp.OwnerJID)
 		if err == nil {
@@ -574,18 +656,22 @@ Resume mensagens via Google Gemini 2.5 Flash
 - --resuma <número> → Resume mensagens do chat atual
 - -r <número> → Forma abreviada
 - -clt <número> → Atalho para resumo CLT
+- -p <número> <pergunta> → Resume e responde uma pergunta
 - --info → Informações do bot
 - --version → Versão do bot
 
 *Opções de Resumo:*
-- --curto ou -c → Resumo curto (padrão)
+- --curto ou -c → Resumo curto
 - --medio ou -m → Resumo médio
 - --longo ou -l → Resumo longo
-- --clt → Personalidade CLT (apenas com -r)
+- --clt → Personalidade CLT (funciona com -r e -p)
 
 *Exemplos:*
 - -r 15 → Resumo curto de 15 mensagens
 - -r 5000 --clt → Resumo com personalidade CLT de 5000 mensagens
+- -p 50 Quem foi o usuário mais ativo? → Resume 50 msgs e responde a pergunta
+- -p 100 --clt Qual foi o assunto principal? → Resume com CLT e responde pergunta
+- -p 200 --longo --clt Houve algum conflito? → Resumo longo CLT + resposta
 `
 
 	h.sendMessage(client, info.Chat, infoText)
