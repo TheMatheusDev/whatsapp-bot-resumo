@@ -331,7 +331,7 @@ func (h *Handler) isEveryoneAdmin(senderName string) bool {
 
 // isCommand checks if a message is a bot command
 func (h *Handler) isCommand(content string) bool {
-	return strings.HasPrefix(content, "--") || strings.HasPrefix(content, "-")
+	return strings.HasPrefix(content, "--") || strings.HasPrefix(content, "-") || strings.HasPrefix(content, "!") || strings.HasPrefix(content, "/")
 }
 
 // handleCommand processes bot commands
@@ -344,19 +344,19 @@ func (h *Handler) handleCommand(content string, info types.MessageInfo, client *
 	command := strings.ToLower(parts[0])
 
 	switch command {
-	case "--resuma", "-r":
+	case "--resuma", "-r", "!resumo", "!resuma", "!r", "/resuma", "/resumo", "/r":
 		h.handleSummarizeCommand(parts[1:], info, client)
-	case "-clt":
+	case "-clt", "!clt", "--clt", "/clt":
 		h.handleSummarizeCltCommand(parts[1:], info, client)
-	case "--resumir-grupo", "-rg":
+	case "--resumir-grupo", "-rg", "!resumir-grupo", "!rg", "/resumir-grupo", "/rg":
 		h.handleSummarizeGroupCommand(parts[1:], info, client)
-	case "--listar-grupos", "-lg":
+	case "--listar-grupos", "-lg", "!listar-grupos", "!lg", "/listar-grupos", "/lg":
 		h.handleListGroupsCommand(info, client)
-	case "--info", "-i":
+	case "--info", "-i", "!info", "!i", "/info", "/i":
 		h.handleInfoCommand(info, client)
-	case "--help", "-h":
+	case "--help", "-h", "!help", "!h", "/help", "/h":
 		h.handleHelpCommand(info, client)
-	case "--version", "-v":
+	case "--version", "-v", "!version", "!v", "/version", "/v":
 		h.handleVersionCommand(info, client)
 	default:
 		h.logger.Debug("Unknown command", "command", command)
@@ -585,9 +585,7 @@ Resume mensagens via Google Gemini 2.5 Flash
 
 *Exemplos:*
 - -r 15 → Resumo curto de 15 mensagens
-- --resuma 50 --longo → Resumo longo de 50 mensagens
 - -r 5000 --clt → Resumo com personalidade CLT de 5000 mensagens
-- -clt 100 → Resumo CLT de 100 mensagens (atalho)
 `
 
 	h.sendMessage(client, info.Chat, infoText)
