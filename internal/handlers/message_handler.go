@@ -410,7 +410,7 @@ func (h *Handler) handleSummarizeCommand(args []string, info types.MessageInfo, 
 			opts.Style = "medium"
 		case "--longo", "-l":
 			opts.Style = "long"
-		case "--clt":
+		case "--clt", "-clt":
 			opts.Clt = true
 		}
 	}
@@ -499,7 +499,7 @@ func (h *Handler) handleAskQuestionCommand(args []string, info types.MessageInfo
 	for _, arg := range args[1:] {
 		argLower := strings.ToLower(arg)
 		switch argLower {
-		case "--clt":
+		case "--clt", "-clt":
 			useClt = true
 		case "--curto", "-c":
 			style = "short"
@@ -841,7 +841,7 @@ func (h *Handler) handleSummarizeGroupCommand(args []string, info types.MessageI
 			opts.Style = "medium"
 		case "--longo", "-l":
 			opts.Style = "long"
-		case "--clt":
+		case "--clt", "-clt":
 			opts.Clt = true
 		}
 	}
