@@ -174,6 +174,7 @@ Com a nova estrutura, contribuições são mais fáceis:
 ### Comandos de Resumo:
 
 - `--resuma <num>` ou `-r <num>`: Resume últimas N mensagens do chat atual
+- `-clt <num>`: Atalho para resumo com personalidade CLT
 - `--info` ou `-i`: Informações do bot
 - `--help` ou `-h`: Ajuda
 - `--version` ou `-v`: Versão
@@ -191,8 +192,14 @@ Com a nova estrutura, contribuições são mais fáceis:
 # Resumir chat atual
 -r 50 --longo
 
-# Resumir com personalidade CLT
+# Resumir com personalidade CLT (forma tradicional)
 -r 200 --clt
+
+# Resumir com personalidade CLT (atalho)
+-clt 100
+
+# Resumir CLT com estilo longo
+-clt 150 --longo
 ```
 
 ### Funcionalidades Especiais:

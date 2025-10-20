@@ -346,6 +346,8 @@ func (h *Handler) handleCommand(content string, info types.MessageInfo, client *
 	switch command {
 	case "--resuma", "-r":
 		h.handleSummarizeCommand(parts[1:], info, client)
+	case "-clt":
+		h.handleSummarizeCltCommand(parts[1:], info, client)
 	case "--resumir-grupo", "-rg":
 		h.handleSummarizeGroupCommand(parts[1:], info, client)
 	case "--listar-grupos", "-lg":
@@ -409,6 +411,47 @@ func (h *Handler) handleSummarizeCommand(args []string, info types.MessageInfo, 
 		case "--clt":
 			opts.Clt = true
 		}
+	}
+
+	// Start summarization in goroutine
+	go h.performSummarization(opts, info, client)
+}
+
+// handleSummarizeCltCommand handles the -clt command (shortcut for -r with --clt flag)
+func (h *Handler) handleSummarizeCltCommand(args []string, info types.MessageInfo, client *whatsmeow.Client) {
+	if len(args) == 0 {
+		h.sendErrorMessage(client, info.Chat, "Número de mensagens não especificado")
+		return
+	}
+
+	// Parse message count
+	count, err := strconv.Atoi(args[0])
+	if err != nil || count <= 0 {
+		h.sendErrorMessage(client, info.Chat, "Número de mensagens inválido")
+		return
+	}
+
+	// Validate count limits (same as legacy code)
+	if count <= 3 {
+		h.sendErrorMessage(client, info.Chat, "ℹ️ Sem tempo para brincadeiras...")
+		return
+	}
+
+	if count <= 10 {
+		h.sendErrorMessage(client, info.Chat, "ℹ️ 10 msgs? Sério? Resuma você mesmo...")
+		return
+	}
+
+	if count > 9000 {
+		h.sendErrorMessage(client, info.Chat, "ℹ️ Tá achando que eu sou seu escravo? Escolha um número menor!	")
+		return
+	}
+
+	// Parse options - CLT is always enabled for this command
+	opts := wstypes.SummarizeOptions{
+		Count: count,
+		Style: "short", // default
+		Clt:   true,    // always enabled for -clt command
 	}
 
 	// Start summarization in goroutine
@@ -530,6 +573,7 @@ Resume mensagens via Google Gemini 2.5 Flash
 *Comandos:*
 - --resuma <número> → Resume mensagens do chat atual
 - -r <número> → Forma abreviada
+- -clt <número> → Atalho para resumo CLT
 - --info → Informações do bot
 - --version → Versão do bot
 
@@ -537,12 +581,13 @@ Resume mensagens via Google Gemini 2.5 Flash
 - --curto ou -c → Resumo curto (padrão)
 - --medio ou -m → Resumo médio
 - --longo ou -l → Resumo longo
-- --clt → Personalidade CLT
+- --clt → Personalidade CLT (apenas com -r)
 
 *Exemplos:*
 - -r 15 → Resumo curto de 15 mensagens
 - --resuma 50 --longo → Resumo longo de 50 mensagens
 - -r 5000 --clt → Resumo com personalidade CLT de 5000 mensagens
+- -clt 100 → Resumo CLT de 100 mensagens (atalho)
 `
 
 	h.sendMessage(client, info.Chat, infoText)
