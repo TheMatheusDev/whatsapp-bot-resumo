@@ -484,9 +484,11 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, info types
 	if err != nil {
 		h.logger.Error("Failed to generate summary", "error", err)
 		// Edit the loading message to show error
-		errorMsg := "❌ Erro ao gerar resumo"
+		errorMsg := ""
 		if ctx.Err() == context.DeadlineExceeded {
 			errorMsg = "⏱️ Timeout ao gerar resumo - tente com menos mensagens"
+		} else {
+			errorMsg = fmt.Sprintf("❌ Erro ao gerar resumo\n\n%s", err.Error())
 		}
 		editMsg := client.BuildEdit(info.Chat, msgResp.ID, &waE2E.Message{
 			Conversation: proto.String(errorMsg),
@@ -767,9 +769,11 @@ func (h *Handler) performGroupSummarization(groupChatID string, opts wstypes.Sum
 	if err != nil {
 		h.logger.Error("Failed to generate summary", "error", err)
 		// Edit the loading message to show error
-		errorMsg := "❌ Erro ao gerar resumo"
+		errorMsg := ""
 		if ctx.Err() == context.DeadlineExceeded {
 			errorMsg = "⏱️ Timeout ao gerar resumo - tente com menos mensagens"
+		} else {
+			errorMsg = fmt.Sprintf("❌ Erro ao gerar resumo\n\n%s", err.Error())
 		}
 		editMsg := client.BuildEdit(info.Chat, msgResp.ID, &waE2E.Message{
 			Conversation: proto.String(errorMsg),
