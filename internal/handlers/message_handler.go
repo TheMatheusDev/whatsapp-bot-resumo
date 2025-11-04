@@ -684,9 +684,9 @@ Resume mensagens via Google Gemini 2.5 Flash
 *Exemplos:*
 - -r 15 → Resumo curto de 15 mensagens
 - -r 5000 --clt → Resumo com personalidade CLT de 5000 mensagens
-- -p 50 Quem foi o usuário mais ativo? → Resume 50 msgs e responde a pergunta
-- -p 100 --clt Qual foi o assunto principal? → Resume com CLT e responde pergunta
-- -p 200 --longo --clt Houve algum conflito? → Resumo longo CLT + resposta
+- -p 50 Como está o humor do grupo? → Resume 50 msgs e responde a pergunta
+- -p 100 --clt Teve alguma treta? → Resume com CLT e responde pergunta
+- -p 200 --longo --clt Carlos surtou? → Resumo longo CLT + resposta
 `
 
 	h.sendMessage(client, info.Chat, infoText)
