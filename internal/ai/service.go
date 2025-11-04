@@ -80,7 +80,7 @@ func (s *Service) SummarizeMessages(ctx context.Context, messages []types.Messag
 	// Build the user prompt
 	var userPrompt string
 	if opts.Question != "" {
-		userPrompt = fmt.Sprintf("Responda a pergunta a seguir primeiro baseado nas msgs: \"%s\"\n\nEntão resuma as msgs:\n%s", opts.Question, messagesStr)
+		userPrompt = fmt.Sprintf("Responda a pergunta a seguir baseado nas msgs: \"%s\"\n\nMensagens:\n%s", opts.Question, messagesStr)
 	} else {
 		userPrompt = fmt.Sprintf("Resuma as seguintes mensagens:\n%s", messagesStr)
 	}
@@ -110,7 +110,7 @@ func (s *Service) SummarizeMessagesWithBackup(ctx context.Context, messages []ty
 	// Build the user prompt
 	var userPrompt string
 	if opts.Question != "" {
-		userPrompt = fmt.Sprintf("Responda a pergunta a seguir primeiro baseado nas msgs: \"%s\"\n\nEntão resuma as msgs:\n%s", opts.Question, messagesStr)
+		userPrompt = fmt.Sprintf("Responda a pergunta a seguir baseado nas msgs: \"%s\"\n\nMensagens:\n%s", opts.Question, messagesStr)
 	} else {
 		userPrompt = fmt.Sprintf("Resuma as seguintes mensagens:\n%s", messagesStr)
 	}
@@ -166,7 +166,7 @@ func (s *Service) buildSystemPrompt(opts types.SummarizeOptions) string {
 	// Add question-specific instructions if a question is provided
 	var questionPrompt string
 	if opts.Question != "" {
-		questionPrompt = "\n\nALÉM DO RESUMO, você deve responder à pergunta fornecida pelo usuário. A resposta deve ser baseada nas mensagens fornecidas. Estruture sua resposta da seguinte forma:\n1. Primeiro, forneça o resumo das mensagens\n2. Depois, responda especificamente à pergunta do usuário\n\nSepare claramente o resumo da resposta à pergunta usando uma linha ou marcador visual."
+		questionPrompt = "\n\nVocê deve responder SOMENTE à pergunta fornecida pelo usuário. NÃO faça um resumo das mensagens. A resposta deve ser baseada nas mensagens fornecidas e ser direta e objetiva, respondendo especificamente o que foi perguntado."
 	}
 
 	return fmt.Sprintf("%s\n%s%s", personality, lengthPrompt, questionPrompt)
