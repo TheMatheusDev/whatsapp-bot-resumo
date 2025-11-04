@@ -29,19 +29,24 @@ Ignore mensagens que são comandos (iniciadas com - ou --).
 
 // Service implements the AIService interface
 type Service struct {
-	client *genai.Client
-	model  string
-	logger types.Logger
+	client      *genai.Client
+	model       string
+	modelBackup string
+	logger      types.Logger
 }
 
 // NewService creates a new AI service
-func NewService(apiKey string, model string, logger types.Logger) (*Service, error) {
+func NewService(apiKey string, model string, modelBackup string, logger types.Logger) (*Service, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
 
 	if model == "" {
 		model = "gemini-2.5-flash" // Default fallback
+	}
+
+	if modelBackup == "" {
+		modelBackup = "gemini-flash-latest" // Default backup
 	}
 
 	ctx := context.Background()
@@ -53,9 +58,10 @@ func NewService(apiKey string, model string, logger types.Logger) (*Service, err
 	}
 
 	return &Service{
-		client: client,
-		model:  model,
-		logger: logger,
+		client:      client,
+		model:       model,
+		modelBackup: modelBackup,
+		logger:      logger,
 	}, nil
 }
 
@@ -85,8 +91,38 @@ func (s *Service) SummarizeMessages(ctx context.Context, messages []types.Messag
 	// Log the full prompt for debugging (optional)
 	s.logger.Debug("Generated full prompt", "prompt", fullPrompt)
 
-	// Generate content using Gemini
-	return s.generateContent(ctx, fullPrompt)
+	// Generate content using Gemini with primary model
+	return s.generateContent(ctx, fullPrompt, s.model)
+}
+
+// SummarizeMessagesWithBackup summarizes messages using the backup model
+func (s *Service) SummarizeMessagesWithBackup(ctx context.Context, messages []types.Message, opts types.SummarizeOptions) (string, error) {
+	if len(messages) == 0 {
+		return "", fmt.Errorf("no messages to summarize")
+	}
+
+	// Build the messages string
+	messagesStr := s.buildMessagesString(messages)
+
+	// Build the system prompt
+	systemPrompt := s.buildSystemPrompt(opts)
+
+	// Build the user prompt
+	var userPrompt string
+	if opts.Question != "" {
+		userPrompt = fmt.Sprintf("Responda a pergunta a seguir primeiro baseado nas msgs: \"%s\"\n\nEntão resuma as msgs:\n%s", opts.Question, messagesStr)
+	} else {
+		userPrompt = fmt.Sprintf("Resuma as seguintes mensagens:\n%s", messagesStr)
+	}
+
+	// Combine prompts
+	fullPrompt := fmt.Sprintf("%s\n\n%s", systemPrompt, userPrompt)
+
+	// Log that we're using backup model
+	s.logger.Info("Using backup model for summarization", "model", s.modelBackup)
+
+	// Generate content using Gemini with backup model
+	return s.generateContent(ctx, fullPrompt, s.modelBackup)
 }
 
 // buildMessagesString converts messages to a formatted string
@@ -137,7 +173,7 @@ func (s *Service) buildSystemPrompt(opts types.SummarizeOptions) string {
 }
 
 // generateContent calls the Gemini API to generate content
-func (s *Service) generateContent(ctx context.Context, prompt string) (string, error) {
+func (s *Service) generateContent(ctx context.Context, prompt string, model string) (string, error) {
 	// Add timeout if not already set
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
@@ -157,7 +193,7 @@ func (s *Service) generateContent(ctx context.Context, prompt string) (string, e
 	}
 
 	// Generate content
-	resp, err := s.client.Models.GenerateContent(ctx, s.model, contents, config)
+	resp, err := s.client.Models.GenerateContent(ctx, model, contents, config)
 	if err != nil {
 		s.logger.Error("Failed to generate content", "error", err)
 		return "", fmt.Errorf("failed to generate content: %w", err)

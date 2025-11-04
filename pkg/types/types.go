@@ -42,6 +42,7 @@ type GroupSummary struct {
 // AIService defines the interface for AI operations
 type AIService interface {
 	SummarizeMessages(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
+	SummarizeMessagesWithBackup(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
 	Close() error
 }
 

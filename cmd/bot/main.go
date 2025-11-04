@@ -114,7 +114,7 @@ func NewBot() (*Bot, error) {
 	}
 
 	// Initialize AI service
-	aiService, err := ai.NewService(cfg.Gemini.APIKey, cfg.Gemini.Model, logger)
+	aiService, err := ai.NewService(cfg.Gemini.APIKey, cfg.Gemini.Model, cfg.Gemini.ModelBackup, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize AI service: %w", err)
 	}

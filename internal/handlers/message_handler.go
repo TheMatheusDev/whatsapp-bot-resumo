@@ -608,18 +608,33 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, info types
 	summary, err := h.aiService.SummarizeMessages(ctx, messages, opts)
 	if err != nil {
 		h.logger.Error("Failed to generate summary", "error", err)
-		// Edit the loading message to show error
-		errorMsg := ""
-		if ctx.Err() == context.DeadlineExceeded {
-			errorMsg = "⏱️ Timeout ao gerar resumo - tente com menos mensagens"
-		} else {
-			errorMsg = fmt.Sprintf("❌ Erro ao gerar resumo\n\n%s", err.Error())
-		}
+
+		// Try with backup model
+		h.logger.Info("Retrying with backup model")
+
+		// Edit the loading message to show we're trying backup
 		editMsg := client.BuildEdit(info.Chat, msgResp.ID, &waE2E.Message{
-			Conversation: proto.String(errorMsg),
+			Conversation: proto.String("ℹ️ Tentando resumir com modelo de backup..."),
 		})
 		client.SendMessage(context.Background(), info.Chat, editMsg)
-		return
+
+		// Try again with backup model
+		summary, err = h.aiService.SummarizeMessagesWithBackup(ctx, messages, opts)
+		if err != nil {
+			h.logger.Error("Failed to generate summary with backup model", "error", err)
+			// Edit the loading message to show error
+			errorMsg := ""
+			if ctx.Err() == context.DeadlineExceeded {
+				errorMsg = "⏱️ Timeout ao gerar resumo - tente com menos mensagens"
+			} else {
+				errorMsg = fmt.Sprintf("❌ Erro ao gerar resumo\n\n%s", err.Error())
+			}
+			editMsg := client.BuildEdit(info.Chat, msgResp.ID, &waE2E.Message{
+				Conversation: proto.String(errorMsg),
+			})
+			client.SendMessage(context.Background(), info.Chat, editMsg)
+			return
+		}
 	}
 
 	// Edit the loading message with the final summary

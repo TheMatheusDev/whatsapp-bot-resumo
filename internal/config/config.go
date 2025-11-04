@@ -20,8 +20,9 @@ type Config struct {
 
 // GeminiConfig holds Gemini AI configuration
 type GeminiConfig struct {
-	APIKey string `json:"api_key"`
-	Model  string `json:"model"`
+	APIKey      string `json:"api_key"`
+	Model       string `json:"model"`
+	ModelBackup string `json:"model_backup"`
 }
 
 // DatabaseConfig holds database configuration
@@ -64,8 +65,9 @@ func Load() (*Config, error) {
 
 	config := &Config{
 		Gemini: GeminiConfig{
-			APIKey: getEnv("GEMINI_API_KEY", ""),
-			Model:  getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
+			APIKey:      getEnv("GEMINI_API_KEY", ""),
+			Model:       getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
+			ModelBackup: getEnv("GEMINI_MODEL_BACKUP", "gemini-flash-latest"),
 		},
 		Database: DatabaseConfig{
 			Path:            getEnv("DB_PATH", "work.db"),
