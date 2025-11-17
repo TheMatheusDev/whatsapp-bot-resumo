@@ -33,7 +33,7 @@ go mod download
 go build -o ./out/whatsapp-bot cmd/bot/main.go
 ```
 
-ou use o build-android.bat para compilar para Android (execute em Termux)
+ou use o build-android.bat para compilar para Termux Android - necessita do Clang e NDK instalado.
 
 Escaneie o QR code no primeiro uso para conectar ao WhatsApp.
 
