@@ -1,225 +1,82 @@
-# WhatsApp Summarizer Bot - Refactored Edition
+# BOT de Resumos para WhatsApp
 
-Um bot WhatsApp que resume conversas usando Google Gemini AI, completamente reestruturado seguindo as melhores práticas do Go.
+> DISCLAIMER: Projeto 90% vibe coded, feito por diversão.
 
-## 🏗️ Arquitetura
+Bot do WhatsApp que resume conversas usando IA Gemini.
 
-O projeto foi reestruturado seguindo padrões clean architecture e dependency injection:
+## 🚀 Funcionalidades
 
-```
-whatsapp-summarizer/
-├── cmd/bot/                    # Entry point da aplicação
-├── internal/                   # Código interno da aplicação
-│   ├── ai/                    # Serviço de IA (Gemini)
-│   ├── config/                # Configuração
-│   ├── database/              # Operações de banco de dados
-│   ├── handlers/              # Handlers de eventos WhatsApp
-│   ├── utils/                 # Utilitários (cache, helpers)
-│   └── whatsapp/             # Serviço WhatsApp
-├── pkg/types/                 # Tipos e interfaces públicas
-├── configs/                   # Arquivos de configuração
-└── code/                     # Código legacy (será removido)
-```
+- Resume mensagens individuais e em grupo
+- Processamento inteligente com Google Gemini AI
+- Cache de resumos para otimização
+- Whitelist de usuários e grupos
+- Armazenamento em SQLite
 
-## 🚀 Melhorias Implementadas
+## 📋 Pré-requisitos
 
-### 1. **Separação de Responsabilidades**
-
-- Cada package tem uma responsabilidade específica
-- Interfaces bem definidas para testabilidade
-- Dependency injection para desacoplamento
-
-### 2. **Configuração Externa**
-
-- Variáveis de ambiente para configuração
-- Arquivo `.env` exemplo incluído
-- Validação de configurações
-
-### 3. **Error Handling Robusto**
-
-- Tratamento de erro consistente
-- Logs estruturados
-- Evitado uso de `panic()`
-
-### 4. **Performance e Concorrência**
-
-- Connection pooling adequado no banco
-- Cache com TTL para informações de grupo
-- Operações assíncronas onde apropriado
-
-### 5. **Manutenibilidade**
-
-- Código modular e testável
-- Interfaces para mocking
-- Estrutura padronizada
+- Go 1.25.2+
+- Conta Google Cloud com API Gemini habilitada
 
 ## ⚙️ Configuração
 
-1. **Copie o arquivo de exemplo:**
+1. Clone o repositório
+2. Use `.env.example` como base para criar um arquivo `.env` com suas configurações:
+3. Instale as dependências:
 
 ```bash
-cp configs/.env.example .env
+go mod download
 ```
 
-2. **Configure as variáveis:**
-
-```env
-GEMINI_API_KEY=sua_chave_aqui
-OWNER_JID=seu_numero_aqui
-USER_WHITELIST=num1,num2,num3
-GROUP_WHITELIST=group1,group2
-```
-
-## 🔧 Compilação e Execução
+4. Compile o bot:
 
 ```bash
-# Compilar
-go build -o bot ./cmd/bot
-
-# Executar
-./bot
-
-# Ou diretamente
-go run ./cmd/bot
+go build -o ./out/whatsapp-bot cmd/bot/main.go
 ```
 
-## 📁 Estrutura dos Packages
+ou use o build-android.bat para compilar para Android (execute em Termux)
 
-### `pkg/types`
+Escaneie o QR code no primeiro uso para conectar ao WhatsApp.
 
-Define interfaces e tipos compartilhados:
+## 📝 Comandos
 
-- `AIService`: Interface para serviços de IA
-- `DatabaseService`: Interface para operações de BD
-- `WhatsAppService`: Interface para WhatsApp
-- `Bot`: Interface principal do bot
+São aceitos os prefixos: `--`, `-`, `/` e `!`.
+**Comandos:**
 
-### `internal/config`
+- --resuma <número> → Resume mensagens do chat atual
+- -r <número> → Forma abreviada
+- -clt <número> → Atalho para resumo CLT
+- -p <número> <pergunta> → Resume e responde uma pergunta
+- --info → Informações do bot
+- --version → Versão do bot
 
-Gerenciamento de configuração:
+**Opções de Resumo:**
 
-- Carregamento de variáveis de ambiente
-- Validação de configurações
-- Estruturas de config tipadas
+- --curto ou -c → Resumo curto
+- --medio ou -m → Resumo médio
+- --longo ou -l → Resumo longo
+- --clt → Personalidade CLT (funciona com -r e -p)
 
-### `internal/ai`
+**Exemplos:**
 
-Serviço de IA usando Gemini:
+- -r 15 → Resumo curto de 15 mensagens
+- -r 5000 --clt → Resumo com personalidade CLT de 5000 mensagens
+- -p 50 Como está o humor do grupo? → Resume 50 msgs e responde a pergunta
+- -p 100 --clt Teve alguma treta? → Resume com CLT e responde pergunta
+- -p 200 --longo --clt Carlos surtou? → Resumo longo CLT + resposta
 
-- Geração de resumos
-- Múltiplas personalidades (ProfetaBOT/CLT)
-- Controle de tamanho de resumo
-
-### `internal/database`
-
-Operações de banco de dados:
-
-- Prepared statements para performance
-- Connection pooling
-- Separação grupo/mensagem direta
-
-### `internal/whatsapp`
-
-Integração WhatsApp:
-
-- Autenticação via QR code
-- Envio de mensagens
-- Gerenciamento de conexão
-
-### `internal/handlers`
-
-Processamento de eventos:
-
-- Parsing de comandos
-- Autorização de usuários
-- Geração de resumos
-- Funcionalidade @everyone para grupos
-
-## 🔄 Migração do Código Legacy
-
-O código original está em `/code` e será gradualmente removido. A nova estrutura mantém compatibilidade funcional.
-
-## 🧪 Testing
-
-A nova estrutura permite testing robusto:
-
-```bash
-# Rodar todos os testes
-go test ./...
-
-# Com coverage
-go test -cover ./...
-```
-
-## 📈 Próximos Passos
-
-1. **Testes Unitários**: Implementar testes para cada package
-2. **Métricas**: Adicionar Prometheus metrics
-3. **CI/CD**: Setup pipeline de integração
-4. **Docker**: Containerização da aplicação
-5. **Graceful Shutdown**: Implementação completa
-
-## 🤝 Contribuição
-
-Com a nova estrutura, contribuições são mais fáceis:
-
-1. Fork o projeto
-2. Crie uma branch para sua feature
-3. Siga as interfaces definidas
-4. Adicione testes
-5. Submeta um PR
-
-## 📝 Comandos do Bot
-
-### Comandos de Resumo:
-
-- `--resuma <num>` ou `-r <num>`: Resume últimas N mensagens do chat atual
-- `-clt <num>`: Atalho para resumo com personalidade CLT
-- `--info` ou `-i`: Informações do bot
-- `--help` ou `-h`: Ajuda
-- `--version` ou `-v`: Versão
-
-### Opções de Resumo:
-
-- `--curto` ou `-c`: Resumo curto
-- `--medio` ou `-m`: Resumo médio (padrão)
-- `--longo` ou `-l`: Resumo longo
-- `--clt`: Usa personalidade CLT
-
-### Exemplos de Uso:
+## 📦 Estrutura
 
 ```
-# Resumir chat atual
--r 50 --longo
-
-# Resumir com personalidade CLT (forma tradicional)
--r 200 --clt
-
-# Resumir com personalidade CLT (atalho)
--clt 100
-
-# Resumir CLT com estilo longo
--clt 150 --longo
+cmd/bot/          - Ponto de entrada
+internal/
+  ├── ai/         - Integração Gemini
+  ├── config/     - Configurações
+  ├── database/   - SQLite
+  ├── handlers/   - Processamento de mensagens
+  ├── utils/      - Cache e utilitários
+  └── whatsapp/   - Cliente WhatsApp
 ```
 
-### Funcionalidades Especiais:
+## 📄 Inspirado por:
 
-- **Menção @everyone**:
-  - `@everyone`, `@todos` ou `@here`: Menciona todos os membros do grupo
-  - Funciona automaticamente quando detectado em qualquer mensagem
-  - Disponível apenas em grupos
-  - Registra a ação no banco de dados
-
-## 🔒 Segurança
-
-- API keys via variáveis de ambiente
-- **Mensagens Diretas (DM)**: Abertas para todos - qualquer pessoa pode usar comandos via DM
-- **Grupos**: Whitelist obrigatória - apenas grupos autorizados podem usar comandos
-- Validação de entrada
-- Privacidade: usuários só veem grupos que são membros
-- Rate limiting (planejado)
-
----
-
-**Mantido por:** Matheus Araújo  
-**Versão:** 2.0 - Refactored Edition
+- [Whatsapp-Summarizer-Bot-Go-Edition por Civermau](https://github.com/Civermau/Whatsapp-Summarizer-Bot-Go-Edition)
