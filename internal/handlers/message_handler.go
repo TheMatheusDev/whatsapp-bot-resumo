@@ -699,7 +699,11 @@ func (h *Handler) handleHelpCommand(info types.MessageInfo, client *whatsmeow.Cl
 }
 
 func (h *Handler) handleVersionCommand(info types.MessageInfo, client *whatsmeow.Client) {
-	h.sendMessage(client, info.Chat, "ℹ️ ProfetaBOT v2.0")
+	versionText := `
+ℹ️ ProfetaBOT v2.1
+
+🔗 Código: https://github.com/TheMatheusDev/whatsapp-bot-resumo`
+	h.sendMessage(client, info.Chat, versionText)
 }
 
 func (h *Handler) sendMessage(client *whatsmeow.Client, chat types.JID, message string) {
