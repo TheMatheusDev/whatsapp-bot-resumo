@@ -352,8 +352,6 @@ func (h *Handler) handleCommand(content string, info types.MessageInfo, client *
 		h.handleAskQuestionCommand(parts[1:], info, client)
 	case "--resumir-grupo", "-rg", "!resumir-grupo", "!rg", "/resumir-grupo", "/rg":
 		h.handleSummarizeGroupCommand(parts[1:], info, client)
-	case "--listar-grupos", "-lg", "!listar-grupos", "!lg", "/listar-grupos", "/lg":
-		h.handleListGroupsCommand(info, client)
 	case "--info", "-i", "!info", "!i", "/info", "/i":
 		h.handleInfoCommand(info, client)
 	case "--help", "-h", "!help", "!h", "/help", "/h":
@@ -698,115 +696,6 @@ func (h *Handler) handleHelpCommand(info types.MessageInfo, client *whatsmeow.Cl
 
 func (h *Handler) handleVersionCommand(info types.MessageInfo, client *whatsmeow.Client) {
 	h.sendMessage(client, info.Chat, "ℹ️ ProfetaBOT v2.0")
-}
-
-// handleListGroupsCommand lists all groups the bot has messages from that are common with the user
-func (h *Handler) handleListGroupsCommand(info types.MessageInfo, client *whatsmeow.Client) {
-	// Get all groups from database
-	allGroups, err := h.dbService.GetAllGroups()
-	if err != nil {
-		h.logger.Error("Failed to get groups", "error", err)
-		h.sendErrorMessage(client, info.Chat, "Erro ao listar grupos")
-		return
-	}
-
-	if len(allGroups) == 0 {
-		h.sendMessage(client, info.Chat, "ℹ️ Nenhum grupo encontrado no banco de dados")
-		return
-	}
-
-	// Filter groups to only those the user is a member of
-	var commonGroups []wstypes.GroupSummary
-	// Get the user's phone number (the part before @)
-	// When coming from DM, info.Sender is like 5585123456789@s.whatsapp.net
-	// When in groups, participants are like 5585123456789@lid
-	// We need to compare just the phone number part
-	userPhoneNumber := info.Sender.User
-
-	h.logger.Info("Listing groups for user",
-		"user_full_jid", info.Sender.String(),
-		"user_phone", userPhoneNumber,
-		"user_server", info.Sender.Server,
-		"total_groups", len(allGroups))
-
-	for _, group := range allGroups {
-		groupJID := types.NewJID(group.ChatID, types.GroupServer)
-
-		// Get group info to check if user is a member
-		groupInfo, err := client.GetGroupInfo(groupJID)
-		if err != nil {
-			h.logger.Debug("Failed to get group info", "group_id", group.ChatID, "error", err)
-			continue
-		}
-
-		h.logger.Debug("Checking group",
-			"group_id", group.ChatID,
-			"group_name", groupInfo.Name,
-			"participants_count", len(groupInfo.Participants))
-
-		// Check if user is a participant in this group
-		isUserInGroup := false
-		for _, participant := range groupInfo.Participants {
-			// Get just the phone number from participant JID
-			// participant.JID could be like 5585123456789@lid or 5585123456789@s.whatsapp.net
-			participantPhone := participant.JID.User
-
-			h.logger.Debug("Checking participant",
-				"participant_full_jid", participant.JID.String(),
-				"participant_phone", participantPhone,
-				"user_phone", userPhoneNumber,
-				"matches", participantPhone == userPhoneNumber)
-
-			// Compare just the phone numbers, ignoring the server part
-			if participantPhone == userPhoneNumber {
-				isUserInGroup = true
-				break
-			}
-		}
-
-		h.logger.Info("Group check result",
-			"group_id", group.ChatID,
-			"group_name", groupInfo.Name,
-			"user_in_group", isUserInGroup)
-
-		if isUserInGroup {
-			// Update group name in summary
-			group.Name = groupInfo.Name
-			commonGroups = append(commonGroups, group)
-			// Update cache with correct name
-			h.cache.SetGroupName(group.ChatID, groupInfo.Name)
-		}
-	}
-
-	h.logger.Info("Groups filtering complete",
-		"total_groups", len(allGroups),
-		"common_groups", len(commonGroups))
-
-	if len(commonGroups) == 0 {
-		h.sendMessage(client, info.Chat, "ℹ️ Você não está em nenhum grupo em comum com o bot que tenha mensagens registradas")
-		return
-	}
-
-	// Build message with common groups
-	var groupList strings.Builder
-	groupList.WriteString(fmt.Sprintf("📋 *Grupos em comum (%d):*\n\n", len(commonGroups)))
-
-	for i, group := range commonGroups {
-		groupName := group.Name
-		if groupName == "" || groupName == group.ChatID {
-			groupName = group.ChatID
-		}
-
-		groupList.WriteString(fmt.Sprintf("%d. *%s*\n", i+1, groupName))
-		groupList.WriteString(fmt.Sprintf("   ID: `%s`\n", group.ChatID))
-		groupList.WriteString(fmt.Sprintf("   Mensagens: %d\n\n", group.MessageCount))
-	}
-
-	groupList.WriteString("\n💡 *Para resumir um grupo:*\n")
-	groupList.WriteString("Use: `-rg <id_do_grupo> <quantidade>`\n")
-	groupList.WriteString("Exemplo: `-rg 120363123456789012 50`")
-
-	h.sendMessage(client, info.Chat, groupList.String())
 }
 
 // handleSummarizeGroupCommand handles summarizing a specific group via DM
