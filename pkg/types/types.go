@@ -50,9 +50,7 @@ type AIService interface {
 type DatabaseService interface {
 	// Message operations
 	SaveGroupMessage(msg Message, groupName string) error
-	SaveDirectMessage(msg Message, groupName string) error
 	GetGroupMessages(chatID string, count int) ([]Message, error)
-	GetDirectMessages(chatID string, count int) ([]Message, error)
 	GetAllGroups() ([]GroupSummary, error)
 
 	// Connection management

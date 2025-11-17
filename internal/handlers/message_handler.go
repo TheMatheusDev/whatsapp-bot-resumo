@@ -281,19 +281,20 @@ func (h *Handler) getGroupName(client *whatsmeow.Client, chat types.JID) string 
 
 // saveMessage saves a message to the database
 func (h *Handler) saveMessage(message wstypes.Message, chat types.JID, client *whatsmeow.Client) error {
-	groupName := h.getGroupName(client, chat)
-
-	if chat.Server == types.GroupServer {
-		return h.dbService.SaveGroupMessage(message, groupName)
+	// Only save group messages
+	if chat.Server != types.GroupServer {
+		return nil
 	}
-	return h.dbService.SaveDirectMessage(message, groupName)
+
+	groupName := h.getGroupName(client, chat)
+	return h.dbService.SaveGroupMessage(message, groupName)
 }
 
 // isAuthorized checks if the user is authorized to use bot commands
 func (h *Handler) isAuthorized(info types.MessageInfo) bool {
-	// For direct messages (DMs), everyone is authorized
+	// Direct messages (DMs) are NOT authorized
 	if !info.IsGroup {
-		return true
+		return false
 	}
 
 	// For groups, check if the group is whitelisted
@@ -574,14 +575,19 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, info types
 		}
 	}
 
-	// Get messages from database
+	// Get messages from database (only groups are supported)
 	var messages []wstypes.Message
 
-	if info.IsGroup {
-		messages, err = h.dbService.GetGroupMessages(info.Chat.User, opts.Count)
-	} else {
-		messages, err = h.dbService.GetDirectMessages(info.Chat.User, opts.Count)
+	if !info.IsGroup {
+		h.logger.Error("Direct messages are not supported for summarization")
+		editMsg := client.BuildEdit(info.Chat, msgResp.ID, &waE2E.Message{
+			Conversation: proto.String("❌ Resumos não são suportados em mensagens diretas"),
+		})
+		client.SendMessage(context.Background(), info.Chat, editMsg)
+		return
 	}
+
+	messages, err = h.dbService.GetGroupMessages(info.Chat.User, opts.Count)
 
 	if err != nil {
 		h.logger.Error("Failed to get messages", "error", err)

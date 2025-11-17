@@ -14,13 +14,11 @@ import (
 
 // Service implements the DatabaseService interface
 type Service struct {
-	db               *sql.DB
-	logger           types.Logger
-	insertGroupStmt  *sql.Stmt
-	insertDirectStmt *sql.Stmt
-	getGroupStmt     *sql.Stmt
-	getDirectStmt    *sql.Stmt
-	stmtMutex        sync.RWMutex
+	db              *sql.DB
+	logger          types.Logger
+	insertGroupStmt *sql.Stmt
+	getGroupStmt    *sql.Stmt
+	stmtMutex       sync.RWMutex
 }
 
 // NewService creates a new database service
@@ -78,16 +76,7 @@ func (s *Service) initSchema() error {
 			message_type TEXT,
 			timestamp DATETIME
 		)`,
-		`CREATE TABLE IF NOT EXISTS direct_messages (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			chat_id TEXT NOT NULL,
-			sender TEXT NOT NULL,
-			message TEXT,
-			message_type TEXT,
-			timestamp DATETIME
-		)`,
 		`CREATE INDEX IF NOT EXISTS idx_group_messages_chat_timestamp ON group_messages(chat_id, timestamp ASC)`,
-		`CREATE INDEX IF NOT EXISTS idx_direct_messages_chat_timestamp ON direct_messages(chat_id, timestamp ASC)`,
 	}
 
 	for _, query := range queries {
@@ -111,22 +100,12 @@ func (s *Service) prepareStatements() error {
 		return fmt.Errorf("failed to prepare insertGroupStmt: %w", err)
 	}
 
-	s.insertDirectStmt, err = s.db.Prepare(`INSERT INTO direct_messages (chat_id, sender, message, message_type, timestamp) VALUES (?, ?, ?, ?, ?)`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare insertDirectStmt: %w", err)
-	}
-
 	// Filter out bot messages when retrieving messages for summarization
 	// This excludes all messages sent by the bot itself (ProfetaBOT [VOCÊ])
 	// Order by DESC to get the most recent messages first
 	s.getGroupStmt, err = s.db.Prepare(`SELECT id, chat_id, sender, message, message_type, timestamp FROM group_messages WHERE chat_id = ? AND sender NOT LIKE 'ProfetaBOT [VOCÊ]%' ORDER BY timestamp DESC LIMIT ?`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare getGroupStmt: %w", err)
-	}
-
-	s.getDirectStmt, err = s.db.Prepare(`SELECT id, chat_id, sender, message, message_type, timestamp FROM direct_messages WHERE chat_id = ? AND sender NOT LIKE 'ProfetaBOT [VOCÊ]%' ORDER BY timestamp DESC LIMIT ?`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare getDirectStmt: %w", err)
 	}
 
 	return nil
@@ -146,26 +125,6 @@ func (s *Service) SaveGroupMessage(msg types.Message, groupName string) error {
 	if err != nil {
 		s.logger.Error("Failed to save group message", "error", err, "group", groupName)
 		return fmt.Errorf("failed to save group message: %w", err)
-	}
-
-	s.logger.Debug("Message saved", msg.Sender, "|", groupName)
-	return nil
-}
-
-// SaveDirectMessage saves a direct message to the database
-func (s *Service) SaveDirectMessage(msg types.Message, groupName string) error {
-	s.stmtMutex.RLock()
-	stmt := s.insertDirectStmt
-	s.stmtMutex.RUnlock()
-
-	if stmt == nil {
-		return fmt.Errorf("insertDirectStmt not initialized")
-	}
-
-	_, err := stmt.Exec(msg.ChatID, msg.Sender, msg.Content, msg.MessageType, msg.Timestamp)
-	if err != nil {
-		s.logger.Error("Failed to save direct message", "error", err, "chat", groupName)
-		return fmt.Errorf("failed to save direct message: %w", err)
 	}
 
 	s.logger.Debug("Message saved", msg.Sender, "|", groupName)
@@ -211,48 +170,6 @@ func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, e
 	}
 
 	s.logger.Debug("Retrieved group messages (bot messages filtered out)", "chat_id", chatID, "count", len(messages))
-	return messages, nil
-}
-
-// GetDirectMessages retrieves direct messages from the database
-func (s *Service) GetDirectMessages(chatID string, count int) ([]types.Message, error) {
-	s.stmtMutex.RLock()
-	stmt := s.getDirectStmt
-	s.stmtMutex.RUnlock()
-
-	if stmt == nil {
-		return nil, fmt.Errorf("getDirectStmt not initialized")
-	}
-
-	rows, err := stmt.Query(chatID, count)
-	if err != nil {
-		s.logger.Error("Failed to query direct messages", "error", err, "chat_id", chatID)
-		return nil, fmt.Errorf("failed to query direct messages: %w", err)
-	}
-	defer rows.Close()
-
-	messages := make([]types.Message, 0, count)
-	for rows.Next() {
-		var msg types.Message
-		err := rows.Scan(&msg.ID, &msg.ChatID, &msg.Sender, &msg.Content, &msg.MessageType, &msg.Timestamp)
-		if err != nil {
-			s.logger.Error("Failed to scan message row", "error", err)
-			return nil, fmt.Errorf("failed to scan message row: %w", err)
-		}
-		messages = append(messages, msg)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows error: %w", err)
-	}
-
-	// Reverse messages to be in chronological order (oldest to newest)
-	// Query returns DESC (newest first), but we want ASC (oldest first) for AI context
-	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
-		messages[i], messages[j] = messages[j], messages[i]
-	}
-
-	s.logger.Debug("Retrieved direct messages (bot messages filtered out)", "chat_id", chatID, "count", len(messages))
 	return messages, nil
 }
 
@@ -306,14 +223,8 @@ func (s *Service) Close() error {
 	if s.insertGroupStmt != nil {
 		s.insertGroupStmt.Close()
 	}
-	if s.insertDirectStmt != nil {
-		s.insertDirectStmt.Close()
-	}
 	if s.getGroupStmt != nil {
 		s.getGroupStmt.Close()
-	}
-	if s.getDirectStmt != nil {
-		s.getDirectStmt.Close()
 	}
 
 	// Close database connection
