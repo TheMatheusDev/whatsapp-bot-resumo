@@ -6,7 +6,7 @@ import (
 )
 
 // handleInfoCommand handles the --info/-i command
-func (h *Handler) handleInfoCommand(info types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleHelpCommand(info types.MessageInfo, client *whatsmeow.Client) {
 	infoText := `
 ℹ️ *ProfetaBOT:*
 Resume mensagens via Google Gemini 2.5 Flash
@@ -34,11 +34,6 @@ Resume mensagens via Google Gemini 2.5 Flash
 `
 
 	h.sendMessage(client, info.Chat, infoText)
-}
-
-// handleHelpCommand handles the --help/-h command
-func (h *Handler) handleHelpCommand(info types.MessageInfo, client *whatsmeow.Client) {
-	h.handleInfoCommand(info, client) // Same as info for now
 }
 
 // handleVersionCommand handles the --version/-v command

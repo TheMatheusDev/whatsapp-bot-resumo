@@ -330,8 +330,6 @@ func (h *Handler) handleCommand(content string, info types.MessageInfo, client *
 		h.handleSummarizeCltCommand(parts[1:], info, client)
 	case "--pergunte", "-p", "!pergunte", "!p", "/pergunte", "/p":
 		h.handleAskQuestionCommand(parts[1:], info, client)
-	case "--info", "-i", "!info", "!i", "/info", "/i":
-		h.handleInfoCommand(info, client)
 	case "--help", "-h", "!help", "!h", "/help", "/h":
 		h.handleHelpCommand(info, client)
 	case "--version", "-v", "!version", "!v", "/version", "/v":
