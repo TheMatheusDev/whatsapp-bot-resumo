@@ -117,7 +117,7 @@ func (h *Handler) handleMessage(evt *events.Message, client *whatsmeow.Client) {
 		// Check if user is authorized to use @everyone
 		senderName := h.getSenderName(evt.Info)
 		if h.everyoneHandler.IsEveryoneAdmin(senderName) {
-			h.everyoneHandler.HandleEveryoneCommand(evt.Info.Chat, client, h.dbService, h.cache)
+			h.everyoneHandler.HandleEveryoneCommand(evt.Info.Chat, client, h.dbService, h.cache, currentMessageText)
 		} else {
 			h.logger.Info("Unauthorized @everyone attempt", "sender", senderName)
 		}

@@ -58,7 +58,7 @@ func (e *EveryoneHandler) IsEveryoneAdmin(senderName string) bool {
 }
 
 // HandleEveryoneCommand mentions all group members when @everyone is detected
-func (e *EveryoneHandler) HandleEveryoneCommand(chat types.JID, client *whatsmeow.Client, dbService wstypes.DatabaseService, cache wstypes.CacheService) {
+func (e *EveryoneHandler) HandleEveryoneCommand(chat types.JID, client *whatsmeow.Client, dbService wstypes.DatabaseService, cache wstypes.CacheService, messageContent string) {
 	go func() {
 		// Check if it's a group chat
 		if chat.Server != types.GroupServer {
@@ -101,7 +101,7 @@ func (e *EveryoneHandler) HandleEveryoneCommand(chat types.JID, client *whatsmeo
 		}
 
 		// Create the message with mentions
-		messageText := "ℹ️ @everyone: \n" + strings.Join(mentionTexts, " ")
+		messageText := "ℹ️ " + messageContent + "\n" + strings.Join(mentionTexts, " ")
 
 		// Send message with mentions
 		_, err = client.SendMessage(ctx, chat, &waE2E.Message{
