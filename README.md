@@ -68,7 +68,7 @@ São aceitos os prefixos: `--`, `-`, `/` e `!`.
 
 ```
 cmd/bot/          - Ponto de entrada
-internal/
+src/
   ├── ai/         - Integração Gemini
   ├── config/     - Configurações
   ├── database/   - SQLite

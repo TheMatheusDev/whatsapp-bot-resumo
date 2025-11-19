@@ -8,8 +8,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"whatsapp-summarizer/internal/config"
 	"whatsapp-summarizer/pkg/types"
+	"whatsapp-summarizer/src/config"
 )
 
 // Service implements the DatabaseService interface

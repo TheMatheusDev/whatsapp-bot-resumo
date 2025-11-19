@@ -13,13 +13,13 @@ import (
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	waLog "go.mau.fi/whatsmeow/util/log"
 
-	"whatsapp-summarizer/internal/ai"
-	"whatsapp-summarizer/internal/config"
-	"whatsapp-summarizer/internal/database"
-	"whatsapp-summarizer/internal/handlers"
-	"whatsapp-summarizer/internal/utils"
-	"whatsapp-summarizer/internal/whatsapp"
 	"whatsapp-summarizer/pkg/types"
+	"whatsapp-summarizer/src/ai"
+	"whatsapp-summarizer/src/cmd"
+	"whatsapp-summarizer/src/config"
+	"whatsapp-summarizer/src/database"
+	"whatsapp-summarizer/src/utils"
+	"whatsapp-summarizer/src/whatsapp"
 )
 
 // SimpleLogger implements types.Logger interface with file and console output
@@ -81,7 +81,7 @@ type Bot struct {
 	aiService    types.AIService
 	dbService    types.DatabaseService
 	whatsappSvc  *whatsapp.Service
-	handler      *handlers.Handler
+	handler      *cmd.Handler
 	cache        types.CacheService
 	container    *sqlstore.Container
 	running      bool
@@ -146,7 +146,7 @@ func NewBot() (*Bot, error) {
 	}
 
 	// Initialize handler
-	handler, err := handlers.NewHandler(cfg, aiService, dbService, cache, logger, bot.botStartTime)
+	handler, err := cmd.NewHandler(cfg, aiService, dbService, cache, logger, bot.botStartTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize handler: %w", err)
 	}
