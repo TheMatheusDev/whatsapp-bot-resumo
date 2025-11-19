@@ -10,7 +10,7 @@ import (
 
 	"google.golang.org/genai"
 
-	"whatsapp-summarizer/pkg/types"
+	"whatsapp-summarizer/src/types"
 )
 
 // Personalities constants

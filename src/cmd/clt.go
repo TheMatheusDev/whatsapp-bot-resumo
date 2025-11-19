@@ -6,7 +6,7 @@ import (
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 
-	wstypes "whatsapp-summarizer/pkg/types"
+	wstypes "whatsapp-summarizer/src/types"
 )
 
 // handleSummarizeCltCommand handles the -clt command (shortcut for -r with --clt flag)

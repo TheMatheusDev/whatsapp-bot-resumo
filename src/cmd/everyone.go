@@ -10,19 +10,18 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
 
-	wstypes "whatsapp-summarizer/pkg/types"
-	"whatsapp-summarizer/src/config"
+	wstypes "whatsapp-summarizer/src/types"
 )
 
 // EveryoneHandler handles @everyone mentions
 type EveryoneHandler struct {
-	config   *config.Config
+	config   *wstypes.Config
 	logger   wstypes.Logger
 	timezone *time.Location
 }
 
 // NewEveryoneHandler creates a new everyone handler
-func NewEveryoneHandler(config *config.Config, logger wstypes.Logger, timezone *time.Location) *EveryoneHandler {
+func NewEveryoneHandler(config *wstypes.Config, logger wstypes.Logger, timezone *time.Location) *EveryoneHandler {
 	return &EveryoneHandler{
 		config:   config,
 		logger:   logger,

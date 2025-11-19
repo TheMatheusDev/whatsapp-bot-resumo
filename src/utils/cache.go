@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"whatsapp-summarizer/pkg/types"
+	"whatsapp-summarizer/src/types"
 )
 
 // Cache implements the CacheService interface

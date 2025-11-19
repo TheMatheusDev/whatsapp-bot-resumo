@@ -8,8 +8,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"whatsapp-summarizer/pkg/types"
-	"whatsapp-summarizer/src/config"
+	"whatsapp-summarizer/src/types"
 )
 
 // Service implements the DatabaseService interface
@@ -22,7 +21,7 @@ type Service struct {
 }
 
 // NewService creates a new database service
-func NewService(cfg *config.DatabaseConfig, logger types.Logger) (*Service, error) {
+func NewService(cfg *types.DatabaseConfig, logger types.Logger) (*Service, error) {
 	db, err := sql.Open("sqlite3", fmt.Sprintf("%s?cache=shared&mode=rwc&_foreign_keys=on", cfg.Path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)

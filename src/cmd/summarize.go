@@ -12,7 +12,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
 
-	wstypes "whatsapp-summarizer/pkg/types"
+	wstypes "whatsapp-summarizer/src/types"
 )
 
 // handleSummarizeCommand handles the summarize command

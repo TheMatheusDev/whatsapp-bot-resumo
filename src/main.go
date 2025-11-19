@@ -13,11 +13,11 @@ import (
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	waLog "go.mau.fi/whatsmeow/util/log"
 
-	"whatsapp-summarizer/pkg/types"
 	"whatsapp-summarizer/src/ai"
 	"whatsapp-summarizer/src/cmd"
 	"whatsapp-summarizer/src/config"
 	"whatsapp-summarizer/src/database"
+	"whatsapp-summarizer/src/types"
 	"whatsapp-summarizer/src/utils"
 	"whatsapp-summarizer/src/whatsapp"
 )
@@ -76,7 +76,7 @@ func (l *SimpleLogger) Close() error {
 
 // Bot implements the types.Bot interface
 type Bot struct {
-	config       *config.Config
+	config       *types.Config
 	logger       types.Logger
 	aiService    types.AIService
 	dbService    types.DatabaseService

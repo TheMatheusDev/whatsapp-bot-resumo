@@ -89,3 +89,44 @@ type Bot interface {
 	Stop() error
 	IsRunning() bool
 }
+
+// Config holds all configuration for the bot
+type Config struct {
+	Gemini   GeminiConfig   `json:"gemini"`
+	Database DatabaseConfig `json:"database"`
+	WhatsApp WhatsAppConfig `json:"whatsapp"`
+	Bot      BotConfig      `json:"bot"`
+}
+
+// GeminiConfig holds Gemini AI configuration
+type GeminiConfig struct {
+	APIKey      string `json:"api_key"`
+	Model       string `json:"model"`
+	ModelBackup string `json:"model_backup"`
+}
+
+// DatabaseConfig holds database configuration
+type DatabaseConfig struct {
+	Path            string `json:"path"`
+	MaxOpenConns    int    `json:"max_open_conns"`
+	MaxIdleConns    int    `json:"max_idle_conns"`
+	ConnMaxLifetime string `json:"conn_max_lifetime"`
+}
+
+// WhatsAppConfig holds WhatsApp configuration
+type WhatsAppConfig struct {
+	OwnerJID       string   `json:"owner_jid"`
+	UserWhitelist  []string `json:"user_whitelist"`
+	GroupWhitelist []string `json:"group_whitelist"`
+	UserBlacklist  []string `json:"user_blacklist"`
+	GroupBlacklist []string `json:"group_blacklist"`
+	EveryoneAdmins []string `json:"everyone_admins"`
+}
+
+// BotConfig holds bot behavior configuration
+type BotConfig struct {
+	Timezone      string `json:"timezone"`
+	CacheTTL      string `json:"cache_ttl"`
+	LogLevel      string `json:"log_level"`
+	EnableMetrics bool   `json:"enable_metrics"`
+}

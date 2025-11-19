@@ -12,13 +12,12 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 	"google.golang.org/protobuf/proto"
 
-	wstypes "whatsapp-summarizer/pkg/types"
-	"whatsapp-summarizer/src/config"
+	wstypes "whatsapp-summarizer/src/types"
 )
 
 // Handler manages WhatsApp message events
 type Handler struct {
-	config          *config.Config
+	config          *wstypes.Config
 	aiService       wstypes.AIService
 	dbService       wstypes.DatabaseService
 	cache           wstypes.CacheService
@@ -30,7 +29,7 @@ type Handler struct {
 
 // NewHandler creates a new message handler
 func NewHandler(
-	config *config.Config,
+	config *wstypes.Config,
 	aiService wstypes.AIService,
 	dbService wstypes.DatabaseService,
 	cache wstypes.CacheService,

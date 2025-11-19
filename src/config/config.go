@@ -8,51 +8,12 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
+
+	"whatsapp-summarizer/src/types"
 )
 
-// Config holds all configuration for the bot
-type Config struct {
-	Gemini   GeminiConfig   `json:"gemini"`
-	Database DatabaseConfig `json:"database"`
-	WhatsApp WhatsAppConfig `json:"whatsapp"`
-	Bot      BotConfig      `json:"bot"`
-}
-
-// GeminiConfig holds Gemini AI configuration
-type GeminiConfig struct {
-	APIKey      string `json:"api_key"`
-	Model       string `json:"model"`
-	ModelBackup string `json:"model_backup"`
-}
-
-// DatabaseConfig holds database configuration
-type DatabaseConfig struct {
-	Path            string `json:"path"`
-	MaxOpenConns    int    `json:"max_open_conns"`
-	MaxIdleConns    int    `json:"max_idle_conns"`
-	ConnMaxLifetime string `json:"conn_max_lifetime"`
-}
-
-// WhatsAppConfig holds WhatsApp configuration
-type WhatsAppConfig struct {
-	OwnerJID       string   `json:"owner_jid"`
-	UserWhitelist  []string `json:"user_whitelist"`
-	GroupWhitelist []string `json:"group_whitelist"`
-	UserBlacklist  []string `json:"user_blacklist"`
-	GroupBlacklist []string `json:"group_blacklist"`
-	EveryoneAdmins []string `json:"everyone_admins"`
-}
-
-// BotConfig holds bot behavior configuration
-type BotConfig struct {
-	Timezone      string `json:"timezone"`
-	CacheTTL      string `json:"cache_ttl"`
-	LogLevel      string `json:"log_level"`
-	EnableMetrics bool   `json:"enable_metrics"`
-}
-
 // Load loads configuration from environment variables
-func Load() (*Config, error) {
+func Load() (*types.Config, error) {
 	// Try to load .env file from current directory
 	if err := godotenv.Load(".env"); err != nil {
 		// If .env doesn't exist in current dir, try executable directory
@@ -63,19 +24,19 @@ func Load() (*Config, error) {
 		}
 	}
 
-	config := &Config{
-		Gemini: GeminiConfig{
+	config := &types.Config{
+		Gemini: types.GeminiConfig{
 			APIKey:      getEnv("GEMINI_API_KEY", ""),
 			Model:       getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
 			ModelBackup: getEnv("GEMINI_MODEL_BACKUP", "gemini-flash-latest"),
 		},
-		Database: DatabaseConfig{
+		Database: types.DatabaseConfig{
 			Path:            getEnv("DB_PATH", "work.db"),
 			MaxOpenConns:    getEnvInt("DB_MAX_OPEN_CONNS", 10),
 			MaxIdleConns:    getEnvInt("DB_MAX_IDLE_CONNS", 5),
 			ConnMaxLifetime: getEnv("DB_CONN_MAX_LIFETIME", "1h"),
 		},
-		WhatsApp: WhatsAppConfig{
+		WhatsApp: types.WhatsAppConfig{
 			OwnerJID:       getEnv("OWNER_JID", ""),
 			UserWhitelist:  getEnvSlice("USER_WHITELIST", []string{}),
 			GroupWhitelist: getEnvSlice("GROUP_WHITELIST", []string{}),
@@ -83,7 +44,7 @@ func Load() (*Config, error) {
 			GroupBlacklist: getEnvSlice("GROUP_BLACKLIST", []string{}),
 			EveryoneAdmins: getEnvSlice("EVERYONE_ADMINS", []string{}),
 		},
-		Bot: BotConfig{
+		Bot: types.BotConfig{
 			Timezone:      getEnv("TIMEZONE", "GMT-3"),
 			CacheTTL:      getEnv("CACHE_TTL", "10m"),
 			LogLevel:      getEnv("LOG_LEVEL", "INFO"),
@@ -91,7 +52,7 @@ func Load() (*Config, error) {
 		},
 	}
 
-	if err := config.Validate(); err != nil {
+	if err := Validate(config); err != nil {
 		return nil, err
 	}
 
@@ -99,7 +60,7 @@ func Load() (*Config, error) {
 }
 
 // Validate validates the configuration
-func (c *Config) Validate() error {
+func Validate(c *types.Config) error {
 	if c.Gemini.APIKey == "" {
 		return fmt.Errorf("GEMINI_API_KEY is required")
 	}

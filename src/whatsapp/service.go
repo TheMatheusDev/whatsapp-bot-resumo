@@ -13,7 +13,7 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"google.golang.org/protobuf/proto"
 
-	wstypes "whatsapp-summarizer/pkg/types"
+	wstypes "whatsapp-summarizer/src/types"
 )
 
 // Service implements the WhatsAppService interface

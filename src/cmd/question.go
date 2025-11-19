@@ -7,7 +7,7 @@ import (
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 
-	wstypes "whatsapp-summarizer/pkg/types"
+	wstypes "whatsapp-summarizer/src/types"
 )
 
 // handleAskQuestionCommand handles the --pergunte/-p command
