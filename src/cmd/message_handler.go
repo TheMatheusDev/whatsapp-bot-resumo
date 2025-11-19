@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -76,6 +78,9 @@ func (h *Handler) handleMessage(evt *events.Message, client *whatsmeow.Client) {
 	if msg == nil {
 		return
 	}
+
+	// Download media if present (images, videos, etc.)
+	h.downloadMediaIfPresent(msg, client)
 
 	// Extract message content
 	content := h.extractMessageContent(msg)
@@ -196,6 +201,236 @@ func (h *Handler) extractQuotedMessageText(msg *waE2E.Message) string {
 	}
 
 	return "[Unknown message type]"
+}
+
+// downloadMediaIfPresent checks if message contains media and downloads it
+func (h *Handler) downloadMediaIfPresent(msg *waE2E.Message, client *whatsmeow.Client) {
+	// Check for image
+	if imgMsg := msg.GetImageMessage(); imgMsg != nil {
+		if err := h.downloadImage(imgMsg, client); err != nil {
+			h.logger.Error("Failed to download image", "error", err)
+		}
+		return
+	}
+
+	// Check for video
+	if videoMsg := msg.GetVideoMessage(); videoMsg != nil {
+		if err := h.downloadVideo(videoMsg, client); err != nil {
+			h.logger.Error("Failed to download video", "error", err)
+		}
+		return
+	}
+
+	// Check for audio
+	if audioMsg := msg.GetAudioMessage(); audioMsg != nil {
+		if err := h.downloadAudio(audioMsg, client); err != nil {
+			h.logger.Error("Failed to download audio", "error", err)
+		}
+		return
+	}
+
+	// Check for document
+	if docMsg := msg.GetDocumentMessage(); docMsg != nil {
+		if err := h.downloadDocument(docMsg, client); err != nil {
+			h.logger.Error("Failed to download document", "error", err)
+		}
+		return
+	}
+
+	// Check for sticker
+	if stickerMsg := msg.GetStickerMessage(); stickerMsg != nil {
+		if err := h.downloadSticker(stickerMsg, client); err != nil {
+			h.logger.Error("Failed to download sticker", "error", err)
+		}
+		return
+	}
+}
+
+// downloadImage downloads and saves a full resolution image to /tmp/
+func (h *Handler) downloadImage(imgMsg *waE2E.ImageMessage, client *whatsmeow.Client) error {
+	// Create tmp directory if it doesn't exist
+	if err := os.MkdirAll("tmp", 0755); err != nil {
+		return fmt.Errorf("failed to create tmp directory: %w", err)
+	}
+
+	// Create filename with timestamp
+	timestamp := time.Now().Format("20060102_150405")
+	filename := fmt.Sprintf("image_%s.jpg", timestamp)
+	filePath := filepath.Join("tmp", filename)
+
+	// Create file
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	// Download full image using whatsmeow's DownloadToFile
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	err = client.DownloadToFile(ctx, imgMsg, file)
+	if err != nil {
+		// If download fails, try to save thumbnail as fallback
+		h.logger.Warn("Failed to download full image, saving thumbnail instead", "error", err)
+		thumbnailData := imgMsg.GetJPEGThumbnail()
+		if len(thumbnailData) > 0 {
+			if err := os.WriteFile(filePath, thumbnailData, 0644); err != nil {
+				return fmt.Errorf("failed to write thumbnail: %w", err)
+			}
+			h.logger.Info("Image thumbnail saved", "path", filePath)
+			return nil
+		}
+		return fmt.Errorf("failed to download image and no thumbnail available: %w", err)
+	}
+
+	h.logger.Info("Image downloaded", "path", filePath, "size", getFileSize(file))
+	return nil
+}
+
+// downloadVideo downloads and saves a video to /tmp/
+func (h *Handler) downloadVideo(videoMsg *waE2E.VideoMessage, client *whatsmeow.Client) error {
+	if err := os.MkdirAll("tmp", 0755); err != nil {
+		return fmt.Errorf("failed to create tmp directory: %w", err)
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+	filename := fmt.Sprintf("video_%s.mp4", timestamp)
+	filePath := filepath.Join("tmp", filename)
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	if err := client.DownloadToFile(ctx, videoMsg, file); err != nil {
+		return fmt.Errorf("failed to download video: %w", err)
+	}
+
+	h.logger.Info("Video downloaded", "path", filePath, "size", getFileSize(file))
+	return nil
+}
+
+// downloadAudio downloads and saves an audio to /tmp/
+func (h *Handler) downloadAudio(audioMsg *waE2E.AudioMessage, client *whatsmeow.Client) error {
+	if err := os.MkdirAll("tmp", 0755); err != nil {
+		return fmt.Errorf("failed to create tmp directory: %w", err)
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+	ext := "ogg" // Default extension for WhatsApp audio
+	if mimetype := audioMsg.GetMimetype(); mimetype != "" {
+		if strings.Contains(mimetype, "mp3") {
+			ext = "mp3"
+		} else if strings.Contains(mimetype, "mp4") {
+			ext = "m4a"
+		}
+	}
+	filename := fmt.Sprintf("audio_%s.%s", timestamp, ext)
+	filePath := filepath.Join("tmp", filename)
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	if err := client.DownloadToFile(ctx, audioMsg, file); err != nil {
+		return fmt.Errorf("failed to download audio: %w", err)
+	}
+
+	h.logger.Info("Audio downloaded", "path", filePath, "size", getFileSize(file))
+	return nil
+}
+
+// downloadDocument downloads and saves a document to /tmp/
+func (h *Handler) downloadDocument(docMsg *waE2E.DocumentMessage, client *whatsmeow.Client) error {
+	if err := os.MkdirAll("tmp", 0755); err != nil {
+		return fmt.Errorf("failed to create tmp directory: %w", err)
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+	// Use original filename if available
+	filename := docMsg.GetTitle()
+	if filename == "" {
+		filename = fmt.Sprintf("document_%s", timestamp)
+	} else {
+		// Sanitize filename and add timestamp to avoid conflicts
+		filename = fmt.Sprintf("%s_%s", timestamp, sanitizeFilename(filename))
+	}
+	filePath := filepath.Join("tmp", filename)
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	if err := client.DownloadToFile(ctx, docMsg, file); err != nil {
+		return fmt.Errorf("failed to download document: %w", err)
+	}
+
+	h.logger.Info("Document downloaded", "path", filePath, "size", getFileSize(file))
+	return nil
+}
+
+// downloadSticker downloads and saves a sticker to /tmp/
+func (h *Handler) downloadSticker(stickerMsg *waE2E.StickerMessage, client *whatsmeow.Client) error {
+	if err := os.MkdirAll("tmp", 0755); err != nil {
+		return fmt.Errorf("failed to create tmp directory: %w", err)
+	}
+	timestamp := time.Now().Format("20060102_150405")
+	filename := fmt.Sprintf("sticker_%s.webp", timestamp)
+	filePath := filepath.Join("tmp", filename)
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if err := client.DownloadToFile(ctx, stickerMsg, file); err != nil {
+		return fmt.Errorf("failed to download sticker: %w", err)
+	}
+	h.logger.Info("Sticker downloaded", "path", filePath, "size", getFileSize(file))
+	return nil
+}
+
+// sanitizeFilename removes potentially dangerous characters from filename
+func sanitizeFilename(filename string) string {
+	// Remove path separators and other dangerous characters
+	dangerous := []string{"/", "\\", "..", ":", "*", "?", "\"", "<", ">", "|"}
+	for _, char := range dangerous {
+		filename = strings.ReplaceAll(filename, char, "_")
+	}
+	return filename
+}
+
+// getFileSize returns the size of a file in a human-readable format
+func getFileSize(file *os.File) string {
+	info, err := file.Stat()
+	if err != nil {
+		return "unknown"
+	}
+	size := info.Size()
+	if size < 1024 {
+		return fmt.Sprintf("%d B", size)
+	} else if size < 1024*1024 {
+		return fmt.Sprintf("%.2f KB", float64(size)/1024)
+	} else if size < 1024*1024*1024 {
+		return fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+	}
+	return fmt.Sprintf("%.2f GB", float64(size)/(1024*1024*1024))
 }
 
 // extractCurrentMessageText extracts only the current message text without quoted message info
