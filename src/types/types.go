@@ -116,10 +116,7 @@ type DatabaseConfig struct {
 // WhatsAppConfig holds WhatsApp configuration
 type WhatsAppConfig struct {
 	OwnerJID       string   `json:"owner_jid"`
-	UserWhitelist  []string `json:"user_whitelist"`
 	GroupWhitelist []string `json:"group_whitelist"`
-	UserBlacklist  []string `json:"user_blacklist"`
-	GroupBlacklist []string `json:"group_blacklist"`
 	EveryoneAdmins []string `json:"everyone_admins"`
 }
 

@@ -38,10 +38,7 @@ func Load() (*types.Config, error) {
 		},
 		WhatsApp: types.WhatsAppConfig{
 			OwnerJID:       getEnv("OWNER_JID", ""),
-			UserWhitelist:  getEnvSlice("USER_WHITELIST", []string{}),
 			GroupWhitelist: getEnvSlice("GROUP_WHITELIST", []string{}),
-			UserBlacklist:  getEnvSlice("USER_BLACKLIST", []string{}),
-			GroupBlacklist: getEnvSlice("GROUP_BLACKLIST", []string{}),
 			EveryoneAdmins: getEnvSlice("EVERYONE_ADMINS", []string{}),
 		},
 		Bot: types.BotConfig{
