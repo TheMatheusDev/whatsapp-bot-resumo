@@ -25,7 +25,7 @@ if exist "%CC%" (
 
 echo.
 echo Iniciando compilacao para Android ARM64 (sem debug symbols)...
-go build -ldflags "-s -w" -o ./out/whatsapp-summarizer-android-arm64 ./cmd/bot
+go build -ldflags "-s -w" -o ./out/whatsapp-summarizer-android-arm64 ./src/
 
 if %ERRORLEVEL% EQU 0 (
     echo.
