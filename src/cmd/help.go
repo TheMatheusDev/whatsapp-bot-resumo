@@ -33,7 +33,7 @@ Resume mensagens via Google Gemini 2.5 Flash
 - -p 200 --longo --clt Carlos surtou? → Resumo longo CLT + resposta
 `
 
-	h.sendMessage(client, info.Chat, infoText)
+	h.sendMessageReply(client, info, infoText)
 }
 
 // handleVersionCommand handles the --version/-v command
@@ -42,5 +42,5 @@ func (h *Handler) handleVersionCommand(info types.MessageInfo, client *whatsmeow
 ℹ️ ProfetaBOT v2.1
 
 🔗 Código: https://github.com/TheMatheusDev/whatsapp-bot-resumo`
-	h.sendMessage(client, info.Chat, versionText)
+	h.sendMessageReply(client, info, versionText)
 }

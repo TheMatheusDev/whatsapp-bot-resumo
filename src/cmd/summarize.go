@@ -18,30 +18,30 @@ import (
 // handleSummarizeCommand handles the summarize command
 func (h *Handler) handleSummarizeCommand(args []string, info types.MessageInfo, client *whatsmeow.Client) {
 	if len(args) == 0 {
-		h.sendErrorMessage(client, info.Chat, "Número de mensagens não especificado")
+		h.sendErrorMessageReply(client, info, "Número de mensagens não especificado")
 		return
 	}
 
 	// Parse message count
 	count, err := strconv.Atoi(args[0])
 	if err != nil || count <= 0 {
-		h.sendErrorMessage(client, info.Chat, "Número de mensagens inválido")
+		h.sendErrorMessageReply(client, info, "Número de mensagens inválido")
 		return
 	}
 
 	// Validate count limits (same as legacy code)
 	if count <= 3 {
-		h.sendErrorMessage(client, info.Chat, "ℹ️ Se acha o engraçadinho, hein?")
+		h.sendErrorMessageReply(client, info, "ℹ️ Se acha o engraçadinho, hein?")
 		return
 	}
 
 	if count <= 10 {
-		h.sendErrorMessage(client, info.Chat, "ℹ️ Não faz sentido resumir tão poucas mensagens...")
+		h.sendErrorMessageReply(client, info, "ℹ️ Não faz sentido resumir tão poucas mensagens...")
 		return
 	}
 
 	if count > 9000 {
-		h.sendErrorMessage(client, info.Chat, "ℹ️ Você só pode ta de brincadeira, né?! Escolha um número menor!")
+		h.sendErrorMessageReply(client, info, "ℹ️ Você só pode ta de brincadeira, né?! Escolha um número menor!")
 		return
 	}
 
@@ -74,10 +74,16 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, info types
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*3)
 	defer cancel()
 
-	// Send initial "reading messages..." message
+	// Send initial "reading messages..." message as reply
 	loadingMessage := fmt.Sprintf("ℹ️ Lendo %d mensagens...", opts.Count)
 	msgResp, err := client.SendMessage(context.Background(), info.Chat, &waE2E.Message{
-		Conversation: proto.String(loadingMessage),
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text: proto.String(loadingMessage),
+			ContextInfo: &waE2E.ContextInfo{
+				StanzaID:    proto.String(info.ID),
+				Participant: proto.String(info.Sender.String()),
+			},
+		},
 	})
 	if err != nil {
 		h.logger.Error("Failed to send loading message", "error", err)
@@ -188,7 +194,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, info types
 	if err != nil {
 		h.logger.Error("Failed to edit message with summary", "error", err)
 		// Fallback: send summary as new message
-		h.sendMessage(client, info.Chat, finalSummary)
+		h.sendMessageReply(client, info, finalSummary)
 	}
 
 	// Save summary as a message

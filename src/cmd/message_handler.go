@@ -587,7 +587,44 @@ func (h *Handler) sendMessage(client *whatsmeow.Client, chat types.JID, message 
 	}
 }
 
+func (h *Handler) sendMessageReply(client *whatsmeow.Client, info types.MessageInfo, message string) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
+	_, err := client.SendMessage(ctx, info.Chat, &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text: proto.String(message),
+			ContextInfo: &waE2E.ContextInfo{
+				StanzaID:    proto.String(info.ID),
+				Participant: proto.String(info.Sender.String()),
+			},
+		},
+	})
+	if err != nil {
+		h.logger.Error("Failed to send message", "error", err)
+	}
+}
+
 func (h *Handler) sendErrorMessage(client *whatsmeow.Client, chat types.JID, message string) {
 	errorMsg := fmt.Sprintf("❌ %s", message)
 	h.sendMessage(client, chat, errorMsg)
+}
+
+func (h *Handler) sendErrorMessageReply(client *whatsmeow.Client, info types.MessageInfo, message string) {
+	errorMsg := fmt.Sprintf("❌ %s", message)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
+	_, err := client.SendMessage(ctx, info.Chat, &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text: proto.String(errorMsg),
+			ContextInfo: &waE2E.ContextInfo{
+				StanzaID:    proto.String(info.ID),
+				Participant: proto.String(info.Sender.String()),
+			},
+		},
+	})
+	if err != nil {
+		h.logger.Error("Failed to send error message", "error", err)
+	}
 }
