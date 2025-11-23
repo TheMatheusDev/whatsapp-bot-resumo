@@ -51,6 +51,7 @@ type DatabaseService interface {
 	// Message operations
 	SaveGroupMessage(msg Message, groupName string) error
 	GetGroupMessages(chatID string, count int) ([]Message, error)
+	GetMessagesSinceTime(chatID string, sinceTime time.Time) ([]Message, error)
 	GetAllGroups() ([]GroupSummary, error)
 
 	// Connection management

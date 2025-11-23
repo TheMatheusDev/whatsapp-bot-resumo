@@ -172,6 +172,44 @@ func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, e
 	return messages, nil
 }
 
+// GetMessagesSinceTime retrieves messages from a specific chat since a given time
+func (s *Service) GetMessagesSinceTime(chatID string, sinceTime time.Time) ([]types.Message, error) {
+	// Format time to match the database format: 2025-11-23 20:34:35-03:00
+	sinceTimeStr := sinceTime.Format("2006-01-02 15:04:05-07:00")
+
+	query := `SELECT id, chat_id, sender, message, message_type, timestamp 
+			  FROM group_messages 
+			  WHERE chat_id = ? 
+			  AND sender NOT LIKE 'ProfetaBOT [VOCÊ]%' 
+			  AND timestamp >= ? 
+			  ORDER BY timestamp ASC`
+
+	rows, err := s.db.Query(query, chatID, sinceTimeStr)
+	if err != nil {
+		s.logger.Error("Failed to query messages since time", "error", err, "chat_id", chatID, "since_time", sinceTimeStr)
+		return nil, fmt.Errorf("failed to query messages since time: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []types.Message
+	for rows.Next() {
+		var msg types.Message
+		err := rows.Scan(&msg.ID, &msg.ChatID, &msg.Sender, &msg.Content, &msg.MessageType, &msg.Timestamp)
+		if err != nil {
+			s.logger.Error("Failed to scan message row", "error", err)
+			return nil, fmt.Errorf("failed to scan message row: %w", err)
+		}
+		messages = append(messages, msg)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	s.logger.Debug("Retrieved messages since time", "chat_id", chatID, "since_time", sinceTimeStr, "count", len(messages))
+	return messages, nil
+}
+
 // GetAllGroups retrieves a list of all groups with their message counts
 func (s *Service) GetAllGroups() ([]types.GroupSummary, error) {
 	query := `

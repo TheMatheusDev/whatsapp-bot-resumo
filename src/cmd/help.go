@@ -12,10 +12,11 @@ func (h *Handler) handleHelpCommand(info types.MessageInfo, client *whatsmeow.Cl
 Resume mensagens via Google Gemini 2.5 Flash
 
 *Comandos:*
-- --resuma <número> → Resume mensagens do chat atual
+- -resuma <número> → Resume mensagens do chat atual
 - -r <número> → Forma abreviada
 - -clt <número> → Atalho para resumo CLT
 - -p <número> <pergunta> → Resume e responde uma pergunta
+- -d ou -dia → Resume todas as msgs do dia (desde 4h da manhã)	
 - --info → Informações do bot
 - --version → Versão do bot
 
@@ -23,7 +24,7 @@ Resume mensagens via Google Gemini 2.5 Flash
 - --curto ou -c → Resumo curto
 - --medio ou -m → Resumo médio
 - --longo ou -l → Resumo longo
-- --clt → Personalidade CLT (funciona com -r e -p)
+- --clt → Personalidade CLT (funciona com -r, -p e -d)
 
 *Exemplos:*
 - -r 15 → Resumo curto de 15 mensagens
@@ -31,6 +32,9 @@ Resume mensagens via Google Gemini 2.5 Flash
 - -p 50 Como está o humor do grupo? → Resume 50 msgs e responde a pergunta
 - -p 100 --clt Teve alguma treta? → Resume com CLT e responde pergunta
 - -p 200 --longo --clt Carlos surtou? → Resumo longo CLT + resposta
+- -d → Resumo diário
+- -d --clt → Resumo diário com personalidade CLT
+- -d --longo → Resumo longo do dia
 `
 
 	h.sendMessageReply(client, info, infoText)
@@ -39,7 +43,7 @@ Resume mensagens via Google Gemini 2.5 Flash
 // handleVersionCommand handles the --version/-v command
 func (h *Handler) handleVersionCommand(info types.MessageInfo, client *whatsmeow.Client) {
 	versionText := `
-ℹ️ ProfetaBOT v2.1
+ℹ️ ProfetaBOT v2.2
 
 🔗 Código: https://github.com/TheMatheusDev/whatsapp-bot-resumo`
 	h.sendMessageReply(client, info, versionText)
