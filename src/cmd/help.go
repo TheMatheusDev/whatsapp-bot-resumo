@@ -5,7 +5,6 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-// handleInfoCommand handles the --info/-i command
 func (h *Handler) handleHelpCommand(msgTrigger types.MessageInfo, client *whatsmeow.Client) {
 	infoText := `
 ℹ️ *ProfetaBOT:*
@@ -38,14 +37,4 @@ Resume mensagens via Google Gemini 2.5 Flash
 `
 
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, infoText)
-}
-
-// handleVersionCommand handles the --version/-v command
-func (h *Handler) handleVersionCommand(msgTrigger types.MessageInfo, client *whatsmeow.Client) {
-	versionText := `
-ℹ️ ProfetaBOT v2.2
-
-🔗 Código: https://github.com/TheMatheusDev/whatsapp-bot-resumo`
-
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, versionText)
 }
