@@ -145,19 +145,19 @@ func NewBot() (*Bot, error) {
 		botStartTime: time.Now(),
 	}
 
-	// Initialize handler
-	handler, err := cmd.NewHandler(cfg, aiService, dbService, cache, logger, bot.botStartTime)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize handler: %w", err)
-	}
-	bot.handler = handler
-
-	// Initialize WhatsApp service
+	// Initialize WhatsApp service first (before handler)
 	whatsappSvc, err := whatsapp.NewService(container, logger, bot.handleWhatsAppEvent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize WhatsApp service: %w", err)
 	}
 	bot.whatsappSvc = whatsappSvc
+
+	// Initialize handler with WhatsApp service
+	handler, err := cmd.NewHandler(cfg, aiService, dbService, whatsappSvc, cache, logger, bot.botStartTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize handler: %w", err)
+	}
+	bot.handler = handler
 
 	return bot, nil
 }

@@ -15,7 +15,7 @@ import (
 )
 
 // handleDailySummaryCommand handles the daily summary command (summarization since 4 AM)
-func (h *Handler) handleDailySummaryCommand(args []string, info types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
 	// Parse options
 	opts := wstypes.SummarizeOptions{
 		Style: "medium", // default para resumo diário
@@ -36,11 +36,11 @@ func (h *Handler) handleDailySummaryCommand(args []string, info types.MessageInf
 	}
 
 	// Start summarization in goroutine
-	go h.performDailySummarization(opts, info, client)
+	go h.performDailySummarization(opts, msgTrigger, client)
 }
 
 // performDailySummarization performs the daily summarization (since 4 AM)
-func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, info types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cancel()
 
@@ -54,33 +54,33 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, info 
 	}
 
 	// Get messages since 4 AM
-	messages, err := h.dbService.GetMessagesSinceTime(info.Chat.User, fourAMToday)
+	messages, err := h.dbService.GetMessagesSinceTime(msgTrigger.Chat.User, fourAMToday)
 	if err != nil {
 		h.logger.Error("Failed to get messages since time", "error", err)
-		h.sendErrorMessageReply(client, info, "Erro ao buscar mensagens do banco de dados")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, "❌ Erro ao buscar mensagens do banco de dados")
 		return
 	}
 
 	// Send initial "reading messages..." message as reply
 	loadingMessage := fmt.Sprintf("ℹ️ Resumindo o dia (%d mensagens)...", len(messages))
-	msgResp, err := client.SendMessage(context.Background(), info.Chat, &waE2E.Message{
+	msgResp, err := client.SendMessage(context.Background(), msgTrigger.Chat, &waE2E.Message{
 		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
 			Text: proto.String(loadingMessage),
 			ContextInfo: &waE2E.ContextInfo{
-				StanzaID:    proto.String(info.ID),
-				Participant: proto.String(info.Sender.String()),
+				StanzaID:    proto.String(msgTrigger.ID),
+				Participant: proto.String(msgTrigger.Sender.String()),
 			},
 		},
 	})
 	if err != nil {
 		h.logger.Error("Failed to send loading message", "error", err)
-		h.sendErrorMessageReply(client, info, "Erro ao enviar mensagem")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, "❌ Erro ao enviar mensagem")
 		return
 	}
 
 	// Check if there are enough messages
 	if len(messages) < 10 {
-		h.editMessage(client, info.Chat, msgResp.ID, fmt.Sprintf("ℹ️ Apenas %d mensagens hoje. Muito pouco para resumir...", len(messages)))
+		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fmt.Sprintf("ℹ️ Apenas %d mensagens hoje. Muito pouco para resumir...", len(messages)))
 		return
 	}
 
@@ -89,9 +89,9 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, info 
 	if err != nil {
 		h.logger.Error("Failed to generate summary", "error", err)
 		if ctx.Err() == context.DeadlineExceeded {
-			h.sendErrorMessageReply(client, info, "Timeout ao gerar resumo - tente com menos mensagens")
+			h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, "❌ Timeout ao gerar resumo - tente com menos mensagens")
 		} else {
-			h.sendErrorMessageReply(client, info, fmt.Sprintf("Erro ao gerar resumo\n\n%s", err.Error()))
+			h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, fmt.Sprintf("❌ Erro ao gerar resumo\n\n%s", err.Error()))
 		}
 		return
 	}
@@ -106,26 +106,13 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, info 
 	fullSummary := summary + footer
 
 	// Edit the loading message with the final summary
-	h.editMessage(client, info.Chat, msgResp.ID, fullSummary)
+	h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fullSummary)
 
 	h.logger.Info("Daily summary completed",
-		"chat_id", info.Chat.User,
+		"chat_id", msgTrigger.Chat.User,
 		"message_count", messageCount,
 		"style", opts.Style,
 		"clt", opts.Clt,
 		"since", fourAMToday.Format("2006-01-02 15:04:05"),
 	)
-}
-
-// editMessage edits a previously sent message
-func (h *Handler) editMessage(client *whatsmeow.Client, chat types.JID, messageID types.MessageID, newContent string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
-	_, err := client.SendMessage(ctx, chat, client.BuildEdit(chat, messageID, &waE2E.Message{
-		Conversation: proto.String(newContent),
-	}))
-	if err != nil {
-		h.logger.Error("Failed to edit message", "error", err)
-	}
 }

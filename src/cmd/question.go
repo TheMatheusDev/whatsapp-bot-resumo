@@ -11,32 +11,32 @@ import (
 )
 
 // handleAskQuestionCommand handles the --pergunte/-p command
-func (h *Handler) handleAskQuestionCommand(args []string, info types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleAskQuestionCommand(args []string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
 	if len(args) < 2 {
-		h.sendErrorMessage(client, info.Chat, "Uso: -p <número> [opções] <pergunta>\n\nOpções: --clt, --curto, --medio, --longo\n\nExemplos:\n• -p 50 Quem foi o usuário mais ativo?\n• -p 100 --clt Qual foi o assunto principal?\n• -p 200 --longo --clt Houve conflitos?")
+		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Uso: -p <número> [opções] <pergunta>\n\nOpções: --clt, --curto, --medio, --longo\n\nExemplos:\n• -p 50 Quem foi o usuário mais ativo?\n• -p 100 --clt Qual foi o assunto principal?\n• -p 200 --longo --clt Houve conflitos?")
 		return
 	}
 
 	// Parse message count
 	count, err := strconv.Atoi(args[0])
 	if err != nil || count <= 0 {
-		h.sendErrorMessage(client, info.Chat, "Número de mensagens inválido")
+		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Número de mensagens inválido")
 		return
 	}
 
 	// Validate count limits
 	if count <= 3 {
-		h.sendErrorMessage(client, info.Chat, "ℹ️ Se acha o engraçadinho, hein?")
+		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Se acha o engraçadinho, hein?")
 		return
 	}
 
 	if count <= 10 {
-		h.sendErrorMessage(client, info.Chat, "ℹ️ Não faz sentido resumir tão poucas mensagens...")
+		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Não faz sentido resumir tão poucas mensagens...")
 		return
 	}
 
 	if count > 9000 {
-		h.sendErrorMessage(client, info.Chat, "ℹ️ Você só pode ta de brincadeira, né?! Escolha um número menor!")
+		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Você só pode ta de brincadeira, né?! Escolha um número menor!")
 		return
 	}
 
@@ -67,7 +67,7 @@ func (h *Handler) handleAskQuestionCommand(args []string, info types.MessageInfo
 	question := strings.Join(questionParts, " ")
 
 	if question == "" {
-		h.sendErrorMessage(client, info.Chat, "ℹ️ Você precisa fazer uma pergunta!")
+		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Você precisa fazer uma pergunta!")
 		return
 	}
 
@@ -80,5 +80,5 @@ func (h *Handler) handleAskQuestionCommand(args []string, info types.MessageInfo
 	}
 
 	// Start summarization in goroutine
-	go h.performSummarization(opts, info, client)
+	go h.performSummarization(opts, msgTrigger, client)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow"
@@ -115,7 +116,7 @@ func (s *Service) performNewLogin(ctx context.Context) error {
 }
 
 // SendMessage sends a text message to a chat
-func (s *Service) SendMessage(ctx context.Context, chatID types.JID, message string) error {
+func (s *Service) SendMessage(chatID types.JID, message string) error {
 	if s.client == nil {
 		return fmt.Errorf("client not initialized")
 	}
@@ -123,6 +124,9 @@ func (s *Service) SendMessage(ctx context.Context, chatID types.JID, message str
 	if !s.connected {
 		return fmt.Errorf("not connected to WhatsApp")
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	defer cancel()
 
 	msg := &waE2E.Message{
 		Conversation: proto.String(message),
@@ -138,8 +142,38 @@ func (s *Service) SendMessage(ctx context.Context, chatID types.JID, message str
 	return nil
 }
 
-// SendEditMessage sends an edit to an existing message
-func (s *Service) SendEditMessage(ctx context.Context, chatID types.JID, messageID types.MessageID, newContent string) error {
+func (s *Service) SendMessageReply(chatID types.JID, replyTo types.MessageID, message string) error {
+	if s.client == nil {
+		return fmt.Errorf("client not initialized")
+	}
+	if !s.connected {
+		return fmt.Errorf("not connected to WhatsApp")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	defer cancel()
+
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text: proto.String(message),
+			ContextInfo: &waE2E.ContextInfo{
+				StanzaID:    proto.String(replyTo),
+				Participant: proto.String(chatID.User),
+			},
+		},
+	}
+
+	_, err := s.client.SendMessage(ctx, chatID, msg)
+	if err != nil {
+		s.logger.Error("Failed to send reply message", "error", err, "chat_id", chatID.String())
+		return fmt.Errorf("failed to send reply message: %w", err)
+	}
+	s.logger.Debug("Reply message sent successfully", "chat_id", chatID.String())
+	return nil
+}
+
+// EditMessage sends an edit to an existing message
+func (s *Service) EditMessage(chatID types.JID, messageID types.MessageID, newContent string) error {
 	if s.client == nil {
 		return fmt.Errorf("client not initialized")
 	}
@@ -147,6 +181,9 @@ func (s *Service) SendEditMessage(ctx context.Context, chatID types.JID, message
 	if !s.connected {
 		return fmt.Errorf("not connected to WhatsApp")
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	defer cancel()
 
 	editMsg := s.client.BuildEdit(chatID, messageID, &waE2E.Message{
 		Conversation: proto.String(newContent),

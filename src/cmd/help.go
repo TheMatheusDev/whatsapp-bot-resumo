@@ -6,7 +6,7 @@ import (
 )
 
 // handleInfoCommand handles the --info/-i command
-func (h *Handler) handleHelpCommand(info types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleHelpCommand(msgTrigger types.MessageInfo, client *whatsmeow.Client) {
 	infoText := `
 ℹ️ *ProfetaBOT:*
 Resume mensagens via Google Gemini 2.5 Flash
@@ -37,14 +37,15 @@ Resume mensagens via Google Gemini 2.5 Flash
 - -d --longo → Resumo longo do dia
 `
 
-	h.sendMessageReply(client, info, infoText)
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, infoText)
 }
 
 // handleVersionCommand handles the --version/-v command
-func (h *Handler) handleVersionCommand(info types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleVersionCommand(msgTrigger types.MessageInfo, client *whatsmeow.Client) {
 	versionText := `
 ℹ️ ProfetaBOT v2.2
 
 🔗 Código: https://github.com/TheMatheusDev/whatsapp-bot-resumo`
-	h.sendMessageReply(client, info, versionText)
+
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, versionText)
 }

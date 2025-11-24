@@ -7,7 +7,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-// Message represents a WhatsApp message
+// Message represents a WhatsApp message (type used for database operations)
 type Message struct {
 	ID          int       `json:"id" db:"id"`
 	ChatID      string    `json:"chat_id" db:"chat_id"`
@@ -61,8 +61,9 @@ type DatabaseService interface {
 
 // WhatsAppService defines the interface for WhatsApp operations
 type WhatsAppService interface {
-	SendMessage(ctx context.Context, chatID types.JID, message string) error
-	SendEditMessage(ctx context.Context, chatID types.JID, messageID types.MessageID, newContent string) error
+	SendMessage(chatID types.JID, message string) error
+	SendMessageReply(chatID types.JID, replyTo types.MessageID, message string) error
+	EditMessage(chatID types.JID, messageID types.MessageID, newContent string) error
 	Connect(ctx context.Context) error
 	Disconnect()
 	IsConnected() bool

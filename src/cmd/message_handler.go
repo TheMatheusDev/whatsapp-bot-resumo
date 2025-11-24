@@ -12,7 +12,6 @@ import (
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
-	"google.golang.org/protobuf/proto"
 
 	wstypes "whatsapp-summarizer/src/types"
 )
@@ -22,6 +21,7 @@ type Handler struct {
 	config          *wstypes.Config
 	aiService       wstypes.AIService
 	dbService       wstypes.DatabaseService
+	whatsappService wstypes.WhatsAppService
 	cache           wstypes.CacheService
 	logger          wstypes.Logger
 	botStartTime    time.Time
@@ -34,6 +34,7 @@ func NewHandler(
 	config *wstypes.Config,
 	aiService wstypes.AIService,
 	dbService wstypes.DatabaseService,
+	whatsappService wstypes.WhatsAppService,
 	cache wstypes.CacheService,
 	logger wstypes.Logger,
 	botStartTime time.Time,
@@ -48,6 +49,7 @@ func NewHandler(
 		config:          config,
 		aiService:       aiService,
 		dbService:       dbService,
+		whatsappService: whatsappService,
 		cache:           cache,
 		logger:          logger,
 		botStartTime:    botStartTime,
@@ -550,7 +552,7 @@ func (h *Handler) isCommand(content string) bool {
 }
 
 // handleCommand processes bot commands
-func (h *Handler) handleCommand(content string, info types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
 	parts := strings.Fields(content)
 	if len(parts) == 0 {
 		return
@@ -560,73 +562,18 @@ func (h *Handler) handleCommand(content string, info types.MessageInfo, client *
 
 	switch command {
 	case "--resuma", "-r", "!resumo", "!resuma", "!r", "/resuma", "/resumo", "/r":
-		h.handleSummarizeCommand(parts[1:], info, client)
+		h.handleSummarizeCommand(parts[1:], msgTrigger, client)
 	case "-clt", "!clt", "--clt", "/clt":
-		h.handleSummarizeCltCommand(parts[1:], info, client)
+		h.handleSummarizeCltCommand(parts[1:], msgTrigger, client)
 	case "--pergunte", "-p", "!pergunte", "!p", "/pergunte", "/p":
-		h.handleAskQuestionCommand(parts[1:], info, client)
-	case "--dia", "-d", "!dia", "!d", "/dia", "/d":
-		h.handleDailySummaryCommand(parts[1:], info, client)
+		h.handleAskQuestionCommand(parts[1:], msgTrigger, client)
+	case "--dia", "-d", "!dia", "!d", "/dia", "/d", "--daily", "/daily":
+		h.handleDailySummaryCommand(parts[1:], msgTrigger, client)
 	case "--help", "-h", "!help", "!h", "/help", "/h":
-		h.handleHelpCommand(info, client)
+		h.handleHelpCommand(msgTrigger, client)
 	case "--version", "-v", "!version", "!v", "/version", "/v":
-		h.handleVersionCommand(info, client)
+		h.handleVersionCommand(msgTrigger, client)
 	default:
 		h.logger.Debug("Unknown command", "command", command)
-	}
-}
-
-// handleSummarizeCltCommand handles the -clt command (shortcut for -r with --clt flag)
-func (h *Handler) sendMessage(client *whatsmeow.Client, chat types.JID, message string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
-	_, err := client.SendMessage(ctx, chat, &waE2E.Message{
-		Conversation: proto.String(message),
-	})
-	if err != nil {
-		h.logger.Error("Failed to send message", "error", err)
-	}
-}
-
-func (h *Handler) sendMessageReply(client *whatsmeow.Client, info types.MessageInfo, message string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
-	_, err := client.SendMessage(ctx, info.Chat, &waE2E.Message{
-		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
-			Text: proto.String(message),
-			ContextInfo: &waE2E.ContextInfo{
-				StanzaID:    proto.String(info.ID),
-				Participant: proto.String(info.Sender.String()),
-			},
-		},
-	})
-	if err != nil {
-		h.logger.Error("Failed to send message", "error", err)
-	}
-}
-
-func (h *Handler) sendErrorMessage(client *whatsmeow.Client, chat types.JID, message string) {
-	errorMsg := fmt.Sprintf("❌ %s", message)
-	h.sendMessage(client, chat, errorMsg)
-}
-
-func (h *Handler) sendErrorMessageReply(client *whatsmeow.Client, info types.MessageInfo, message string) {
-	errorMsg := fmt.Sprintf("❌ %s", message)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
-	_, err := client.SendMessage(ctx, info.Chat, &waE2E.Message{
-		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
-			Text: proto.String(errorMsg),
-			ContextInfo: &waE2E.ContextInfo{
-				StanzaID:    proto.String(info.ID),
-				Participant: proto.String(info.Sender.String()),
-			},
-		},
-	})
-	if err != nil {
-		h.logger.Error("Failed to send error message", "error", err)
 	}
 }
