@@ -96,6 +96,9 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 		return
 	}
 
+	// Add header
+	header := "ℹ️ *Resumo do dia:*\n"
+
 	// Add metadata footer
 	messageCount := len(messages)
 	duration := now.Sub(fourAMToday)
@@ -103,7 +106,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 	msgsPerHour := int(float64(messageCount) / hours)
 
 	footer := fmt.Sprintf("\n\n---\n📊 %d mensagens | ⏱️ %d msgs/h", messageCount, msgsPerHour)
-	fullSummary := summary + footer
+	fullSummary := header + summary + footer
 
 	// Edit the loading message with the final summary
 	h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fullSummary)
