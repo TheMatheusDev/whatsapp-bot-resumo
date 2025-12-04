@@ -123,7 +123,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 		"chat_id", msgTrigger.Chat.User,
 		"message_count", messageCount,
 		"style", opts.Style,
-		"clt", opts.Clt,
+		"personality", opts.Personality,
 		"since", fourAMToday.Format("2006-01-02 15:04:05"),
 	)
 }
