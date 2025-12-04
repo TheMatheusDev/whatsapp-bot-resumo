@@ -41,9 +41,9 @@ func (h *Handler) handleSummarizeCltCommand(args []string, msgTrigger types.Mess
 
 	// Parse options - CLT is always enabled for this command
 	opts := wstypes.SummarizeOptions{
-		Count: count,
-		Style: "short", // default
-		Clt:   true,    // always enabled for -clt command
+		Count:       count,
+		Style:       "short", // default
+		Personality: "clt",   // always enabled for -clt command
 	}
 
 	// Start summarization in goroutine

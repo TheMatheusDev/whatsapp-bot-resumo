@@ -47,9 +47,9 @@ func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.Message
 
 	// Parse options
 	opts := wstypes.SummarizeOptions{
-		Count: count,
-		Style: "short", // default
-		Clt:   false,   // default
+		Count:       count,
+		Style:       "short",   // default
+		Personality: "profeta", // default
 	}
 
 	for _, arg := range args[1:] {
@@ -61,7 +61,15 @@ func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.Message
 		case "--longo", "-l":
 			opts.Style = "long"
 		case "--clt", "-clt":
-			opts.Clt = true
+			opts.Personality = "clt"
+		case "--narrador", "-narrador":
+			opts.Personality = "narrador"
+		case "--farialimer", "-farialimer":
+			opts.Personality = "farialimer"
+		case "--noir", "-noir":
+			opts.Personality = "noir"
+		case "--zoomer", "-zoomer":
+			opts.Personality = "zoomer"
 		}
 	}
 

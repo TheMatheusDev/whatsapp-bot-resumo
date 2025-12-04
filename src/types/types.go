@@ -19,11 +19,11 @@ type Message struct {
 
 // SummarizeOptions represents options for message summarization
 type SummarizeOptions struct {
-	Count    int    `json:"count"`    // number of messages to summarize
-	Style    string `json:"style"`    // short, medium, long
-	Media    bool   `json:"media"`    // include media in the summary
-	Clt      bool   `json:"clt"`      // use clt personality instead of ProfetaBOT
-	Question string `json:"question"` // optional question to answer along with the summary
+	Count       int    `json:"count"`       // number of messages to summarize
+	Style       string `json:"style"`       // short, medium, long
+	Media       bool   `json:"media"`       // include media in the summary
+	Personality string `json:"personality"` // personality: profeta, clt, narrador, farialimer, noir, zoomer
+	Question    string `json:"question"`    // optional question to answer along with the summary
 }
 
 // GroupInfo represents cached group information

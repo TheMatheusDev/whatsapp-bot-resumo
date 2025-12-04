@@ -18,8 +18,8 @@ import (
 func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
 	// Parse options
 	opts := wstypes.SummarizeOptions{
-		Style: "medium", // default para resumo diário
-		Clt:   false,
+		Style:       "medium",  // default para resumo diário
+		Personality: "profeta", // default
 	}
 
 	for _, arg := range args {
@@ -31,7 +31,15 @@ func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.Mess
 		case "--longo", "-l":
 			opts.Style = "long"
 		case "--clt", "-clt":
-			opts.Clt = true
+			opts.Personality = "clt"
+		case "--narrador", "-narrador":
+			opts.Personality = "narrador"
+		case "--farialimer", "-farialimer":
+			opts.Personality = "farialimer"
+		case "--noir", "-noir":
+			opts.Personality = "noir"
+		case "--zoomer", "-zoomer":
+			opts.Personality = "zoomer"
 		}
 	}
 

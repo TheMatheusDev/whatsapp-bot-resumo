@@ -130,9 +130,20 @@ func (s *Service) buildMessagesString(messages []types.Message) string {
 func (s *Service) buildSystemPrompt(opts types.SummarizeOptions) string {
 	// Choose personality
 	var personality string
-	if opts.Clt {
+	switch opts.Personality {
+	case "clt":
 		personality = CLTPersonality
-	} else {
+	case "narrador":
+		personality = NarradorEsportivoPersonality
+	case "farialimer":
+		personality = FariaLimerPersonality
+	case "noir":
+		personality = DetetiveNoirPersonality
+	case "zoomer":
+		personality = ZoomerPersonality
+	case "profeta":
+		fallthrough
+	default:
 		personality = ProfetaBOTPersonality
 	}
 

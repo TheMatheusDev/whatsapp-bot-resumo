@@ -43,14 +43,22 @@ func (h *Handler) handleAskQuestionCommand(args []string, msgTrigger types.Messa
 	// Parse options and extract question
 	// Check for flags in the remaining args
 	var questionParts []string
-	useClt := false
-	style := "short" // default to medium for questions since they need more context
+	personality := "profeta" // default
+	style := "short"         // default to medium for questions since they need more context
 
 	for _, arg := range args[1:] {
 		argLower := strings.ToLower(arg)
 		switch argLower {
 		case "--clt", "-clt":
-			useClt = true
+			personality = "clt"
+		case "--narrador", "-narrador":
+			personality = "narrador"
+		case "--farialimer", "-farialimer":
+			personality = "farialimer"
+		case "--noir", "-noir":
+			personality = "noir"
+		case "--zoomer", "-zoomer":
+			personality = "zoomer"
 		case "--curto", "-c":
 			style = "short"
 		case "--medio", "-m":
@@ -73,10 +81,10 @@ func (h *Handler) handleAskQuestionCommand(args []string, msgTrigger types.Messa
 
 	// Parse options - start with defaults
 	opts := wstypes.SummarizeOptions{
-		Count:    count,
-		Style:    style,
-		Clt:      useClt,
-		Question: question,
+		Count:       count,
+		Style:       style,
+		Personality: personality,
+		Question:    question,
 	}
 
 	// Start summarization in goroutine
