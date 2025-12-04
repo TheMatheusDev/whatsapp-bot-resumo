@@ -101,9 +101,23 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 
 	// Add metadata footer
 	messageCount := len(messages)
-	duration := now.Sub(fourAMToday)
-	hours := duration.Hours()
-	msgsPerHour := int(float64(messageCount) / hours)
+
+	// Calculate duration from first message timestamp instead of 4 AM
+	var duration time.Duration
+	var msgsPerHour int
+	if messageCount > 0 && messages[0].Timestamp.After(fourAMToday) {
+		// Use first message timestamp as start time
+		duration = now.Sub(messages[0].Timestamp)
+		hours := duration.Hours()
+		if hours > 0 {
+			msgsPerHour = int(float64(messageCount) / hours)
+		}
+	} else {
+		// Fallback to 4 AM if no messages or invalid timestamp
+		duration = now.Sub(fourAMToday)
+		hours := duration.Hours()
+		msgsPerHour = int(float64(messageCount) / hours)
+	}
 
 	footer := fmt.Sprintf("\n\n---\n📊 %d mensagens | ⏱️ %d msgs/h", messageCount, msgsPerHour)
 	fullSummary := header + summary + footer
