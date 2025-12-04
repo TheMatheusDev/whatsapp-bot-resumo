@@ -8,6 +8,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 
 	wstypes "whatsapp-summarizer/src/types"
+	"whatsapp-summarizer/src/utils"
 )
 
 // handleAskQuestionCommand handles the --pergunte/-p command
@@ -40,36 +41,8 @@ func (h *Handler) handleAskQuestionCommand(args []string, msgTrigger types.Messa
 		return
 	}
 
-	// Parse options and extract question
-	// Check for flags in the remaining args
-	var questionParts []string
-	personality := "profeta" // default
-	style := "short"         // default to medium for questions since they need more context
-
-	for _, arg := range args[1:] {
-		argLower := strings.ToLower(arg)
-		switch argLower {
-		case "--clt", "-clt":
-			personality = "clt"
-		case "--narrador", "-narrador":
-			personality = "narrador"
-		case "--farialimer", "-farialimer":
-			personality = "farialimer"
-		case "--noir", "-noir":
-			personality = "noir"
-		case "--zoomer", "-zoomer":
-			personality = "zoomer"
-		case "--curto", "-c":
-			style = "short"
-		case "--medio", "-m":
-			style = "medium"
-		case "--longo", "-l":
-			style = "long"
-		default:
-			// Not a flag, it's part of the question
-			questionParts = append(questionParts, arg)
-		}
-	}
+	// Parse options and extract question using utility function
+	style, personality, questionParts := utils.ParseSummarizeOptions(args[1:], true)
 
 	// Join the remaining args as the question
 	question := strings.Join(questionParts, " ")

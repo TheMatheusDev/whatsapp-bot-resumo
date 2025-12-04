@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"go.mau.fi/whatsmeow"
@@ -13,6 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	wstypes "whatsapp-summarizer/src/types"
+	"whatsapp-summarizer/src/utils"
 )
 
 // handleSummarizeCommand handles the summarize command
@@ -45,33 +45,8 @@ func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.Message
 		return
 	}
 
-	// Parse options
-	opts := wstypes.SummarizeOptions{
-		Count:       count,
-		Style:       "short",   // default
-		Personality: "profeta", // default
-	}
-
-	for _, arg := range args[1:] {
-		switch strings.ToLower(arg) {
-		case "--curto", "-c":
-			opts.Style = "short"
-		case "--medio", "-m":
-			opts.Style = "medium"
-		case "--longo", "-l":
-			opts.Style = "long"
-		case "--clt", "-clt":
-			opts.Personality = "clt"
-		case "--narrador", "-narrador":
-			opts.Personality = "narrador"
-		case "--farialimer", "-farialimer":
-			opts.Personality = "farialimer"
-		case "--noir", "-noir":
-			opts.Personality = "noir"
-		case "--zoomer", "-zoomer":
-			opts.Personality = "zoomer"
-		}
-	}
+	// Parse options using utility function
+	opts := utils.ParseSummarizeOptionsToStruct(args[1:], count)
 
 	// Start summarization in goroutine
 	go h.performSummarization(opts, msgTrigger, client)

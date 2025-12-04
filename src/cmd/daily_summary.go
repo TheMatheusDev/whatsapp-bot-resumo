@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"go.mau.fi/whatsmeow"
@@ -12,35 +11,22 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	wstypes "whatsapp-summarizer/src/types"
+	"whatsapp-summarizer/src/utils"
 )
 
 // handleDailySummaryCommand handles the daily summary command (summarization since 4 AM)
 func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
-	// Parse options
-	opts := wstypes.SummarizeOptions{
-		Style:       "medium",  // default para resumo diário
-		Personality: "profeta", // default
+	// Parse options using utility function
+	style, personality, _ := utils.ParseSummarizeOptions(args, false)
+
+	// Override default style for daily summary
+	if style == "short" {
+		style = "medium"
 	}
 
-	for _, arg := range args {
-		switch strings.ToLower(arg) {
-		case "--curto", "-c":
-			opts.Style = "short"
-		case "--medio", "-m":
-			opts.Style = "medium"
-		case "--longo", "-l":
-			opts.Style = "long"
-		case "--clt", "-clt":
-			opts.Personality = "clt"
-		case "--narrador", "-narrador":
-			opts.Personality = "narrador"
-		case "--farialimer", "-farialimer":
-			opts.Personality = "farialimer"
-		case "--noir", "-noir":
-			opts.Personality = "noir"
-		case "--zoomer", "-zoomer":
-			opts.Personality = "zoomer"
-		}
+	opts := wstypes.SummarizeOptions{
+		Style:       style,
+		Personality: personality,
 	}
 
 	// Start summarization in goroutine
