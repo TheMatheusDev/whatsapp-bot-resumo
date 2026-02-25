@@ -6,8 +6,8 @@ import (
 
 func (h *Handler) handleHelpCommand(msgTrigger types.MessageInfo) {
 	infoText := `
-ℹ️ *ProfetaBOT:*
-Resume mensagens via Google Gemini 2.5 Pro/Flash com várias personalidades e estilos!
+ℹ️ *ResumoBOT:*
+Resume mensagens via Google Gemini com personalidades e estilos!
 Prefixos de comando: !, - ou /
 
 *Comandos:*
@@ -16,6 +16,7 @@ Prefixos de comando: !, - ou /
 - !d ou !dia → Resume todas as msgs do dia (desde 4h da manhã)	
 - !help → Informações do bot
 - !version → Versão do bot
+- !ping → Verifica se o bot está online
 
 *Comandos de Personalidade:*
 - !clt <número> → Resumo com personalidade CLT (trabalhador cansado)
@@ -37,7 +38,6 @@ Prefixos de comando: !, - ou /
 - !p 50 Como está o humor do grupo? → Responde a pergunta de acordo com as últimas 50 mensagens
 - !p 100 --clt Teve alguma treta? → Responde a pergunta com personalidade CLT
 - !d → Resumo diário
-- !d --clt → Resumo diário com personalidade CLT
 - !d --farialimer --longo → Resumo longo do dia com personalidade Faria Limmer
 `
 
