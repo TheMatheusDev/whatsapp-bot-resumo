@@ -100,9 +100,9 @@ func (s *Service) prepareStatements() error {
 	}
 
 	// Filter out bot messages when retrieving messages for summarization
-	// This excludes all messages sent by the bot itself (ProfetaBOT [VOCÊ])
+	// This excludes all messages sent by the bot itself (ResumoBOT [VOCÊ])
 	// Order by DESC to get the most recent messages first
-	s.getGroupStmt, err = s.db.Prepare(`SELECT id, chat_id, sender, message, message_type, timestamp FROM group_messages WHERE chat_id = ? AND sender NOT LIKE 'ProfetaBOT [VOCÊ]%' ORDER BY timestamp DESC LIMIT ?`)
+	s.getGroupStmt, err = s.db.Prepare(`SELECT id, chat_id, sender, message, message_type, timestamp FROM group_messages WHERE chat_id = ? AND sender NOT LIKE 'ResumoBOT [VOCÊ]%' ORDER BY timestamp DESC LIMIT ?`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare getGroupStmt: %w", err)
 	}
@@ -180,7 +180,7 @@ func (s *Service) GetMessagesSinceTime(chatID string, sinceTime time.Time) ([]ty
 	query := `SELECT id, chat_id, sender, message, message_type, timestamp 
 			  FROM group_messages 
 			  WHERE chat_id = ? 
-			  AND sender NOT LIKE 'ProfetaBOT [VOCÊ]%' 
+			  AND sender NOT LIKE 'ResumoBOT [VOCÊ]%' 
 			  AND timestamp >= ? 
 			  ORDER BY timestamp ASC`
 
@@ -215,7 +215,7 @@ func (s *Service) GetAllGroups() ([]types.GroupSummary, error) {
 	query := `
 		SELECT chat_id, COUNT(*) as message_count
 		FROM group_messages
-		WHERE sender NOT LIKE 'ProfetaBOT [VOCÊ]%'
+		WHERE sender NOT LIKE 'ResumoBOT [VOCÊ]%'
 		GROUP BY chat_id
 		ORDER BY message_count DESC
 	`

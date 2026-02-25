@@ -6,7 +6,7 @@ import (
 
 func (h *Handler) handleVersionCommand(msgTrigger types.MessageInfo) {
 	versionText := `
-ℹ️ ProfetaBOT v2.3
+ℹ️ ResumoBOT v2.3
 
 🔗 Código: https://github.com/TheMatheusDev/whatsapp-bot-resumo`
 

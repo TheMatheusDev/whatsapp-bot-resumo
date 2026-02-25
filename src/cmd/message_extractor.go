@@ -98,7 +98,7 @@ func (h *Handler) extractCurrentMessageText(msg *waE2E.Message) string {
 // getSenderName gets the sender name for a message
 func (h *Handler) getSenderName(info types.MessageInfo) string {
 	if info.IsFromMe {
-		return "ProfetaBOT [VOCÊ]"
+		return "ResumoBOT [VOCÊ]"
 	}
 
 	// For group messages, use the sender's push name or phone number

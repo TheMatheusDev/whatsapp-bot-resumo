@@ -115,7 +115,7 @@ func (e *EveryoneHandler) HandleEveryoneCommand(chat types.JID, dbService wstype
 		// Log the message to database
 		everyoneMsg := wstypes.Message{
 			ChatID:      chat.User,
-			Sender:      "ProfetaBOT [VOCÊ]",
+			Sender:      "ResumoBOT [VOCÊ]",
 			Content:     "[MENTIONED EVERYONE]",
 			MessageType: "EveryoneMention",
 			Timestamp:   time.Now().In(e.timezone),
