@@ -64,11 +64,11 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 
 		var ownerMessage string
 		if opts.Question != "" {
-			ownerMessage = fmt.Sprintf("ℹ️ %s requisitou um %s resumo de %d mensagens em %s\n❓ Pergunta: %s",
-				senderName, opts.Style, opts.Count, groupName, opts.Question)
+			ownerMessage = fmt.Sprintf("ℹ️ %s requisitou um %s resumo de %d mensagens em %s\n🎭 Personalidade: %s\n❓ Pergunta: %s",
+				senderName, opts.Style, opts.Count, groupName, opts.Personality, opts.Question)
 		} else {
-			ownerMessage = fmt.Sprintf("ℹ️ %s requisitou um %s resumo de %d mensagens em %s",
-				senderName, opts.Style, opts.Count, groupName)
+			ownerMessage = fmt.Sprintf("ℹ️ %s requisitou um %s resumo de %d mensagens em %s\n🎭 Personalidade: %s",
+				senderName, opts.Style, opts.Count, groupName, opts.Personality)
 		}
 
 		ownerJID := types.NewJID(h.config.WhatsApp.OwnerJID, types.DefaultUserServer)
