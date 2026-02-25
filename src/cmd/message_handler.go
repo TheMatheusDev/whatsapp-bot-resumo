@@ -27,6 +27,7 @@ type Handler struct {
 	botStartTime    time.Time
 	timezone        *time.Location
 	everyoneHandler *EveryoneHandler
+	whitelistMap    map[string]bool
 }
 
 // NewHandler creates a new message handler
@@ -45,6 +46,12 @@ func NewHandler(
 		loc = time.FixedZone(config.Bot.Timezone, -3*60*60)
 	}
 
+	// Build whitelist map for O(1) lookups
+	whitelistMap := make(map[string]bool, len(config.WhatsApp.GroupWhitelist))
+	for _, gid := range config.WhatsApp.GroupWhitelist {
+		whitelistMap[gid] = true
+	}
+
 	return &Handler{
 		config:          config,
 		aiService:       aiService,
@@ -55,6 +62,7 @@ func NewHandler(
 		botStartTime:    botStartTime,
 		timezone:        loc,
 		everyoneHandler: NewEveryoneHandler(config, logger, loc),
+		whitelistMap:    whitelistMap,
 	}, nil
 }
 
@@ -534,16 +542,8 @@ func (h *Handler) isAuthorized(info types.MessageInfo) bool {
 		return false
 	}
 
-	// For groups, check if the group is whitelisted
-	chatID := info.Chat.User
-	for _, allowedGroup := range h.config.WhatsApp.GroupWhitelist {
-		if chatID == allowedGroup {
-			return true
-		}
-	}
-
-	// Group not whitelisted
-	return false
+	// O(1) whitelist lookup
+	return h.whitelistMap[info.Chat.User]
 }
 
 // isCommand checks if a message is a bot command
