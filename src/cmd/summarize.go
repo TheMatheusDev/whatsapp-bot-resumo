@@ -71,12 +71,10 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 				senderName, opts.Style, opts.Count, groupName)
 		}
 
-		ownerJID, err := types.ParseJID(h.config.WhatsApp.OwnerJID)
-		if err == nil {
-			go func() {
-				h.whatsappService.SendMessage(ownerJID, ownerMessage)
-			}()
-		}
+		ownerJID := types.NewJID(h.config.WhatsApp.OwnerJID, types.DefaultUserServer)
+		go func() {
+			h.whatsappService.SendMessage(ownerJID, ownerMessage)
+		}()
 	}
 
 	// Get messages from database (only groups are supported)
