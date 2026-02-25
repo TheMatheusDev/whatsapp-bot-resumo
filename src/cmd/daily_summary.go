@@ -13,6 +13,91 @@ import (
 	"whatsapp-summarizer/src/utils"
 )
 
+// RunAutoDailySummary triggers the daily summary automatically for a given chat JID string.
+// It is called by the scheduler at 00:00 and covers messages from the previous day.
+func (h *Handler) RunAutoDailySummary(chatJIDStr string) {
+	chatJID, err := types.ParseJID(chatJIDStr)
+	if err != nil {
+		h.logger.Error("AutoDailySummary: invalid JID", "jid", chatJIDStr, "error", err)
+		return
+	}
+
+	go h.performAutoDailySummarization(chatJID)
+}
+
+// performAutoDailySummarization performs the automatic daily summarization without a message trigger.
+func (h *Handler) performAutoDailySummarization(chatJID types.JID) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+	defer cancel()
+
+	opts := wstypes.SummarizeOptions{
+		Style:       "medium",
+		Personality: "clt",
+	}
+
+	// Calculate 4 AM of the previous day in the bot's timezone (since we run at 00:00)
+	now := time.Now().In(h.timezone)
+	fourAMYesterday := time.Date(now.Year(), now.Month(), now.Day()-1, 4, 0, 0, 0, h.timezone)
+
+	messages, err := h.dbService.GetMessagesSinceTime(chatJID.User, fourAMYesterday)
+	if err != nil {
+		h.logger.Error("AutoDailySummary: failed to get messages", "error", err)
+		return
+	}
+
+	if len(messages) < 10 {
+		h.logger.Info("AutoDailySummary: not enough messages, skipping", "chat", chatJID.User, "count", len(messages))
+		return
+	}
+
+	loadingMessage := fmt.Sprintf("ℹ️ Resumindo o dia (%d mensagens)...", len(messages))
+	msgResp, err := h.whatsappService.SendRawMessage(context.Background(), chatJID, &waE2E.Message{
+		Conversation: proto.String(loadingMessage),
+	})
+	if err != nil {
+		h.logger.Error("AutoDailySummary: failed to send loading message", "error", err)
+		return
+	}
+
+	// Try primary model, then fallbacks
+	summary, err := h.aiService.SummarizeMessages(ctx, messages, opts)
+	if err != nil {
+		h.logger.Warn("AutoDailySummary: primary model failed, trying backup", "error", err)
+		h.whatsappService.EditMessage(chatJID, msgResp.ID, fmt.Sprintf("🔄 Lendo %d mensagens...", len(messages)))
+
+		summary, err = h.aiService.SummarizeMessagesWithBackup(ctx, messages, opts)
+		if err != nil {
+			h.logger.Warn("AutoDailySummary: backup model failed, trying second backup", "error", err)
+			h.whatsappService.EditMessage(chatJID, msgResp.ID, fmt.Sprintf("🔁 Lendo %d mensagens...", len(messages)))
+
+			summary, err = h.aiService.SummarizeMessagesWithBackup2(ctx, messages, opts)
+			if err != nil {
+				h.logger.Error("AutoDailySummary: all models failed", "error", err)
+				h.whatsappService.EditMessage(chatJID, msgResp.ID, "❌ Erro ao gerar resumo automático")
+				return
+			}
+		}
+	}
+
+	// Build final message
+	messageCount := len(messages)
+	var msgsPerHour int
+	duration := now.Sub(fourAMYesterday)
+	if hours := duration.Hours(); hours > 0 {
+		msgsPerHour = int(float64(messageCount) / hours)
+	}
+
+	header := fmt.Sprintf("🌙 *Resumo do dia %s:*\n", fourAMYesterday.Format("02/01"))
+	footer := fmt.Sprintf("\n\n---\n📊 %d mensagens | ⏱️ %d msgs/h", messageCount, msgsPerHour)
+	h.whatsappService.EditMessage(chatJID, msgResp.ID, header+summary+footer)
+
+	h.logger.Info("AutoDailySummary completed",
+		"chat_id", chatJID.User,
+		"message_count", messageCount,
+		"since", fourAMYesterday.Format("2006-01-02 15:04:05"),
+	)
+}
+
 // handleDailySummaryCommand handles the daily summary command (summarization since 4 AM)
 func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.MessageInfo) {
 	// Parse options using utility function

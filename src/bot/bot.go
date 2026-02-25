@@ -21,16 +21,17 @@ import (
 
 // Bot is the main application orchestrator
 type Bot struct {
-	config       *types.Config
-	logger       types.Logger
-	aiService    types.AIService
-	dbService    types.DatabaseService
-	whatsappSvc  *whatsapp.Service
-	handler      *cmd.Handler
-	cache        types.CacheService
-	container    *sqlstore.Container
-	running      bool
-	botStartTime time.Time
+	config        *types.Config
+	logger        types.Logger
+	aiService     types.AIService
+	dbService     types.DatabaseService
+	whatsappSvc   *whatsapp.Service
+	handler       *cmd.Handler
+	cache         types.CacheService
+	container     *sqlstore.Container
+	running       bool
+	botStartTime  time.Time
+	stopScheduler chan struct{}
 }
 
 // New creates a new bot instance with dependency injection
@@ -126,7 +127,48 @@ func (b *Bot) Start(ctx context.Context) error {
 	b.botStartTime = time.Now()
 	b.logger.Info("Bot started successfully", "start_time", b.botStartTime)
 
+	b.stopScheduler = make(chan struct{})
+	go b.startDailySummaryScheduler()
+
 	return nil
+}
+
+// startDailySummaryScheduler runs a goroutine that fires the automatic daily summary at 00:00 every day.
+func (b *Bot) startDailySummaryScheduler() {
+	groups := b.config.Bot.DailySummaryGroups
+	if len(groups) == 0 {
+		groups = b.config.WhatsApp.GroupWhitelist
+	}
+	if len(groups) == 0 {
+		b.logger.Info("DailySummaryScheduler: no groups configured, scheduler idle")
+		return
+	}
+
+	// Parse timezone from config
+	loc, err := time.LoadLocation(b.config.Bot.Timezone)
+	if err != nil {
+		loc = time.FixedZone(b.config.Bot.Timezone, -3*60*60)
+	}
+
+	for {
+		now := time.Now().In(loc)
+		// Next midnight in the configured timezone
+		nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, loc)
+		waitDuration := nextMidnight.Sub(now)
+
+		b.logger.Info("DailySummaryScheduler: next run", "in", waitDuration.Round(time.Second).String(), "at", nextMidnight.Format("2006-01-02 15:04:05"))
+
+		select {
+		case <-time.After(waitDuration):
+			b.logger.Info("DailySummaryScheduler: firing daily summaries", "groups", len(groups))
+			for _, jid := range groups {
+				b.handler.RunAutoDailySummary(jid)
+			}
+		case <-b.stopScheduler:
+			b.logger.Info("DailySummaryScheduler: stopped")
+			return
+		}
+	}
 }
 
 // Stop stops the bot
@@ -136,6 +178,10 @@ func (b *Bot) Stop() error {
 	}
 
 	b.logger.Info("Stopping bot...")
+
+	if b.stopScheduler != nil {
+		close(b.stopScheduler)
+	}
 
 	if b.whatsappSvc != nil {
 		b.whatsappSvc.Disconnect()

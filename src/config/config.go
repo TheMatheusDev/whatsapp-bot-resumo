@@ -43,10 +43,11 @@ func Load() (*types.Config, error) {
 			EveryoneAdmins: getEnvSlice("EVERYONE_ADMINS", []string{}),
 		},
 		Bot: types.BotConfig{
-			Timezone:      getEnv("TIMEZONE", "GMT-3"),
-			CacheTTL:      getEnv("CACHE_TTL", "10m"),
-			LogLevel:      getEnv("LOG_LEVEL", "INFO"),
-			EnableMetrics: getEnvBool("ENABLE_METRICS", false),
+			Timezone:           getEnv("TIMEZONE", "GMT-3"),
+			CacheTTL:           getEnv("CACHE_TTL", "10m"),
+			LogLevel:           getEnv("LOG_LEVEL", "INFO"),
+			EnableMetrics:      getEnvBool("ENABLE_METRICS", false),
+			DailySummaryGroups: getEnvSlice("DAILY_SUMMARY_GROUPS", []string{}),
 		},
 	}
 

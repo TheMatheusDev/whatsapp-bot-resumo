@@ -135,8 +135,9 @@ type WhatsAppConfig struct {
 
 // BotConfig holds bot behavior configuration
 type BotConfig struct {
-	Timezone      string `json:"timezone"`
-	CacheTTL      string `json:"cache_ttl"`
-	LogLevel      string `json:"log_level"`
-	EnableMetrics bool   `json:"enable_metrics"`
+	Timezone           string   `json:"timezone"`
+	CacheTTL           string   `json:"cache_ttl"`
+	LogLevel           string   `json:"log_level"`
+	EnableMetrics      bool     `json:"enable_metrics"`
+	DailySummaryGroups []string `json:"daily_summary_groups"`
 }
