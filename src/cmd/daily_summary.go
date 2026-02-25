@@ -95,7 +95,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 
 			// Try with second backup model
 			h.logger.Info("Retrying with second backup model")
-			h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fmt.Sprintf("🔄 Lendo %d mensagens...", len(messages)))
+			h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fmt.Sprintf("� Lendo %d mensagens...", len(messages)))
 
 			summary, err = h.aiService.SummarizeMessagesWithBackup2(ctx, messages, opts)
 			if err != nil {

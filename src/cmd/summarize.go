@@ -71,10 +71,12 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 				senderName, opts.Style, opts.Count, groupName)
 		}
 
-		ownerJID := types.NewJID(h.config.WhatsApp.OwnerJID, types.DefaultUserServer)
-		go func() {
-			h.whatsappService.SendMessage(ownerJID, ownerMessage)
-		}()
+		ownerJID, err := types.ParseJID(h.config.WhatsApp.OwnerJID)
+		if err == nil {
+			go func() {
+				h.whatsappService.SendMessage(ownerJID, ownerMessage)
+			}()
+		}
 	}
 
 	// Get messages from database (only groups are supported)
@@ -119,7 +121,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 
 			// Try with second backup model
 			h.logger.Info("Retrying with second backup model")
-			h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fmt.Sprintf("🔄 Lendo %d mensagens...", opts.Count))
+			h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fmt.Sprintf("� Lendo %d mensagens...", opts.Count))
 
 			summary, err = h.aiService.SummarizeMessagesWithBackup2(ctx, messages, opts)
 			if err != nil {
