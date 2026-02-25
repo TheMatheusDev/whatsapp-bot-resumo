@@ -16,7 +16,7 @@ var cltCountMessages = CountValidationMessages{
 // handleSummarizeCltCommand handles the -clt command (shortcut for -r with --clt flag)
 func (h *Handler) handleSummarizeCltCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Número de mensagens não especificado")
+		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Comando incompleto!\n\nUso: !CLT <número de mensagens> [opções optativas]\n\nOpções: --curto, --medio, --longo\n\nExemplos:\n - *!CLT 100*\n- !CLT 30 --longo")
 		return
 	}
 
