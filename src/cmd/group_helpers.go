@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 
@@ -21,7 +23,7 @@ func (h *Handler) getGroupName(client *whatsmeow.Client, chat types.JID) string 
 	}
 
 	// Cache miss, fetch from WhatsApp API
-	groupInfo, err := client.GetGroupInfo(chat)
+	groupInfo, err := client.GetGroupInfo(context.Background(), chat)
 	groupName := chatID // fallback to chat ID
 	if err == nil && groupInfo != nil {
 		groupName = groupInfo.Name

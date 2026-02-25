@@ -69,7 +69,7 @@ func (e *EveryoneHandler) HandleEveryoneCommand(chat types.JID, client *whatsmeo
 		defer cancel()
 
 		// Get group info
-		groupInfo, err := client.GetGroupInfo(chat)
+		groupInfo, err := client.GetGroupInfo(ctx, chat)
 		if err != nil {
 			e.logger.Error("Failed to get group info for @everyone", "error", err, "chat_id", chat.String())
 			return
@@ -153,7 +153,7 @@ func (e *EveryoneHandler) getGroupName(client *whatsmeow.Client, chat types.JID,
 	}
 
 	// Cache miss, fetch from WhatsApp API
-	groupInfo, err := client.GetGroupInfo(chat)
+	groupInfo, err := client.GetGroupInfo(context.Background(), chat)
 	groupName := chatID // fallback to chat ID
 	if err == nil && groupInfo != nil {
 		groupName = groupInfo.Name
