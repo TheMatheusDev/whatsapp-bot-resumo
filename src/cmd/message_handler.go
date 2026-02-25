@@ -39,10 +39,10 @@ func NewHandler(
 	logger wstypes.Logger,
 	botStartTime time.Time,
 ) (*Handler, error) {
-	// Parse timezone
-	loc, err := time.LoadLocation("GMT-3")
+	// Parse timezone from config
+	loc, err := time.LoadLocation(config.Bot.Timezone)
 	if err != nil {
-		loc = time.FixedZone("GMT-3", -3*60*60)
+		loc = time.FixedZone(config.Bot.Timezone, -3*60*60)
 	}
 
 	return &Handler{
