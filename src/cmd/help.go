@@ -20,7 +20,6 @@ Prefixos de comando: !, - ou /
 *Comandos de Personalidade:*
 - !clt <número> → Resumo com personalidade CLT (trabalhador cansado)
 - !fl <número> → Resumo com executivo da Faria Lima
-- !noir <número> → Resumo com detetive noir dos anos 40
 - !z <número> → Resumo com zoomer da Geração Z
 
 *Argumentos de Tamanho de Resumo:*
@@ -29,7 +28,6 @@ Prefixos de comando: !, - ou /
 - --longo ou -l → Resumo longo
 - --clt → Personalidade CLT
 - --farialimer ou --fl → Personalidade Faria Lima
-- --noir ou --detetive → Personalidade detetive noir
 - --zoomer ou --z → Personalidade zoomer
 
 *Exemplos:*
@@ -38,7 +36,6 @@ Prefixos de comando: !, - ou /
 - !clt 100 → Resumo com personalidade de CLT de 100 mensagens (atalho)
 - !p 50 Como está o humor do grupo? → Responde a pergunta de acordo com as últimas 50 mensagens
 - !p 100 --clt Teve alguma treta? → Responde a pergunta com personalidade CLT
-- !p 200 --noir Carlos surtou? → Responde a pergunta com personalidade detetive noir
 - !d → Resumo diário
 - !d --clt → Resumo diário com personalidade CLT
 - !d --farialimer --longo → Resumo longo do dia com personalidade Faria Limmer

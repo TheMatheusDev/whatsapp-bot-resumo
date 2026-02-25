@@ -51,8 +51,6 @@ func TestParseSummarizeOptions_PersonalityFlags(t *testing.T) {
 		{"clt", []string{"--clt"}, "clt"},
 		{"farialimer", []string{"--farialimer"}, "farialimer"},
 		{"farialimer alias", []string{"-fl"}, "farialimer"},
-		{"noir", []string{"--noir"}, "noir"},
-		{"noir detetive alias", []string{"--detetive"}, "noir"},
 		{"zoomer", []string{"--zoomer"}, "zoomer"},
 		{"zoomer alias", []string{"-z"}, "zoomer"},
 	}
@@ -85,12 +83,12 @@ func TestParseSummarizeOptions_NonFlagArgsDisabled(t *testing.T) {
 }
 
 func TestParseSummarizeOptions_CombinedFlags(t *testing.T) {
-	style, personality, _ := ParseSummarizeOptions([]string{"--longo", "--noir"}, false)
+	style, personality, _ := ParseSummarizeOptions([]string{"--longo", "--clt"}, false)
 	if style != "long" {
 		t.Errorf("expected style 'long', got '%s'", style)
 	}
-	if personality != "noir" {
-		t.Errorf("expected personality 'noir', got '%s'", personality)
+	if personality != "clt" {
+		t.Errorf("expected personality 'clt', got '%s'", personality)
 	}
 }
 

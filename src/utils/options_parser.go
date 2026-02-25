@@ -35,8 +35,6 @@ func ParseSummarizeOptions(args []string, includeNonFlags bool) (style string, p
 			personality = "clt"
 		case "--farialimer", "--fl", "-farialimer", "-fl":
 			personality = "farialimer"
-		case "--noir", "--detetive", "--d", "-noir", "-detetive", "-d":
-			personality = "noir"
 		case "--zoomer", "--z", "-zoomer", "-z":
 			personality = "zoomer"
 		default:
