@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"go.mau.fi/whatsmeow"
@@ -22,26 +21,8 @@ func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.Message
 		return
 	}
 
-	// Parse message count
-	count, err := strconv.Atoi(args[0])
-	if err != nil || count <= 0 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Número de mensagens inválido")
-		return
-	}
-
-	// Validate count limits (same as legacy code)
-	if count <= 3 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Se acha o engraçadinho, hein?")
-		return
-	}
-
-	if count <= 10 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Não faz sentido resumir tão poucas mensagens...")
-		return
-	}
-
-	if count > 9000 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Você só pode ta de brincadeira, né?! Escolha um número menor!")
+	count, ok := h.parseAndValidateCount(msgTrigger.Chat, args[0], DefaultCountMessages)
+	if !ok {
 		return
 	}
 

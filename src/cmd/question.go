@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"strconv"
 	"strings"
 
 	"go.mau.fi/whatsmeow"
@@ -18,26 +17,8 @@ func (h *Handler) handleAskQuestionCommand(args []string, msgTrigger types.Messa
 		return
 	}
 
-	// Parse message count
-	count, err := strconv.Atoi(args[0])
-	if err != nil || count <= 0 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Número de mensagens inválido")
-		return
-	}
-
-	// Validate count limits
-	if count <= 3 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Se acha o engraçadinho, hein?")
-		return
-	}
-
-	if count <= 10 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Não faz sentido resumir tão poucas mensagens...")
-		return
-	}
-
-	if count > 9000 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Você só pode ta de brincadeira, né?! Escolha um número menor!")
+	count, ok := h.parseAndValidateCount(msgTrigger.Chat, args[0], DefaultCountMessages)
+	if !ok {
 		return
 	}
 
@@ -52,7 +33,6 @@ func (h *Handler) handleAskQuestionCommand(args []string, msgTrigger types.Messa
 		return
 	}
 
-	// Parse options - start with defaults
 	opts := wstypes.SummarizeOptions{
 		Count:       count,
 		Style:       style,
