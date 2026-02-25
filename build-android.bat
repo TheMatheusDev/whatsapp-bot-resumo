@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-set NDK_ROOT=C:\PROGRA~2\msys64\android-ndk-r28c
+set NDK_ROOT=C:\PROGRA~2\msys64\android-ndk
 set TOOLCHAIN=%NDK_ROOT%\toolchains\llvm\prebuilt\windows-x86_64\bin
 
 set CC=%TOOLCHAIN%\aarch64-linux-android33-clang
