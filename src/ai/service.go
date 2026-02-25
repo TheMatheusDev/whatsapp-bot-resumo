@@ -28,11 +28,11 @@ func NewService(apiKey string, model string, modelBackup string, logger types.Lo
 	}
 
 	if model == "" {
-		model = "gemini-2.5-flash" // Default fallback
+		model = "gemini-3.1-pro-preview" // Default fallback
 	}
 
 	if modelBackup == "" {
-		modelBackup = "gemini-flash-latest" // Default backup
+		modelBackup = "gemini-3-flash-preview" // Default backup
 	}
 
 	ctx := context.Background()

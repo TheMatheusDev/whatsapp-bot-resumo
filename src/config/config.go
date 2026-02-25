@@ -27,8 +27,8 @@ func Load() (*types.Config, error) {
 	config := &types.Config{
 		Gemini: types.GeminiConfig{
 			APIKey:      getEnv("GEMINI_API_KEY", ""),
-			Model:       getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
-			ModelBackup: getEnv("GEMINI_MODEL_BACKUP", "gemini-flash-latest"),
+			Model:       getEnv("GEMINI_MODEL", "gemini-3.1-pro-preview"),
+			ModelBackup: getEnv("GEMINI_MODEL_BACKUP", "gemini-3-flash-preview"),
 		},
 		Database: types.DatabaseConfig{
 			Path:            getEnv("DB_PATH", "work.db"),
