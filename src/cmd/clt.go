@@ -4,6 +4,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 
 	wstypes "whatsapp-summarizer/src/types"
+	"whatsapp-summarizer/src/utils"
 )
 
 var cltCountMessages = CountValidationMessages{
@@ -24,9 +25,12 @@ func (h *Handler) handleSummarizeCltCommand(args []string, msgTrigger types.Mess
 		return
 	}
 
+	// Parse style options
+	style, _, _ := utils.ParseSummarizeOptions(args[1:], false)
+
 	opts := wstypes.SummarizeOptions{
 		Count:       count,
-		Style:       "short",
+		Style:       style,
 		Personality: "clt",
 	}
 
