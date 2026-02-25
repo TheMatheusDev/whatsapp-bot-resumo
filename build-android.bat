@@ -4,8 +4,8 @@ setlocal enabledelayedexpansion
 set NDK_ROOT=C:\PROGRA~2\msys64\android-ndk
 set TOOLCHAIN=%NDK_ROOT%\toolchains\llvm\prebuilt\windows-x86_64\bin
 
-set CC=%TOOLCHAIN%\aarch64-linux-android33-clang
-set CXX=%TOOLCHAIN%\aarch64-linux-android33-clang++
+set CC=%TOOLCHAIN%\aarch64-linux-android35-clang
+set CXX=%TOOLCHAIN%\aarch64-linux-android35-clang++
 set AR=%TOOLCHAIN%\llvm-ar
 set CGO_ENABLED=1
 set GOOS=android
