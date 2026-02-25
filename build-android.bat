@@ -1,4 +1,3 @@
-REM filepath: c:\Users\Ascending\Documents\Whatsapp-Summarizer-Bot-Go-Edition\build-android.bat
 @echo off
 setlocal enabledelayedexpansion
 
