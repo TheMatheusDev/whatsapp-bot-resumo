@@ -167,18 +167,18 @@ func (s *Service) buildSystemPrompt(opts types.SummarizeOptions) string {
 	// Choose personality
 	var personality string
 	switch opts.Personality {
-	case "clt":
-		personality = CLTPersonality
+	case "profeta":
+		personality = ProfetaBOTPersonality
 	case "farialimer":
 		personality = FariaLimerPersonality
 	case "noir":
 		personality = DetetiveNoirPersonality
 	case "zoomer":
 		personality = ZoomerPersonality
-	case "profeta":
+	case "clt":
 		fallthrough
 	default:
-		personality = ProfetaBOTPersonality
+		personality = CLTPersonality
 	}
 
 	// Choose length prompt

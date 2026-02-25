@@ -20,7 +20,7 @@ import (
 func ParseSummarizeOptions(args []string, includeNonFlags bool) (style string, personality string, nonFlagArgs []string) {
 	// Set defaults
 	style = "short"
-	personality = "profeta"
+	personality = "clt"
 
 	for _, arg := range args {
 		argLower := strings.ToLower(arg)

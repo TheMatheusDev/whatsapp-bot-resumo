@@ -9,8 +9,8 @@ func TestParseSummarizeOptions_Defaults(t *testing.T) {
 	if style != "short" {
 		t.Errorf("expected default style 'short', got '%s'", style)
 	}
-	if personality != "profeta" {
-		t.Errorf("expected default personality 'profeta', got '%s'", personality)
+	if personality != "clt" {
+		t.Errorf("expected default personality 'clt', got '%s'", personality)
 	}
 	if len(nonFlags) != 0 {
 		t.Errorf("expected no non-flag args, got %v", nonFlags)
