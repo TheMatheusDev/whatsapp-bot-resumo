@@ -86,7 +86,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 		h.logger.Info("Retrying with backup model")
 
 		// Edit the loading message to show we're trying backup
-		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, "ℹ️ Tentando resumir com modelo de backup...")
+		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fmt.Sprintf("🔄 Lendo %d mensagens...", len(messages)))
 
 		// Try again with backup model
 		summary, err = h.aiService.SummarizeMessagesWithBackup(ctx, messages, opts)
