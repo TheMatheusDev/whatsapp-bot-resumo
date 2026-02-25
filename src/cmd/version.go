@@ -6,12 +6,12 @@ import (
 
 func (h *Handler) handleVersionCommand(msgTrigger types.MessageInfo) {
 	versionText := `
-ℹ️ ResumoBOT v2.4
+ℹ️ ResumoBOT v2.4.1
 
 📋 *O que há de novo:*
 
 🏷️ Bot renomeado para ResumoBOT
-🤖 Personalidade CLT como padrão — narrador esportivo removido.
+🤖 Personalidade CLT como padrão — narrador esportivo e detetive noir removidos.
 ⏰ Resumo diário automático às 00:00.
 🔁 IA com fallback duplo — modelos Gemini atualizados.
 🐛 Correções e melhorias internas de performance.
