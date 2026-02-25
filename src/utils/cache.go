@@ -34,13 +34,9 @@ func (c *Cache) GetGroupName(chatID string) (string, bool) {
 		return "", false
 	}
 
-	// Check if cache entry is expired
+	// Check if cache entry is expired (lazy expiry: stale entries
+	// are overwritten on next SetGroupName, avoiding lock promotion)
 	if time.Since(info.CachedAt) > c.ttl {
-		c.mu.RUnlock()
-		c.mu.Lock()
-		delete(c.data, chatID)
-		c.mu.Unlock()
-		c.mu.RLock()
 		return "", false
 	}
 
