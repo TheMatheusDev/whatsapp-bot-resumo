@@ -55,7 +55,7 @@ func New() (*Bot, error) {
 		return nil, fmt.Errorf("failed to initialize database service: %w", err)
 	}
 
-	aiService, err := ai.NewService(cfg.Gemini.APIKey, cfg.Gemini.Model, cfg.Gemini.ModelBackup, l)
+	aiService, err := ai.NewService(cfg.Gemini.APIKey, cfg.Gemini.Model, cfg.Gemini.ModelBackup, cfg.Gemini.ModelBackup2, l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize AI service: %w", err)
 	}

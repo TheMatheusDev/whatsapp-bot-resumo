@@ -47,6 +47,7 @@ type GroupSummary struct {
 type AIService interface {
 	SummarizeMessages(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
 	SummarizeMessagesWithBackup(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
+	SummarizeMessagesWithBackup2(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
 	Close() error
 }
 
@@ -111,9 +112,10 @@ type Config struct {
 
 // GeminiConfig holds Gemini AI configuration
 type GeminiConfig struct {
-	APIKey      string `json:"api_key"`
-	Model       string `json:"model"`
-	ModelBackup string `json:"model_backup"`
+	APIKey       string `json:"api_key"`
+	Model        string `json:"model"`
+	ModelBackup  string `json:"model_backup"`
+	ModelBackup2 string `json:"model_backup2"`
 }
 
 // DatabaseConfig holds database configuration

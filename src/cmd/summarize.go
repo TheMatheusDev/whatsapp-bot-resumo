@@ -71,12 +71,10 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 				senderName, opts.Style, opts.Count, groupName)
 		}
 
-		ownerJID, err := types.ParseJID(h.config.WhatsApp.OwnerJID)
-		if err == nil {
-			go func() {
-				h.whatsappService.SendMessage(ownerJID, ownerMessage)
-			}()
-		}
+		ownerJID := types.NewJID(h.config.WhatsApp.OwnerJID, types.DefaultUserServer)
+		go func() {
+			h.whatsappService.SendMessage(ownerJID, ownerMessage)
+		}()
 	}
 
 	// Get messages from database (only groups are supported)
@@ -118,15 +116,24 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 		summary, err = h.aiService.SummarizeMessagesWithBackup(ctx, messages, opts)
 		if err != nil {
 			h.logger.Error("Failed to generate summary with backup model", "error", err)
-			// Edit the loading message to show error
-			errorMsg := ""
-			if ctx.Err() == context.DeadlineExceeded {
-				errorMsg = "⏱️ Timeout ao gerar resumo - tente com menos mensagens"
-			} else {
-				errorMsg = fmt.Sprintf("❌ Erro ao gerar resumo\n\n%s", err.Error())
+
+			// Try with second backup model
+			h.logger.Info("Retrying with second backup model")
+			h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fmt.Sprintf("🔄 Lendo %d mensagens...", opts.Count))
+
+			summary, err = h.aiService.SummarizeMessagesWithBackup2(ctx, messages, opts)
+			if err != nil {
+				h.logger.Error("Failed to generate summary with second backup model", "error", err)
+				// Edit the loading message to show error
+				errorMsg := ""
+				if ctx.Err() == context.DeadlineExceeded {
+					errorMsg = "⏱️ Timeout ao gerar resumo - tente com menos mensagens"
+				} else {
+					errorMsg = fmt.Sprintf("❌ Erro ao gerar resumo\n\n%s", err.Error())
+				}
+				h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, errorMsg)
+				return
 			}
-			h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, errorMsg)
-			return
 		}
 	}
 

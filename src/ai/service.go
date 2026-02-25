@@ -15,14 +15,15 @@ import (
 
 // Service implements the AIService interface
 type Service struct {
-	client      *genai.Client
-	model       string
-	modelBackup string
-	logger      types.Logger
+	client       *genai.Client
+	model        string
+	modelBackup  string
+	modelBackup2 string
+	logger       types.Logger
 }
 
 // NewService creates a new AI service
-func NewService(apiKey string, model string, modelBackup string, logger types.Logger) (*Service, error) {
+func NewService(apiKey string, model string, modelBackup string, modelBackup2 string, logger types.Logger) (*Service, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
@@ -35,6 +36,10 @@ func NewService(apiKey string, model string, modelBackup string, logger types.Lo
 		modelBackup = "gemini-3-flash-preview" // Default backup
 	}
 
+	if modelBackup2 == "" {
+		modelBackup2 = "gemini-2.5-flash" // Default second backup
+	}
+
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey: apiKey,
@@ -44,10 +49,11 @@ func NewService(apiKey string, model string, modelBackup string, logger types.Lo
 	}
 
 	return &Service{
-		client:      client,
-		model:       model,
-		modelBackup: modelBackup,
-		logger:      logger,
+		client:       client,
+		model:        model,
+		modelBackup:  modelBackup,
+		modelBackup2: modelBackup2,
+		logger:       logger,
 	}, nil
 }
 
@@ -109,6 +115,36 @@ func (s *Service) SummarizeMessagesWithBackup(ctx context.Context, messages []ty
 
 	// Generate content using Gemini with backup model
 	return s.generateContent(ctx, fullPrompt, s.modelBackup)
+}
+
+// SummarizeMessagesWithBackup2 summarizes messages using the second backup model
+func (s *Service) SummarizeMessagesWithBackup2(ctx context.Context, messages []types.Message, opts types.SummarizeOptions) (string, error) {
+	if len(messages) == 0 {
+		return "", fmt.Errorf("no messages to summarize")
+	}
+
+	// Build the messages string
+	messagesStr := s.buildMessagesString(messages)
+
+	// Build the system prompt
+	systemPrompt := s.buildSystemPrompt(opts)
+
+	// Build the user prompt
+	var userPrompt string
+	if opts.Question != "" {
+		userPrompt = fmt.Sprintf("Responda a pergunta a seguir baseado nas msgs: \"%s\"\n\nMensagens:\n%s", opts.Question, messagesStr)
+	} else {
+		userPrompt = fmt.Sprintf("Resuma as seguintes mensagens:\n%s", messagesStr)
+	}
+
+	// Combine prompts
+	fullPrompt := fmt.Sprintf("%s\n\n%s", systemPrompt, userPrompt)
+
+	// Log that we're using second backup model
+	s.logger.Info("Using second backup model for summarization", "model", s.modelBackup2)
+
+	// Generate content using Gemini with second backup model
+	return s.generateContent(ctx, fullPrompt, s.modelBackup2)
 }
 
 // buildMessagesString converts messages to a formatted string
