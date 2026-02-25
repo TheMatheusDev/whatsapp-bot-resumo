@@ -3,14 +3,13 @@ package cmd
 import (
 	"context"
 
-	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 
 	wstypes "whatsapp-summarizer/src/types"
 )
 
 // getGroupName gets the group name, using cache when possible
-func (h *Handler) getGroupName(client *whatsmeow.Client, chat types.JID) string {
+func (h *Handler) getGroupName(chat types.JID) string {
 	if chat.Server != types.GroupServer {
 		return "Direct Chat"
 	}
@@ -23,7 +22,7 @@ func (h *Handler) getGroupName(client *whatsmeow.Client, chat types.JID) string 
 	}
 
 	// Cache miss, fetch from WhatsApp API
-	groupInfo, err := client.GetGroupInfo(context.Background(), chat)
+	groupInfo, err := h.whatsappService.GetGroupInfo(context.Background(), chat)
 	groupName := chatID // fallback to chat ID
 	if err == nil && groupInfo != nil {
 		groupName = groupInfo.Name
@@ -36,12 +35,12 @@ func (h *Handler) getGroupName(client *whatsmeow.Client, chat types.JID) string 
 }
 
 // saveMessage saves a message to the database
-func (h *Handler) saveMessage(message wstypes.Message, chat types.JID, client *whatsmeow.Client) error {
+func (h *Handler) saveMessage(message wstypes.Message, chat types.JID) error {
 	// Only save group messages
 	if chat.Server != types.GroupServer {
 		return nil
 	}
 
-	groupName := h.getGroupName(client, chat)
+	groupName := h.getGroupName(chat)
 	return h.dbService.SaveGroupMessage(message, groupName)
 }

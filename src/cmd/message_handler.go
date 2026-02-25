@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 
@@ -57,16 +56,16 @@ func NewHandler(
 		logger:          logger,
 		botStartTime:    botStartTime,
 		timezone:        loc,
-		everyoneHandler: NewEveryoneHandler(config, logger, loc),
+		everyoneHandler: NewEveryoneHandler(config, logger, loc, whatsappService),
 		whitelistMap:    whitelistMap,
 	}, nil
 }
 
 // HandleEvent handles WhatsApp events
-func (h *Handler) HandleEvent(evt interface{}, client *whatsmeow.Client) {
+func (h *Handler) HandleEvent(evt interface{}) {
 	switch v := evt.(type) {
 	case *events.Message:
-		h.handleMessage(v, client)
+		h.handleMessage(v)
 	case *events.Receipt:
 		// Handle message receipts if needed
 	case *events.Presence:
@@ -79,14 +78,14 @@ func (h *Handler) HandleEvent(evt interface{}, client *whatsmeow.Client) {
 }
 
 // handleMessage processes incoming messages
-func (h *Handler) handleMessage(evt *events.Message, client *whatsmeow.Client) {
+func (h *Handler) handleMessage(evt *events.Message) {
 	msg := evt.Message
 	if msg == nil {
 		return
 	}
 
 	// Download media if present (images, videos, etc.)
-	h.downloadMediaIfPresent(msg, client)
+	h.downloadMediaIfPresent(msg)
 
 	// Extract message content
 	content := h.extractMessageContent(msg)
@@ -104,7 +103,7 @@ func (h *Handler) handleMessage(evt *events.Message, client *whatsmeow.Client) {
 	}
 
 	// Save to database (ALWAYS save, even if message is from before bot started)
-	if err := h.saveMessage(message, evt.Info.Chat, client); err != nil {
+	if err := h.saveMessage(message, evt.Info.Chat); err != nil {
 		h.logger.Error("Failed to save message", "error", err)
 	}
 
@@ -123,7 +122,7 @@ func (h *Handler) handleMessage(evt *events.Message, client *whatsmeow.Client) {
 		// Check if user is authorized to use @everyone
 		senderName := h.getSenderName(evt.Info)
 		if h.everyoneHandler.IsEveryoneAdmin(senderName) {
-			h.everyoneHandler.HandleEveryoneCommand(evt.Info.Chat, client, h.dbService, h.cache, currentMessageText)
+			h.everyoneHandler.HandleEveryoneCommand(evt.Info.Chat, h.dbService, h.cache, currentMessageText)
 		} else {
 			h.logger.Info("Unauthorized @everyone attempt", "sender", senderName)
 		}
@@ -131,12 +130,12 @@ func (h *Handler) handleMessage(evt *events.Message, client *whatsmeow.Client) {
 
 	// Process commands if from authorized users (only for new messages)
 	if h.isAuthorized(evt.Info) && h.isCommand(content) {
-		h.handleCommand(content, evt.Info, client)
+		h.handleCommand(content, evt.Info)
 	}
 }
 
 // handleCommand processes bot commands
-func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 	parts := strings.Fields(content)
 	if len(parts) == 0 {
 		return
@@ -146,25 +145,25 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, cl
 
 	switch command {
 	case "--resuma", "-r", "!resumo", "!resuma", "!r", "/resuma", "/resumo", "/r":
-		h.handleSummarizeCommand(parts[1:], msgTrigger, client)
+		h.handleSummarizeCommand(parts[1:], msgTrigger)
 	case "-clt", "!clt", "--clt", "/clt":
-		h.handleSummarizeCltCommand(parts[1:], msgTrigger, client)
+		h.handleSummarizeCltCommand(parts[1:], msgTrigger)
 	case "--narrador", "-n", "!narrador", "!n", "/narrador", "/n":
-		h.handleSummarizeNarradorCommand(parts[1:], msgTrigger, client)
+		h.handleSummarizeNarradorCommand(parts[1:], msgTrigger)
 	case "--farialimer", "-fl", "!farialimer", "!fl", "/farialimer", "/fl":
-		h.handleSummarizeFariaLimerCommand(parts[1:], msgTrigger, client)
+		h.handleSummarizeFariaLimerCommand(parts[1:], msgTrigger)
 	case "--noir", "--detetive", "-noir", "-detetive", "!noir", "!detetive", "/noir", "/detetive":
-		h.handleSummarizeNoirCommand(parts[1:], msgTrigger, client)
+		h.handleSummarizeNoirCommand(parts[1:], msgTrigger)
 	case "--zoomer", "-z", "!zoomer", "!z", "/zoomer", "/z":
-		h.handleSummarizeZoomerCommand(parts[1:], msgTrigger, client)
+		h.handleSummarizeZoomerCommand(parts[1:], msgTrigger)
 	case "--pergunte", "-p", "!pergunte", "!p", "/pergunte", "/p":
-		h.handleAskQuestionCommand(parts[1:], msgTrigger, client)
+		h.handleAskQuestionCommand(parts[1:], msgTrigger)
 	case "--dia", "-d", "!dia", "!d", "/dia", "/d", "--daily", "/daily":
-		h.handleDailySummaryCommand(parts[1:], msgTrigger, client)
+		h.handleDailySummaryCommand(parts[1:], msgTrigger)
 	case "--help", "-h", "!help", "!h", "/help", "/h":
-		h.handleHelpCommand(msgTrigger, client)
+		h.handleHelpCommand(msgTrigger)
 	case "--version", "-v", "!version", "!v", "/version", "/v":
-		h.handleVersionCommand(msgTrigger, client)
+		h.handleVersionCommand(msgTrigger)
 	default:
 		h.logger.Debug("Unknown command", "command", command)
 	}

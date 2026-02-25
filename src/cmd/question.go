@@ -3,7 +3,6 @@ package cmd
 import (
 	"strings"
 
-	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 
 	wstypes "whatsapp-summarizer/src/types"
@@ -11,7 +10,7 @@ import (
 )
 
 // handleAskQuestionCommand handles the --pergunte/-p command
-func (h *Handler) handleAskQuestionCommand(args []string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleAskQuestionCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) < 2 {
 		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Uso: -p <número> [opções] <pergunta>\n\nOpções: --clt, --curto, --medio, --longo\n\nExemplos:\n• -p 50 Quem foi o usuário mais ativo?\n• -p 100 --clt Qual foi o assunto principal?\n• -p 200 --longo --clt Houve conflitos?")
 		return
@@ -41,5 +40,5 @@ func (h *Handler) handleAskQuestionCommand(args []string, msgTrigger types.Messa
 	}
 
 	// Start summarization in goroutine
-	go h.performSummarization(opts, msgTrigger, client)
+	go h.performSummarization(opts, msgTrigger)
 }

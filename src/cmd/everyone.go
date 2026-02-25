@@ -5,27 +5,26 @@ import (
 	"strings"
 	"time"
 
-	"go.mau.fi/whatsmeow"
-	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
-	"google.golang.org/protobuf/proto"
 
 	wstypes "whatsapp-summarizer/src/types"
 )
 
 // EveryoneHandler handles @everyone mentions
 type EveryoneHandler struct {
-	config   *wstypes.Config
-	logger   wstypes.Logger
-	timezone *time.Location
+	config          *wstypes.Config
+	logger          wstypes.Logger
+	timezone        *time.Location
+	whatsappService wstypes.WhatsAppService
 }
 
 // NewEveryoneHandler creates a new everyone handler
-func NewEveryoneHandler(config *wstypes.Config, logger wstypes.Logger, timezone *time.Location) *EveryoneHandler {
+func NewEveryoneHandler(config *wstypes.Config, logger wstypes.Logger, timezone *time.Location, whatsappService wstypes.WhatsAppService) *EveryoneHandler {
 	return &EveryoneHandler{
-		config:   config,
-		logger:   logger,
-		timezone: timezone,
+		config:          config,
+		logger:          logger,
+		timezone:        timezone,
+		whatsappService: whatsappService,
 	}
 }
 
@@ -58,7 +57,7 @@ func (e *EveryoneHandler) IsEveryoneAdmin(senderName string) bool {
 }
 
 // HandleEveryoneCommand mentions all group members when @everyone is detected
-func (e *EveryoneHandler) HandleEveryoneCommand(chat types.JID, client *whatsmeow.Client, dbService wstypes.DatabaseService, cache wstypes.CacheService, messageContent string) {
+func (e *EveryoneHandler) HandleEveryoneCommand(chat types.JID, dbService wstypes.DatabaseService, cache wstypes.CacheService, messageContent string) {
 	go func() {
 		// Check if it's a group chat
 		if chat.Server != types.GroupServer {
@@ -69,7 +68,7 @@ func (e *EveryoneHandler) HandleEveryoneCommand(chat types.JID, client *whatsmeo
 		defer cancel()
 
 		// Get group info
-		groupInfo, err := client.GetGroupInfo(ctx, chat)
+		groupInfo, err := e.whatsappService.GetGroupInfo(ctx, chat)
 		if err != nil {
 			e.logger.Error("Failed to get group info for @everyone", "error", err, "chat_id", chat.String())
 			return
@@ -81,13 +80,16 @@ func (e *EveryoneHandler) HandleEveryoneCommand(chat types.JID, client *whatsmeo
 			return
 		}
 
+		// Get bot JID to exclude from mentions
+		botJID := e.whatsappService.GetBotJID()
+
 		// Create mentions string with all group members
 		var mentionTexts []string
 		var mentionJIDs []string
 
 		for _, member := range members {
 			// Skip if it's the bot itself
-			if member.JID.User == client.Store.LID.ToNonAD().User {
+			if member.JID.User == botJID.User {
 				continue
 			}
 
@@ -104,15 +106,7 @@ func (e *EveryoneHandler) HandleEveryoneCommand(chat types.JID, client *whatsmeo
 		messageText := "ℹ️ " + messageContent + "\n" + strings.Join(mentionTexts, " ")
 
 		// Send message with mentions
-		_, err = client.SendMessage(ctx, chat, &waE2E.Message{
-			ExtendedTextMessage: &waE2E.ExtendedTextMessage{
-				Text: proto.String(messageText),
-				ContextInfo: &waE2E.ContextInfo{
-					MentionedJID: mentionJIDs,
-				},
-			},
-		})
-
+		err = e.whatsappService.SendMentionMessage(ctx, chat, messageText, mentionJIDs)
 		if err != nil {
 			e.logger.Error("Failed to send @everyone message", "error", err, "chat_id", chat.String())
 			return
@@ -128,7 +122,7 @@ func (e *EveryoneHandler) HandleEveryoneCommand(chat types.JID, client *whatsmeo
 		}
 
 		// Get group name and save message
-		groupName := e.getGroupName(client, chat, cache)
+		groupName := e.getGroupName(chat, cache)
 		if err := dbService.SaveGroupMessage(everyoneMsg, groupName); err != nil {
 			e.logger.Error("Failed to save @everyone message to database", "error", err)
 		}
@@ -140,7 +134,7 @@ func (e *EveryoneHandler) HandleEveryoneCommand(chat types.JID, client *whatsmeo
 }
 
 // getGroupName gets the group name, using cache when possible
-func (e *EveryoneHandler) getGroupName(client *whatsmeow.Client, chat types.JID, cache wstypes.CacheService) string {
+func (e *EveryoneHandler) getGroupName(chat types.JID, cache wstypes.CacheService) string {
 	if chat.Server != types.GroupServer {
 		return "Direct Chat"
 	}
@@ -153,7 +147,7 @@ func (e *EveryoneHandler) getGroupName(client *whatsmeow.Client, chat types.JID,
 	}
 
 	// Cache miss, fetch from WhatsApp API
-	groupInfo, err := client.GetGroupInfo(context.Background(), chat)
+	groupInfo, err := e.whatsappService.GetGroupInfo(context.Background(), chat)
 	groupName := chatID // fallback to chat ID
 	if err == nil && groupInfo != nil {
 		groupName = groupInfo.Name

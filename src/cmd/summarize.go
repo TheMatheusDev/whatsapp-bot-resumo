@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.mau.fi/whatsmeow"
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
@@ -15,7 +14,7 @@ import (
 )
 
 // handleSummarizeCommand handles the summarize command
-func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
 		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Número de mensagens não especificado")
 		return
@@ -30,17 +29,17 @@ func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.Message
 	opts := utils.ParseSummarizeOptionsToStruct(args[1:], count)
 
 	// Start summarization in goroutine
-	go h.performSummarization(opts, msgTrigger, client)
+	go h.performSummarization(opts, msgTrigger)
 }
 
 // performSummarization performs the actual summarization
-func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger types.MessageInfo) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*3)
 	defer cancel()
 
 	// Send initial "reading messages..." message as reply
 	loadingMessage := fmt.Sprintf("ℹ️ Lendo %d mensagens...", opts.Count)
-	msgResp, err := client.SendMessage(context.Background(), msgTrigger.Chat, &waE2E.Message{
+	msgResp, err := h.whatsappService.SendRawMessage(context.Background(), msgTrigger.Chat, &waE2E.Message{
 		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
 			Text: proto.String(loadingMessage),
 			ContextInfo: &waE2E.ContextInfo{
@@ -57,7 +56,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 
 	// Notify owner about the request (similar to legacy code)
 	if h.config.WhatsApp.OwnerJID != "" && h.config.WhatsApp.OwnerJID != msgTrigger.Sender.User {
-		groupName := h.getGroupName(client, msgTrigger.Chat)
+		groupName := h.getGroupName(msgTrigger.Chat)
 		senderName := msgTrigger.PushName
 		if senderName == "" {
 			senderName = msgTrigger.Sender.User
@@ -75,9 +74,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 		ownerJID, err := types.ParseJID(h.config.WhatsApp.OwnerJID)
 		if err == nil {
 			go func() {
-				client.SendMessage(context.Background(), ownerJID, &waE2E.Message{
-					Conversation: proto.String(ownerMessage),
-				})
+				h.whatsappService.SendMessage(ownerJID, ownerMessage)
 			}()
 		}
 	}
@@ -87,10 +84,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 
 	if !msgTrigger.IsGroup {
 		h.logger.Error("Direct messages are not supported for summarization")
-		editMsg := client.BuildEdit(msgTrigger.Chat, msgResp.ID, &waE2E.Message{
-			Conversation: proto.String("❌ Resumos não são suportados em mensagens diretas"),
-		})
-		client.SendMessage(context.Background(), msgTrigger.Chat, editMsg)
+		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, "❌ Resumos não são suportados em mensagens diretas")
 		return
 	}
 
@@ -99,19 +93,13 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 	if err != nil {
 		h.logger.Error("Failed to get messages", "error", err)
 		// Edit the loading message to show error
-		editMsg := client.BuildEdit(msgTrigger.Chat, msgResp.ID, &waE2E.Message{
-			Conversation: proto.String("❌ Erro ao buscar mensagens"),
-		})
-		client.SendMessage(context.Background(), msgTrigger.Chat, editMsg)
+		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, "❌ Erro ao buscar mensagens")
 		return
 	}
 
 	if len(messages) == 0 {
 		// Edit the loading message to show no messages found
-		editMsg := client.BuildEdit(msgTrigger.Chat, msgResp.ID, &waE2E.Message{
-			Conversation: proto.String("ℹ❌ Nenhuma mensagem encontrada"),
-		})
-		client.SendMessage(context.Background(), msgTrigger.Chat, editMsg)
+		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, "ℹ❌ Nenhuma mensagem encontrada")
 		return
 	}
 
@@ -124,10 +112,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 		h.logger.Info("Retrying with backup model")
 
 		// Edit the loading message to show we're trying backup
-		editMsg := client.BuildEdit(msgTrigger.Chat, msgResp.ID, &waE2E.Message{
-			Conversation: proto.String("ℹ️ Tentando resumir com modelo de backup..."),
-		})
-		client.SendMessage(context.Background(), msgTrigger.Chat, editMsg)
+		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, "ℹ️ Tentando resumir com modelo de backup...")
 
 		// Try again with backup model
 		summary, err = h.aiService.SummarizeMessagesWithBackup(ctx, messages, opts)
@@ -140,21 +125,14 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 			} else {
 				errorMsg = fmt.Sprintf("❌ Erro ao gerar resumo\n\n%s", err.Error())
 			}
-			editMsg := client.BuildEdit(msgTrigger.Chat, msgResp.ID, &waE2E.Message{
-				Conversation: proto.String(errorMsg),
-			})
-			client.SendMessage(context.Background(), msgTrigger.Chat, editMsg)
+			h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, errorMsg)
 			return
 		}
 	}
 
 	// Edit the loading message with the final summary
 	finalSummary := fmt.Sprintf("ℹ️ Resumo por IA:\n%s", summary)
-	editMsg := client.BuildEdit(msgTrigger.Chat, msgResp.ID, &waE2E.Message{
-		Conversation: proto.String(finalSummary),
-	})
-
-	_, err = client.SendMessage(context.Background(), msgTrigger.Chat, editMsg)
+	err = h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, finalSummary)
 	if err != nil {
 		h.logger.Error("Failed to edit message with summary", "error", err)
 		// Fallback: send summary as new message
@@ -169,5 +147,5 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 		MessageType: "Summary",
 		Timestamp:   time.Now().In(h.timezone),
 	}
-	h.saveMessage(summaryMsg, msgTrigger.Chat, client)
+	h.saveMessage(summaryMsg, msgTrigger.Chat)
 }

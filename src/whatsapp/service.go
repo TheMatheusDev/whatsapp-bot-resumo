@@ -11,6 +11,7 @@ import (
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
+	watypes "go.mau.fi/whatsmeow/types"
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"google.golang.org/protobuf/proto"
 
@@ -213,9 +214,86 @@ func (s *Service) IsConnected() bool {
 	return s.connected && s.client != nil && s.client.IsConnected()
 }
 
-// GetClient returns the underlying WhatsApp client (for handlers that need direct access)
-func (s *Service) GetClient() *whatsmeow.Client {
-	return s.client
+// SendRawMessage sends a raw protobuf message to a chat and returns the response.
+// This is used for messages that need ContextInfo (e.g., replies with loading indicator).
+// The returned SendResponse contains the message ID needed for subsequent EditMessage calls.
+func (s *Service) SendRawMessage(ctx context.Context, chatID types.JID, msg *waE2E.Message) (whatsmeow.SendResponse, error) {
+	if s.client == nil {
+		return whatsmeow.SendResponse{}, fmt.Errorf("client not initialized")
+	}
+	if !s.connected {
+		return whatsmeow.SendResponse{}, fmt.Errorf("not connected to WhatsApp")
+	}
+
+	resp, err := s.client.SendMessage(ctx, chatID, msg)
+	if err != nil {
+		s.logger.Error("Failed to send raw message", "error", err, "chat_id", chatID.String())
+		return whatsmeow.SendResponse{}, fmt.Errorf("failed to send raw message: %w", err)
+	}
+
+	s.logger.Debug("Raw message sent successfully", "chat_id", chatID.String(), "msg_id", resp.ID)
+	return resp, nil
+}
+
+// GetGroupInfo returns information about a WhatsApp group
+func (s *Service) GetGroupInfo(ctx context.Context, chatID types.JID) (*watypes.GroupInfo, error) {
+	if s.client == nil {
+		return nil, fmt.Errorf("client not initialized")
+	}
+
+	groupInfo, err := s.client.GetGroupInfo(ctx, chatID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group info: %w", err)
+	}
+
+	return groupInfo, nil
+}
+
+// DownloadToFile downloads media from a WhatsApp message to a file
+func (s *Service) DownloadToFile(ctx context.Context, msg whatsmeow.DownloadableMessage, file *os.File) error {
+	if s.client == nil {
+		return fmt.Errorf("client not initialized")
+	}
+
+	if err := s.client.DownloadToFile(ctx, msg, file); err != nil {
+		return fmt.Errorf("failed to download to file: %w", err)
+	}
+
+	return nil
+}
+
+// GetBotJID returns the JID of the bot itself
+func (s *Service) GetBotJID() types.JID {
+	if s.client == nil || s.client.Store == nil {
+		return types.JID{}
+	}
+	return s.client.Store.LID.ToNonAD()
+}
+
+// SendMentionMessage sends a message that mentions specific users
+func (s *Service) SendMentionMessage(ctx context.Context, chatID types.JID, text string, mentionedJIDs []string) error {
+	if s.client == nil {
+		return fmt.Errorf("client not initialized")
+	}
+	if !s.connected {
+		return fmt.Errorf("not connected to WhatsApp")
+	}
+
+	_, err := s.client.SendMessage(ctx, chatID, &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text: proto.String(text),
+			ContextInfo: &waE2E.ContextInfo{
+				MentionedJID: mentionedJIDs,
+			},
+		},
+	})
+	if err != nil {
+		s.logger.Error("Failed to send mention message", "error", err, "chat_id", chatID.String())
+		return fmt.Errorf("failed to send mention message: %w", err)
+	}
+
+	s.logger.Debug("Mention message sent successfully", "chat_id", chatID.String())
+	return nil
 }
 
 // AddEventHandler adds an event handler to the client

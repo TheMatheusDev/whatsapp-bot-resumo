@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 
 	wstypes "whatsapp-summarizer/src/types"
@@ -15,7 +14,7 @@ var noirCountMessages = CountValidationMessages{
 }
 
 // handleSummarizeNoirCommand handles the noir/detective command (shortcut for -r with --noir flag)
-func (h *Handler) handleSummarizeNoirCommand(args []string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleSummarizeNoirCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
 		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Número de mensagens não especificado")
 		return
@@ -35,5 +34,5 @@ func (h *Handler) handleSummarizeNoirCommand(args []string, msgTrigger types.Mes
 		Personality: "noir",
 	}
 
-	go h.performSummarization(opts, msgTrigger, client)
+	go h.performSummarization(opts, msgTrigger)
 }

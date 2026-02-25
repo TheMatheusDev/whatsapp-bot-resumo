@@ -101,8 +101,8 @@ func New() (*Bot, error) {
 
 // handleWhatsAppEvent handles WhatsApp events via the message handler
 func (b *Bot) handleWhatsAppEvent(evt interface{}) {
-	if b.handler != nil && b.whatsappSvc != nil {
-		b.handler.HandleEvent(evt, b.whatsappSvc.GetClient())
+	if b.handler != nil {
+		b.handler.HandleEvent(evt)
 	}
 }
 

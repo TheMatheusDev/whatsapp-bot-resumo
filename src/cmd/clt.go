@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 
 	wstypes "whatsapp-summarizer/src/types"
@@ -14,7 +13,7 @@ var cltCountMessages = CountValidationMessages{
 }
 
 // handleSummarizeCltCommand handles the -clt command (shortcut for -r with --clt flag)
-func (h *Handler) handleSummarizeCltCommand(args []string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleSummarizeCltCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
 		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Número de mensagens não especificado")
 		return
@@ -31,5 +30,5 @@ func (h *Handler) handleSummarizeCltCommand(args []string, msgTrigger types.Mess
 		Personality: "clt",
 	}
 
-	go h.performSummarization(opts, msgTrigger, client)
+	go h.performSummarization(opts, msgTrigger)
 }

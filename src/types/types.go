@@ -2,9 +2,13 @@ package types
 
 import (
 	"context"
+	"os"
 	"time"
 
+	"go.mau.fi/whatsmeow"
+	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
+	watypes "go.mau.fi/whatsmeow/types"
 )
 
 // Message represents a WhatsApp message (type used for database operations)
@@ -64,6 +68,11 @@ type WhatsAppService interface {
 	SendMessage(chatID types.JID, message string) error
 	SendMessageReply(chatID types.JID, replyTo types.MessageID, message string) error
 	EditMessage(chatID types.JID, messageID types.MessageID, newContent string) error
+	SendRawMessage(ctx context.Context, chatID types.JID, msg *waE2E.Message) (whatsmeow.SendResponse, error)
+	GetGroupInfo(ctx context.Context, chatID types.JID) (*watypes.GroupInfo, error)
+	DownloadToFile(ctx context.Context, msg whatsmeow.DownloadableMessage, file *os.File) error
+	GetBotJID() types.JID
+	SendMentionMessage(ctx context.Context, chatID types.JID, text string, mentionedJIDs []string) error
 	Connect(ctx context.Context) error
 	Disconnect()
 	IsConnected() bool

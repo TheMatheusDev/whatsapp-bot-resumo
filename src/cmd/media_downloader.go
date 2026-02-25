@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,11 +9,13 @@ import (
 
 	"go.mau.fi/whatsmeow"
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
+
+	"context"
 )
 
 // downloadMedia is a generic template for downloading media files from WhatsApp.
 // It handles: directory creation, file creation, context timeout, download, and logging.
-func (h *Handler) downloadMedia(msg whatsmeow.DownloadableMessage, prefix, ext string, timeout time.Duration, client *whatsmeow.Client) (string, error) {
+func (h *Handler) downloadMedia(msg whatsmeow.DownloadableMessage, prefix, ext string, timeout time.Duration) (string, error) {
 	if err := os.MkdirAll("tmp", 0755); err != nil {
 		return "", fmt.Errorf("failed to create tmp directory: %w", err)
 	}
@@ -32,7 +33,7 @@ func (h *Handler) downloadMedia(msg whatsmeow.DownloadableMessage, prefix, ext s
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	if err := client.DownloadToFile(ctx, msg, file); err != nil {
+	if err := h.whatsappService.DownloadToFile(ctx, msg, file); err != nil {
 		return filePath, fmt.Errorf("failed to download %s: %w", prefix, err)
 	}
 
@@ -42,16 +43,16 @@ func (h *Handler) downloadMedia(msg whatsmeow.DownloadableMessage, prefix, ext s
 }
 
 // downloadMediaIfPresent checks if message contains media and downloads it
-func (h *Handler) downloadMediaIfPresent(msg *waE2E.Message, client *whatsmeow.Client) {
+func (h *Handler) downloadMediaIfPresent(msg *waE2E.Message) {
 	if imgMsg := msg.GetImageMessage(); imgMsg != nil {
-		if err := h.downloadImage(imgMsg, client); err != nil {
+		if err := h.downloadImage(imgMsg); err != nil {
 			h.logger.Error("Failed to download image", "error", err)
 		}
 		return
 	}
 
 	if videoMsg := msg.GetVideoMessage(); videoMsg != nil {
-		if _, err := h.downloadMedia(videoMsg, "video", "mp4", 120*time.Second, client); err != nil {
+		if _, err := h.downloadMedia(videoMsg, "video", "mp4", 120*time.Second); err != nil {
 			h.logger.Error("Failed to download video", "error", err)
 		}
 		return
@@ -66,21 +67,21 @@ func (h *Handler) downloadMediaIfPresent(msg *waE2E.Message, client *whatsmeow.C
 				ext = "m4a"
 			}
 		}
-		if _, err := h.downloadMedia(audioMsg, "audio", ext, 60*time.Second, client); err != nil {
+		if _, err := h.downloadMedia(audioMsg, "audio", ext, 60*time.Second); err != nil {
 			h.logger.Error("Failed to download audio", "error", err)
 		}
 		return
 	}
 
 	if docMsg := msg.GetDocumentMessage(); docMsg != nil {
-		if err := h.downloadDocument(docMsg, client); err != nil {
+		if err := h.downloadDocument(docMsg); err != nil {
 			h.logger.Error("Failed to download document", "error", err)
 		}
 		return
 	}
 
 	if stickerMsg := msg.GetStickerMessage(); stickerMsg != nil {
-		if _, err := h.downloadMedia(stickerMsg, "sticker", "webp", 60*time.Second, client); err != nil {
+		if _, err := h.downloadMedia(stickerMsg, "sticker", "webp", 60*time.Second); err != nil {
 			h.logger.Error("Failed to download sticker", "error", err)
 		}
 		return
@@ -88,8 +89,8 @@ func (h *Handler) downloadMediaIfPresent(msg *waE2E.Message, client *whatsmeow.C
 }
 
 // downloadImage downloads an image with thumbnail fallback
-func (h *Handler) downloadImage(imgMsg *waE2E.ImageMessage, client *whatsmeow.Client) error {
-	filePath, err := h.downloadMedia(imgMsg, "image", "jpg", 60*time.Second, client)
+func (h *Handler) downloadImage(imgMsg *waE2E.ImageMessage) error {
+	filePath, err := h.downloadMedia(imgMsg, "image", "jpg", 60*time.Second)
 	if err != nil {
 		// If download fails, try to save thumbnail as fallback
 		h.logger.Warn("Failed to download full image, saving thumbnail instead", "error", err)
@@ -107,7 +108,7 @@ func (h *Handler) downloadImage(imgMsg *waE2E.ImageMessage, client *whatsmeow.Cl
 }
 
 // downloadDocument downloads a document with original filename preservation
-func (h *Handler) downloadDocument(docMsg *waE2E.DocumentMessage, client *whatsmeow.Client) error {
+func (h *Handler) downloadDocument(docMsg *waE2E.DocumentMessage) error {
 	if err := os.MkdirAll("tmp", 0755); err != nil {
 		return fmt.Errorf("failed to create tmp directory: %w", err)
 	}
@@ -130,7 +131,7 @@ func (h *Handler) downloadDocument(docMsg *waE2E.DocumentMessage, client *whatsm
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	if err := client.DownloadToFile(ctx, docMsg, file); err != nil {
+	if err := h.whatsappService.DownloadToFile(ctx, docMsg, file); err != nil {
 		return fmt.Errorf("failed to download document: %w", err)
 	}
 

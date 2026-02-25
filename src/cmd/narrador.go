@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 
 	wstypes "whatsapp-summarizer/src/types"
@@ -15,7 +14,7 @@ var narradorCountMessages = CountValidationMessages{
 }
 
 // handleSummarizeNarradorCommand handles the narrador command (shortcut for -r with --narrador flag)
-func (h *Handler) handleSummarizeNarradorCommand(args []string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleSummarizeNarradorCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
 		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Número de mensagens não especificado")
 		return
@@ -35,5 +34,5 @@ func (h *Handler) handleSummarizeNarradorCommand(args []string, msgTrigger types
 		Personality: "narrador",
 	}
 
-	go h.performSummarization(opts, msgTrigger, client)
+	go h.performSummarization(opts, msgTrigger)
 }

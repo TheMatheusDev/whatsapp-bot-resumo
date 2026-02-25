@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 
 	wstypes "whatsapp-summarizer/src/types"
@@ -15,7 +14,7 @@ var zoomerCountMessages = CountValidationMessages{
 }
 
 // handleSummarizeZoomerCommand handles the zoomer command (shortcut for -r with --zoomer flag)
-func (h *Handler) handleSummarizeZoomerCommand(args []string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleSummarizeZoomerCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
 		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ número de mensagens não especificado")
 		return
@@ -35,5 +34,5 @@ func (h *Handler) handleSummarizeZoomerCommand(args []string, msgTrigger types.M
 		Personality: "zoomer",
 	}
 
-	go h.performSummarization(opts, msgTrigger, client)
+	go h.performSummarization(opts, msgTrigger)
 }

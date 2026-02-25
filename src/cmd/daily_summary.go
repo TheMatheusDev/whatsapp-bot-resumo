@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.mau.fi/whatsmeow"
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
@@ -15,7 +14,7 @@ import (
 )
 
 // handleDailySummaryCommand handles the daily summary command (summarization since 4 AM)
-func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.MessageInfo) {
 	// Parse options using utility function
 	style, personality, _ := utils.ParseSummarizeOptions(args, false)
 
@@ -30,11 +29,11 @@ func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.Mess
 	}
 
 	// Start summarization in goroutine
-	go h.performDailySummarization(opts, msgTrigger, client)
+	go h.performDailySummarization(opts, msgTrigger)
 }
 
 // performDailySummarization performs the daily summarization (since 4 AM)
-func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTrigger types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTrigger types.MessageInfo) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cancel()
 
@@ -57,7 +56,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 
 	// Send initial "reading messages..." message as reply
 	loadingMessage := fmt.Sprintf("ℹ️ Resumindo o dia (%d mensagens)...", len(messages))
-	msgResp, err := client.SendMessage(context.Background(), msgTrigger.Chat, &waE2E.Message{
+	msgResp, err := h.whatsappService.SendRawMessage(context.Background(), msgTrigger.Chat, &waE2E.Message{
 		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
 			Text: proto.String(loadingMessage),
 			ContextInfo: &waE2E.ContextInfo{
@@ -87,10 +86,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 		h.logger.Info("Retrying with backup model")
 
 		// Edit the loading message to show we're trying backup
-		editMsg := client.BuildEdit(msgTrigger.Chat, msgResp.ID, &waE2E.Message{
-			Conversation: proto.String("ℹ️ Tentando resumir com modelo de backup..."),
-		})
-		client.SendMessage(context.Background(), msgTrigger.Chat, editMsg)
+		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, "ℹ️ Tentando resumir com modelo de backup...")
 
 		// Try again with backup model
 		summary, err = h.aiService.SummarizeMessagesWithBackup(ctx, messages, opts)
@@ -103,10 +99,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 			} else {
 				errorMsg = fmt.Sprintf("❌ Erro ao gerar resumo\n\n%s", err.Error())
 			}
-			editMsg := client.BuildEdit(msgTrigger.Chat, msgResp.ID, &waE2E.Message{
-				Conversation: proto.String(errorMsg),
-			})
-			client.SendMessage(context.Background(), msgTrigger.Chat, editMsg)
+			h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, errorMsg)
 			return
 		}
 	}

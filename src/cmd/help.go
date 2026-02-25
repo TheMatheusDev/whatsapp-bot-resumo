@@ -1,11 +1,10 @@
 package cmd
 
 import (
-	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 )
 
-func (h *Handler) handleHelpCommand(msgTrigger types.MessageInfo, client *whatsmeow.Client) {
+func (h *Handler) handleHelpCommand(msgTrigger types.MessageInfo) {
 	infoText := `
 ℹ️ *ProfetaBOT:*
 Resume mensagens via Google Gemini 2.5 Pro/Flash com várias personalidades e estilos!
