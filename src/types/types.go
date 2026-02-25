@@ -26,7 +26,7 @@ type SummarizeOptions struct {
 	Count       int    `json:"count"`       // number of messages to summarize
 	Style       string `json:"style"`       // short, medium, long
 	Media       bool   `json:"media"`       // include media in the summary
-	Personality string `json:"personality"` // personality: profeta, clt, narrador, farialimer, noir, zoomer
+	Personality string `json:"personality"` // personality: profeta, clt, farialimer, noir, zoomer
 	Question    string `json:"question"`    // optional question to answer along with the summary
 }
 

@@ -148,8 +148,6 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 		h.handleSummarizeCommand(parts[1:], msgTrigger)
 	case "-clt", "!clt", "--clt", "/clt":
 		h.handleSummarizeCltCommand(parts[1:], msgTrigger)
-	case "--narrador", "-n", "!narrador", "!n", "/narrador", "/n":
-		h.handleSummarizeNarradorCommand(parts[1:], msgTrigger)
 	case "--farialimer", "-fl", "!farialimer", "!fl", "/farialimer", "/fl":
 		h.handleSummarizeFariaLimerCommand(parts[1:], msgTrigger)
 	case "--noir", "--detetive", "-noir", "-detetive", "!noir", "!detetive", "/noir", "/detetive":

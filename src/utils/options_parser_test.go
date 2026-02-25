@@ -49,8 +49,6 @@ func TestParseSummarizeOptions_PersonalityFlags(t *testing.T) {
 		expected string
 	}{
 		{"clt", []string{"--clt"}, "clt"},
-		{"narrador", []string{"--narrador"}, "narrador"},
-		{"narrador alias", []string{"-n"}, "narrador"},
 		{"farialimer", []string{"--farialimer"}, "farialimer"},
 		{"farialimer alias", []string{"-fl"}, "farialimer"},
 		{"noir", []string{"--noir"}, "noir"},
