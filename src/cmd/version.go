@@ -6,7 +6,7 @@ import (
 
 func (h *Handler) handleVersionCommand(msgTrigger types.MessageInfo) {
 	versionText := `
-ℹ️ ResumoBOT v2.4.1
+ℹ️ ResumoBOT v2.4.2
 
 📋 *O que há de novo:*
 
