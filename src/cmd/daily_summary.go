@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
@@ -15,13 +16,27 @@ import (
 
 // RunAutoDailySummary triggers the daily summary automatically for a given chat JID string.
 // It is called by the scheduler at 00:00 and covers messages from the previous day.
+// Accepts both bare numbers ("120363XXX") and full JIDs ("120363XXX@g.us"), trimming spaces.
 func (h *Handler) RunAutoDailySummary(chatJIDStr string) {
-	chatJID, err := types.ParseJID(chatJIDStr)
-	if err != nil {
-		h.logger.Error("AutoDailySummary: invalid JID", "jid", chatJIDStr, "error", err)
+	chatJIDStr = strings.TrimSpace(chatJIDStr)
+	if chatJIDStr == "" {
+		h.logger.Error("AutoDailySummary: empty JID, skipping")
 		return
 	}
 
+	// Extract the user part (before @), regardless of input format
+	userPart := chatJIDStr
+	if idx := strings.Index(chatJIDStr, "@"); idx >= 0 {
+		userPart = chatJIDStr[:idx]
+	}
+
+	if userPart == "" {
+		h.logger.Error("AutoDailySummary: could not extract user part from JID", "jid", chatJIDStr)
+		return
+	}
+
+	chatJID := types.JID{User: userPart, Server: "g.us"}
+	h.logger.Info("AutoDailySummary: queuing", "chat", chatJID.User)
 	go h.performAutoDailySummarization(chatJID)
 }
 
