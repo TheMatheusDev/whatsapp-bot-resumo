@@ -149,7 +149,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 	// Save summary as a message
 	summaryMsg := wstypes.Message{
 		ChatID:      msgTrigger.Chat.User,
-		Sender:      "ProfetaBOT [VOCÊ]",
+		Sender:      "ResumoBOT [VOCÊ]",
 		Content:     finalSummary,
 		MessageType: "Summary",
 		Timestamp:   time.Now().In(h.timezone),
