@@ -133,11 +133,21 @@ type WhatsAppConfig struct {
 	EveryoneAdmins []string `json:"everyone_admins"`
 }
 
+// MediaDownloadConfig holds per-type media download toggles
+type MediaDownloadConfig struct {
+	Image    bool `json:"image"`
+	Video    bool `json:"video"`
+	Audio    bool `json:"audio"`
+	Document bool `json:"document"`
+	Sticker  bool `json:"sticker"`
+}
+
 // BotConfig holds bot behavior configuration
 type BotConfig struct {
-	Timezone           string   `json:"timezone"`
-	CacheTTL           string   `json:"cache_ttl"`
-	LogLevel           string   `json:"log_level"`
-	EnableMetrics      bool     `json:"enable_metrics"`
-	DailySummaryGroups []string `json:"daily_summary_groups"`
+	Timezone           string              `json:"timezone"`
+	CacheTTL           string              `json:"cache_ttl"`
+	LogLevel           string              `json:"log_level"`
+	EnableMetrics      bool                `json:"enable_metrics"`
+	DailySummaryGroups []string            `json:"daily_summary_groups"`
+	MediaDownload      MediaDownloadConfig `json:"media_download"`
 }

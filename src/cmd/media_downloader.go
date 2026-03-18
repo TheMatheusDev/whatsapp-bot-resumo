@@ -45,6 +45,10 @@ func (h *Handler) downloadMedia(msg whatsmeow.DownloadableMessage, prefix, ext s
 // downloadMediaIfPresent checks if message contains media and downloads it
 func (h *Handler) downloadMediaIfPresent(msg *waE2E.Message) {
 	if imgMsg := msg.GetImageMessage(); imgMsg != nil {
+		if !h.config.Bot.MediaDownload.Image {
+			h.logger.Debug("Image download disabled, skipping")
+			return
+		}
 		if err := h.downloadImage(imgMsg); err != nil {
 			h.logger.Error("Failed to download image", "error", err)
 		}
@@ -52,6 +56,10 @@ func (h *Handler) downloadMediaIfPresent(msg *waE2E.Message) {
 	}
 
 	if videoMsg := msg.GetVideoMessage(); videoMsg != nil {
+		if !h.config.Bot.MediaDownload.Video {
+			h.logger.Debug("Video download disabled, skipping")
+			return
+		}
 		if _, err := h.downloadMedia(videoMsg, "video", "mp4", 120*time.Second); err != nil {
 			h.logger.Error("Failed to download video", "error", err)
 		}
@@ -59,6 +67,10 @@ func (h *Handler) downloadMediaIfPresent(msg *waE2E.Message) {
 	}
 
 	if audioMsg := msg.GetAudioMessage(); audioMsg != nil {
+		if !h.config.Bot.MediaDownload.Audio {
+			h.logger.Debug("Audio download disabled, skipping")
+			return
+		}
 		ext := "ogg"
 		if mimetype := audioMsg.GetMimetype(); mimetype != "" {
 			if strings.Contains(mimetype, "mp3") {
@@ -74,6 +86,10 @@ func (h *Handler) downloadMediaIfPresent(msg *waE2E.Message) {
 	}
 
 	if docMsg := msg.GetDocumentMessage(); docMsg != nil {
+		if !h.config.Bot.MediaDownload.Document {
+			h.logger.Debug("Document download disabled, skipping")
+			return
+		}
 		if err := h.downloadDocument(docMsg); err != nil {
 			h.logger.Error("Failed to download document", "error", err)
 		}
@@ -81,12 +97,17 @@ func (h *Handler) downloadMediaIfPresent(msg *waE2E.Message) {
 	}
 
 	if stickerMsg := msg.GetStickerMessage(); stickerMsg != nil {
+		if !h.config.Bot.MediaDownload.Sticker {
+			h.logger.Debug("Sticker download disabled, skipping")
+			return
+		}
 		if _, err := h.downloadMedia(stickerMsg, "sticker", "webp", 60*time.Second); err != nil {
 			h.logger.Error("Failed to download sticker", "error", err)
 		}
 		return
 	}
 }
+
 
 // downloadImage downloads an image with thumbnail fallback
 func (h *Handler) downloadImage(imgMsg *waE2E.ImageMessage) error {

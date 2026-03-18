@@ -48,6 +48,13 @@ func Load() (*types.Config, error) {
 			LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 			EnableMetrics:      getEnvBool("ENABLE_METRICS", false),
 			DailySummaryGroups: getEnvSlice("DAILY_SUMMARY_GROUPS", []string{}),
+			MediaDownload: types.MediaDownloadConfig{
+				Image:    getEnvBool("DOWNLOAD_IMAGE", true),
+				Video:    getEnvBool("DOWNLOAD_VIDEO", true),
+				Audio:    getEnvBool("DOWNLOAD_AUDIO", true),
+				Document: getEnvBool("DOWNLOAD_DOCUMENT", true),
+				Sticker:  getEnvBool("DOWNLOAD_STICKER", true),
+			},
 		},
 	}
 
