@@ -40,33 +40,11 @@ if %ERRORLEVEL% EQU 0 (
     exit /b 1
 )
 
-:: ─── Linux x86_64 ──────────────────────────
-set CC=
-set CXX=
-set AR=
-set CGO_ENABLED=0
-set GOOS=linux
-set GOARCH=amd64
-
-if exist .\out\whatsapp-summarizer-linux-x86_64 del /f /q .\out\whatsapp-summarizer-linux-x86_64
-
-echo.
-echo [Linux-x86_64] Iniciando compilacao...
-go build -ldflags "-s -w" -o ./out/whatsapp-summarizer-linux-x86_64 ./src/
-
-if %ERRORLEVEL% EQU 0 (
-    echo [Linux-x86_64] Compilacao concluida com sucesso!
-) else (
-    echo [Linux-x86_64] Erro na compilacao. Codigo: %ERRORLEVEL%
-    pause
-    exit /b 1
-)
-
 :: ─── Windows x86_64 ──────────────────────────
 set CC=
 set CXX=
 set AR=
-set CGO_ENABLED=0
+set CGO_ENABLED=1
 set GOOS=windows
 set GOARCH=amd64
 
