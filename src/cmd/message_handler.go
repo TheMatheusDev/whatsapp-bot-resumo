@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -79,6 +80,7 @@ func (h *Handler) HandleEvent(evt interface{}) {
 
 // handleMessage processes incoming messages
 func (h *Handler) handleMessage(evt *events.Message) {
+	ctx := context.Background()
 	msg := evt.Message
 	if msg == nil {
 		return
@@ -119,12 +121,12 @@ func (h *Handler) handleMessage(evt *events.Message) {
 	// Extract only the current message text (without quoted message) for @everyone check
 	currentMessageText := h.extractCurrentMessageText(msg)
 	if h.everyoneHandler.ContainsEveryoneMention(currentMessageText) && evt.Info.IsGroup {
-		// Check if user is authorized to use @everyone
-		senderName := h.getSenderName(evt.Info)
-		if h.everyoneHandler.IsEveryoneAdmin(senderName) {
+		// Check if user is authorized to use @everyone (by JID, not display name)
+		senderJID := evt.Info.Sender.User
+		if h.everyoneHandler.IsEveryoneAdmin(ctx, evt.Info.Chat, senderJID) {
 			h.everyoneHandler.HandleEveryoneCommand(evt.Info.Chat, h.dbService, h.cache, currentMessageText)
 		} else {
-			h.logger.Info("Unauthorized @everyone attempt", "sender", senderName)
+			h.logger.Info("Unauthorized @everyone attempt", "sender_jid", senderJID)
 		}
 	}
 

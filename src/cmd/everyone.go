@@ -35,20 +35,30 @@ func (e *EveryoneHandler) ContainsEveryoneMention(content string) bool {
 		strings.Contains(content, "@here")
 }
 
-// IsEveryoneAdmin checks if the user is authorized to use @everyone
-func (e *EveryoneHandler) IsEveryoneAdmin(senderName string) bool {
-	// If no admins configured, allow everyone (backward compatibility)
-	if len(e.config.WhatsApp.EveryoneAdmins) == 0 {
-		return true
+// IsEveryoneAdmin checks if the sender is authorized to use @everyone.
+// Authorization is granted if:
+//  1. The sender's JID is in the EveryoneAdmins allowlist from config, OR
+//  2. The sender is a native group admin or superadmin according to WhatsApp.
+//
+// If the group info cannot be retrieved, falls back to the config allowlist only.
+func (e *EveryoneHandler) IsEveryoneAdmin(ctx context.Context, chat types.JID, senderJIDUser string) bool {
+	// Check against the configured JID allowlist (optional)
+	for _, jid := range e.config.WhatsApp.EveryoneAdmins {
+		if strings.TrimSpace(jid) == senderJIDUser {
+			return true
+		}
 	}
 
-	// Normalize sender name for comparison (lowercase and trim)
-	normalizedSender := strings.ToLower(strings.TrimSpace(senderName))
+	// Check native group admin status via WhatsApp group info
+	groupInfo, err := e.whatsappService.GetGroupInfo(ctx, chat)
+	if err != nil {
+		e.logger.Warn("Could not fetch group info for @everyone admin check, falling back to config allowlist only",
+			"error", err, "chat_id", chat.String())
+		return false
+	}
 
-	// Check if sender is in the admin list
-	for _, admin := range e.config.WhatsApp.EveryoneAdmins {
-		normalizedAdmin := strings.ToLower(strings.TrimSpace(admin))
-		if normalizedSender == normalizedAdmin {
+	for _, p := range groupInfo.Participants {
+		if p.JID.User == senderJIDUser && (p.IsAdmin || p.IsSuperAdmin) {
 			return true
 		}
 	}
