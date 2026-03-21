@@ -152,7 +152,7 @@ func (s *Service) SaveGroupMessageReturningID(msg types.Message, groupName strin
 		return 0, fmt.Errorf("failed to get last insert ID: %w", err)
 	}
 
-	s.logger.Debug("Message saved with ID", "id", id, "sender", msg.Sender, "group", groupName)
+	s.logger.Debug(fmt.Sprintf("Message saved: [ID: %d | Sender: %s | Group: %s]", id, msg.Sender, groupName))
 	return id, nil
 }
 
