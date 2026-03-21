@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"strings"
+
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 )
@@ -33,6 +35,15 @@ func (h *Handler) extractMessageContent(msg *waE2E.Message) string {
 		return baseText
 	}
 
+	// Handle audio messages - return placeholder for transcription
+	if audioMsg := msg.GetAudioMessage(); audioMsg != nil {
+		mimetype := audioMsg.GetMimetype()
+		if strings.Contains(mimetype, "audio/ogg") || strings.Contains(mimetype, "opus") {
+			return "[Áudio Não Transcrito]"
+		}
+		return "[Áudio Não Transcrito]"
+	}
+
 	// Handle other message types as needed
 	return ""
 }
@@ -63,7 +74,7 @@ func (h *Handler) extractQuotedMessageText(msg *waE2E.Message) string {
 
 	if audioMsg := msg.GetAudioMessage(); audioMsg != nil {
 		_ = audioMsg
-		return "[Audio]"
+		return "[Áudio Não Transcrito]"
 	}
 
 	if docMsg := msg.GetDocumentMessage(); docMsg != nil {

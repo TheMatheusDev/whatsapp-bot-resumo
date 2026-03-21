@@ -296,6 +296,20 @@ func (s *Service) SendMentionMessage(ctx context.Context, chatID types.JID, text
 	return nil
 }
 
+// DownloadToMemory downloads media from a WhatsApp message directly into memory
+func (s *Service) DownloadToMemory(ctx context.Context, msg whatsmeow.DownloadableMessage) ([]byte, error) {
+	if s.client == nil {
+		return nil, fmt.Errorf("client not initialized")
+	}
+
+	data, err := s.client.Download(ctx, msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download to memory: %w", err)
+	}
+
+	return data, nil
+}
+
 // AddEventHandler adds an event handler to the client
 func (s *Service) AddEventHandler(handler func(interface{})) {
 	if s.client != nil {

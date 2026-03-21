@@ -48,6 +48,7 @@ type AIService interface {
 	SummarizeMessages(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
 	SummarizeMessagesWithBackup(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
 	SummarizeMessagesWithBackup2(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
+	TranscribeAudio(ctx context.Context, audioData []byte, mimeType string) (string, error)
 	Close() error
 }
 
@@ -55,6 +56,8 @@ type AIService interface {
 type DatabaseService interface {
 	// Message operations
 	SaveGroupMessage(msg Message, groupName string) error
+	SaveGroupMessageReturningID(msg Message, groupName string) (int64, error)
+	UpdateMessageContent(id int64, newContent string) error
 	GetGroupMessages(chatID string, count int) ([]Message, error)
 	GetMessagesSinceTime(chatID string, sinceTime time.Time) ([]Message, error)
 	GetAllGroups() ([]GroupSummary, error)
@@ -72,6 +75,7 @@ type WhatsAppService interface {
 	SendRawMessage(ctx context.Context, chatID types.JID, msg *waE2E.Message) (whatsmeow.SendResponse, error)
 	GetGroupInfo(ctx context.Context, chatID types.JID) (*watypes.GroupInfo, error)
 	DownloadToFile(ctx context.Context, msg whatsmeow.DownloadableMessage, file *os.File) error
+	DownloadToMemory(ctx context.Context, msg whatsmeow.DownloadableMessage) ([]byte, error)
 	GetBotJID() types.JID
 	SendMentionMessage(ctx context.Context, chatID types.JID, text string, mentionedJIDs []string) error
 	Connect(ctx context.Context) error

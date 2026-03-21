@@ -290,6 +290,63 @@ func (s *Service) saveAPIResponse(resp *genai.GenerateContentResponse) {
 	s.logger.Info("API response saved to APIresponse.txt")
 }
 
+// TranscribeAudio transcribes audio data using the Gemini API with model fallback
+func (s *Service) TranscribeAudio(ctx context.Context, audioData []byte, mimeType string) (string, error) {
+	prompt := "Transcreva de forma precisa o áudio em anexo. Seja direto, não adicione nenhum comentário ou narração. Apenas o texto falado"
+
+	// Build content with audio inline data
+	contents := []*genai.Content{
+		{
+			Role: genai.RoleUser,
+			Parts: []*genai.Part{
+				{InlineData: &genai.Blob{MIMEType: mimeType, Data: audioData}},
+				{Text: prompt},
+			},
+		},
+	}
+
+	config := &genai.GenerateContentConfig{
+		Temperature:     genai.Ptr(float32(0.2)),
+		MaxOutputTokens: 8192,
+	}
+
+	// Try primary model
+	models := []string{s.model, s.modelBackup, s.modelBackup2}
+	var lastErr error
+
+	for i, model := range models {
+		if i == 0 {
+			s.logger.Info("Transcribing audio with primary model", "model", model)
+		} else {
+			s.logger.Warn("Retrying transcription with fallback model", "model", model, "attempt", i+1)
+		}
+
+		resp, err := s.client.Models.GenerateContent(ctx, model, contents, config)
+		if err != nil {
+			lastErr = fmt.Errorf("model %s failed: %w", model, err)
+			s.logger.Error("Transcription failed with model", "model", model, "error", err)
+			continue
+		}
+
+		if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+			lastErr = fmt.Errorf("model %s returned empty response", model)
+			s.logger.Error("Empty transcription response", "model", model)
+			continue
+		}
+
+		text := resp.Candidates[0].Content.Parts[0].Text
+		if text == "" {
+			lastErr = fmt.Errorf("model %s returned empty text", model)
+			continue
+		}
+
+		s.logger.Info("Audio transcribed successfully", "model", model, "length", len(text))
+		return text, nil
+	}
+
+	return "", fmt.Errorf("all models failed to transcribe audio: %w", lastErr)
+}
+
 // Close closes the Gemini client
 func (s *Service) Close() error {
 	// The new genai client doesn't require explicit closing

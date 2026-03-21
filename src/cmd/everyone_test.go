@@ -36,6 +36,9 @@ func (m *mockWhatsAppService) GetGroupInfo(_ context.Context, _ types.JID) (*typ
 func (m *mockWhatsAppService) DownloadToFile(_ context.Context, _ whatsmeow.DownloadableMessage, _ *os.File) error {
 	return nil
 }
+func (m *mockWhatsAppService) DownloadToMemory(_ context.Context, _ whatsmeow.DownloadableMessage) ([]byte, error) {
+	return nil, nil
+}
 func (m *mockWhatsAppService) GetBotJID() types.JID { return types.JID{} }
 func (m *mockWhatsAppService) SendMentionMessage(_ context.Context, _ types.JID, _ string, _ []string) error {
 	return nil

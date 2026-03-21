@@ -154,5 +154,5 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 		MessageType: "Summary",
 		Timestamp:   time.Now().In(h.timezone),
 	}
-	h.saveMessage(summaryMsg, msgTrigger.Chat)
+	h.saveMessage(summaryMsg, msgTrigger.Chat) //nolint:errcheck
 }

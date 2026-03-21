@@ -130,6 +130,44 @@ func (s *Service) SaveGroupMessage(msg types.Message, groupName string) error {
 	return nil
 }
 
+// SaveGroupMessageReturningID saves a group message and returns the inserted row ID
+func (s *Service) SaveGroupMessageReturningID(msg types.Message, groupName string) (int64, error) {
+	s.stmtMutex.RLock()
+	stmt := s.insertGroupStmt
+	s.stmtMutex.RUnlock()
+
+	if stmt == nil {
+		return 0, fmt.Errorf("insertGroupStmt not initialized")
+	}
+
+	result, err := stmt.Exec(msg.ChatID, msg.Sender, msg.Content, msg.MessageType, msg.Timestamp)
+	if err != nil {
+		s.logger.Error("Failed to save group message", "error", err, "group", groupName)
+		return 0, fmt.Errorf("failed to save group message: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		s.logger.Error("Failed to get last insert ID", "error", err)
+		return 0, fmt.Errorf("failed to get last insert ID: %w", err)
+	}
+
+	s.logger.Debug("Message saved with ID", "id", id, "sender", msg.Sender, "group", groupName)
+	return id, nil
+}
+
+// UpdateMessageContent updates the message content for a given message ID
+func (s *Service) UpdateMessageContent(id int64, newContent string) error {
+	_, err := s.db.Exec("UPDATE group_messages SET message = ? WHERE id = ?", newContent, id)
+	if err != nil {
+		s.logger.Error("Failed to update message content", "error", err, "id", id)
+		return fmt.Errorf("failed to update message content: %w", err)
+	}
+
+	s.logger.Debug("Message content updated", "id", id)
+	return nil
+}
+
 // GetGroupMessages retrieves group messages from the database
 func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, error) {
 	s.stmtMutex.RLock()

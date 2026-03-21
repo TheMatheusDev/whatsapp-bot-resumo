@@ -34,13 +34,13 @@ func (h *Handler) getGroupName(chat types.JID) string {
 	return groupName
 }
 
-// saveMessage saves a message to the database
-func (h *Handler) saveMessage(message wstypes.Message, chat types.JID) error {
+// saveMessage saves a message to the database and returns the inserted row ID
+func (h *Handler) saveMessage(message wstypes.Message, chat types.JID) (int64, error) {
 	// Only save group messages
 	if chat.Server != types.GroupServer {
-		return nil
+		return 0, nil
 	}
 
 	groupName := h.getGroupName(chat)
-	return h.dbService.SaveGroupMessage(message, groupName)
+	return h.dbService.SaveGroupMessageReturningID(message, groupName)
 }

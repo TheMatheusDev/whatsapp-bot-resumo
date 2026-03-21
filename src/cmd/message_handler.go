@@ -105,8 +105,21 @@ func (h *Handler) handleMessage(evt *events.Message) {
 	}
 
 	// Save to database (ALWAYS save, even if message is from before bot started)
-	if err := h.saveMessage(message, evt.Info.Chat); err != nil {
+	msgID, err := h.saveMessage(message, evt.Info.Chat)
+	if err != nil {
 		h.logger.Error("Failed to save message", "error", err)
+	}
+
+	// If this is a voice message, trigger async transcription
+	if audioMsg := msg.GetAudioMessage(); audioMsg != nil && msgID > 0 {
+		if isVoiceMessage(audioMsg) {
+			audioData, mimeType, err := h.tryDownloadAudioToMemory(audioMsg)
+			if err != nil {
+				h.logger.Error("Failed to download audio to memory for transcription", "error", err)
+			} else {
+				h.transcribeAudioAsync(msgID, audioData, mimeType)
+			}
+		}
 	}
 
 	// Skip command processing for messages sent before bot started
