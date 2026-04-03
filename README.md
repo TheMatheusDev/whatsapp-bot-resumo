@@ -16,6 +16,8 @@ Bot do WhatsApp que resume conversas usando IA Gemini.
 
 - Go 1.25.2+
 - Conta Google Cloud com API Gemini habilitada
+- Clang para build Android ARM64 (opcional)
+- Android NDK para build Android ARM64 (opcional)
 
 ## ⚙️ Configuração
 
@@ -30,49 +32,63 @@ go mod download
 4. Compile o bot:
 
 ```bash
-go build -o ./out/whatsapp-bot cmd/bot/main.go
+go build -o ./out/whatsapp-summarizer ./src/
 ```
 
-ou use o build-android.bat para compilar para Termux Android - necessita do Clang e NDK instalado.
+ou use o `build.bat` em Windows para compilar para Android ARM64 (Termux) e Windows x86_64 (necessita do NDK/Clang para o target Android).
 
-Escaneie o QR code no primeiro uso para conectar ao WhatsApp.
+5. Escaneie o QR code no primeiro uso para conectar ao WhatsApp. Aproveite!
 
 ## 📝 Comandos
 
 São aceitos os prefixos: `--`, `-`, `/` e `!`.
+
+Ademais, quase todos os comandos possuem uma versão curta com a primeira letra, ex: `!r` para `!resuma`, `!p` para `!pergunte`. Opções de personalidade possuem comandos curtos como: `!fl` para `--farialimer`, `!z` para `--zoomer`.
+
 **Comandos:**
 
-- --resuma <número> → Resume mensagens do chat atual
-- -r <número> → Forma abreviada
-- -clt <número> → Atalho para resumo CLT
-- -p <número> <pergunta> → Resume e responde uma pergunta
-- --info → Informações do bot
-- --version → Versão do bot
+- `!resuma <número>` (versão curta: `!r`) → Resume mensagens do chat atual
+- `!clt <número>` → Atalho para resumo CLT
+- `!farialimer <número>` (versão curta: `!fl`) → Atalho para resumo Faria Limer
+- `!zoomer <número>` (versão curta: `!z`) → Atalho para resumo Zoomer
+- `!pergunte <número> <pergunta>` (versão curta: `!p`) → Resume e responde uma pergunta
+- `!dia` (versão curta: `!d`) → Resumo diário (desde 4h)
+- `!help` (versão curta: `!h`) → Ajuda
+- `!version` (versão curta: `!v`) → Versão do bot
+- `!ping` → Teste de conectividade
 
 **Opções de Resumo:**
 
-- --curto ou -c → Resumo curto
-- --medio ou -m → Resumo médio
-- --longo ou -l → Resumo longo
-- --clt → Personalidade CLT (funciona com -r e -p)
+Argumentos para comando de resumo (`!resuma`/`!pergunte`) também possuem versões curtas.
+
+- `--curto` (versão curta: `-c`) → Resumo curto
+- `--medio` (versão curta: `-m`) → Resumo médio
+- `--longo` (versão curta: `-l`) → Resumo longo
+- `--clt` → Personalidade CLT (funciona com -r e -p)
+- `--farialimer` (versão curta: `-fl`) → Personalidade Faria Limer
+- `--zoomer` (versão curta: `-z`) → Personalidade Zoomer
 
 **Exemplos:**
 
-- -r 15 → Resumo curto de 15 mensagens
-- -r 5000 --clt → Resumo com personalidade CLT de 5000 mensagens
-- -p 50 Como está o humor do grupo? → Resume 50 msgs e responde a pergunta
-- -p 100 --clt Teve alguma treta? → Resume com CLT e responde pergunta
-- -p 200 --longo --clt Carlos surtou? → Resumo longo CLT + resposta
+- `!r 15` → Resumo de 15 mensagens com estilo padrão (CLT)
+- `!r 5000 --zoomer` → Resumo de 5000 mensagens com estilo Zoomer
+- `!p 50 Como está o humor do grupo?` → Responde a pergunta com base nas últimas 50 mensagens
+- `!p 100 -fl Teve alguma treta?` → Responde a pergunta com estilo Faria Limer
+- `!d --farialimer --longo` → Resumo longo do dia em estilo Faria Limer
+- `!p 200 -l -z Carlos surtou?` → Responde a pergunta com um resumo longo e estilo Zoomer
 
 ## 📦 Estrutura
 
 ```
-cmd/bot/          - Ponto de entrada
 src/
+  ├── main.go     - Ponto de entrada
   ├── ai/         - Integração Gemini
+  ├── bot/        - Orquestração da aplicação
+  ├── cmd/        - Processamento de comandos e eventos
   ├── config/     - Configurações
   ├── database/   - SQLite
-  ├── handlers/   - Processamento de mensagens
+  ├── logger/     - Logging
+  ├── types/      - Interfaces e tipos compartilhados
   ├── utils/      - Cache e utilitários
   └── whatsapp/   - Cliente WhatsApp
 ```
