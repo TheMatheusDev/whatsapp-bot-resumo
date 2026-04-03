@@ -6,8 +6,10 @@ set NDK_ROOT=C:\PROGRA~2\msys64\android-ndk
 set TOOLCHAIN=%NDK_ROOT%\toolchains\llvm\prebuilt\windows-x86_64\bin
 
 echo ============================================
-echo  Build - Android ARM64 + Linux x86_64 + Windows x86_64
+echo  Build - Android ARM64 + Windows x86_64
 echo ============================================
+
+if not exist .\out mkdir .\out
 
 :: ─── Android ARM64 ───────────────────────────
 set CC=%TOOLCHAIN%\aarch64-linux-android35-clang
@@ -48,7 +50,7 @@ set CGO_ENABLED=1
 set GOOS=windows
 set GOARCH=amd64
 
-if exist .\out\whatsapp-summarizer-windows-x86_64.exe del /f /q .\out\whatsapp-summarizer-windows-x86_64.exe
+if exist .\out\whatsapp-summarizer-windows-x86_64.exe del /f /q .\out\whatsapp-summarizer-windows-amd64.exe
 
 echo.
 echo [Windows-x86_64] Iniciando compilacao...
