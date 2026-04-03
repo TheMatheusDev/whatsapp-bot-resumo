@@ -36,8 +36,8 @@ func (h *Handler) getGroupName(chat types.JID) string {
 
 // saveMessage saves a message to the database and returns the inserted row ID
 func (h *Handler) saveMessage(message wstypes.Message, chat types.JID) (int64, error) {
-	// Only save group messages
-	if chat.Server != types.GroupServer {
+	// Only persist messages from whitelisted groups.
+	if !h.isWhitelistedGroup(chat) {
 		return 0, nil
 	}
 

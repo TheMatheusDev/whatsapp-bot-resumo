@@ -6,15 +6,18 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-// isAuthorized checks if the user is authorized to use bot commands
-func (h *Handler) isAuthorized(info types.MessageInfo) bool {
-	// Direct messages (DMs) are NOT authorized
-	if !info.IsGroup {
+// isWhitelistedGroup checks if a group JID is whitelisted for bot operations.
+func (h *Handler) isWhitelistedGroup(chat types.JID) bool {
+	if chat.Server != types.GroupServer {
 		return false
 	}
 
-	// O(1) whitelist lookup
-	return h.whitelistMap[info.Chat.User]
+	return h.whitelistMap[chat.User]
+}
+
+// isAuthorized checks if the user is authorized to use bot commands
+func (h *Handler) isAuthorized(info types.MessageInfo) bool {
+	return info.IsGroup && h.isWhitelistedGroup(info.Chat)
 }
 
 // isCommand checks if a message is a bot command

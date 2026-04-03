@@ -106,7 +106,8 @@ func (h *Handler) handleMessage(evt *events.Message) {
 		Timestamp:   evt.Info.Timestamp.In(h.timezone),
 	}
 
-	// Save to database (ALWAYS save, even if message is from before bot started)
+	// Save to database only for whitelisted groups.
+	// Messages sent before bot start are still stored for historical context.
 	msgID, err := h.saveMessage(message, evt.Info.Chat)
 	if err != nil {
 		h.logger.Error("Failed to save message", "error", err)
@@ -135,7 +136,7 @@ func (h *Handler) handleMessage(evt *events.Message) {
 	// Check for @everyone mentions (only for new messages)
 	// Extract only the current message text (without quoted message) for @everyone check
 	currentMessageText := h.extractCurrentMessageText(msg)
-	if h.everyoneHandler.ContainsEveryoneMention(currentMessageText) && evt.Info.IsGroup {
+	if h.everyoneHandler.ContainsEveryoneMention(currentMessageText) && h.isAuthorized(evt.Info) {
 		// Check if user is authorized to use @everyone (by JID, not display name)
 		senderJID := evt.Info.Sender.User
 		if h.everyoneHandler.IsEveryoneAdmin(ctx, evt.Info.Chat, senderJID) {
