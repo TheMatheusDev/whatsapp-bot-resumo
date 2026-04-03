@@ -47,6 +47,8 @@ func Load() (*types.Config, error) {
 			CacheTTL:           getEnv("CACHE_TTL", "10m"),
 			LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 			EnableMetrics:      getEnvBool("ENABLE_METRICS", false),
+			WelcomeMessage:     getEnv("WELCOME_MESSAGE", "Seja bem-vindo(a), @numero!"),
+			FarewellMessage:    getEnv("FAREWELL_MESSAGE", "@numero saiu do grupo."),
 			DailySummaryGroups: getEnvSlice("DAILY_SUMMARY_GROUPS", []string{}),
 			MediaDownload: types.MediaDownloadConfig{
 				Image:    getEnvBool("DOWNLOAD_IMAGE", true),

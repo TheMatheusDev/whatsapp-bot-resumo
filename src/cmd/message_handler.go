@@ -71,6 +71,8 @@ func (h *Handler) HandleEvent(evt interface{}) {
 		// Handle message receipts if needed
 	case *events.Presence:
 		// Handle presence updates if needed
+	case *events.GroupInfo:
+		h.handleGroupInfoEvent(v)
 	case *events.HistorySync:
 		h.logger.Debug("History sync received", "type", v.Data.GetSyncType().String())
 	default:
