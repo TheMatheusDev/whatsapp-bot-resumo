@@ -1,0 +1,111 @@
+name: Build
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  # Permite rodar manualmente pela aba Actions
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Go ──────────────────────────────────────────────────────────────────
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.1"
+
+      - name: Download modules
+        run: go mod download
+
+      # ── Ferramentas de cross-compile ─────────────────────────────────────────
+      - name: Install MinGW (cross-compile Windows)
+        run: sudo apt-get install -y gcc-mingw-w64-x86-64
+
+      - name: Set up Android NDK
+        uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          # r29 é a versão mais recente
+          ndk-version: r29
+          link-to-sdk: false
+
+      # ── Criar diretório de saída ─────────────────────────────────────────────
+      - name: Create output directory
+        run: mkdir -p out
+
+      # ── Linux x86_64 ─────────────────────────────────────────────────────────
+      - name: Build Linux x86_64
+        run: |
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
+            go build -ldflags "-s -w" \
+            -o out/whatsapp-summarizer-linux-amd64 \
+            ./src/
+        env:
+          CC: gcc
+
+      # ── Windows x86_64 ───────────────────────────────────────────────────────
+      - name: Build Windows x86_64
+        run: |
+          CGO_ENABLED=1 GOOS=windows GOARCH=amd64 \
+            go build -ldflags "-s -w" \
+            -o out/whatsapp-summarizer-windows-amd64.exe \
+            ./src/
+        env:
+          CC: x86_64-w64-mingw32-gcc
+          CXX: x86_64-w64-mingw32-g++
+
+      # ── Android ARM64 ────────────────────────────────────────────────────────
+      - name: Build Android ARM64
+        run: |
+          TOOLCHAIN="${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          CGO_ENABLED=1 GOOS=android GOARCH=arm64 \
+            CC="$TOOLCHAIN/aarch64-linux-android35-clang" \
+            CXX="$TOOLCHAIN/aarch64-linux-android35-clang++" \
+            go build -ldflags "-s -w" \
+            -o out/whatsapp-summarizer-android-arm64 \
+            ./src/
+
+      # ── Listar artefatos ─────────────────────────────────────────────────────
+      - name: List outputs
+        run: ls -lh out/
+
+      # ── Upload dos artefatos ─────────────────────────────────────────────────
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: whatsapp-summarizer-${{ github.sha }}
+          path: out/
+          retention-days: 30
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job separado: cria uma Release automaticamente ao fazer push de uma tag
+  # Exemplo: git tag v1.0.0 && git push origin v1.0.0
+  # ────────────────────────────────────────────────────────────────────────────
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: whatsapp-summarizer-${{ github.sha }}
+          path: out/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true
