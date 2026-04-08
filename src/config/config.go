@@ -47,8 +47,8 @@ func Load() (*types.Config, error) {
 			CacheTTL:           getEnv("CACHE_TTL", "10m"),
 			LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 			EnableMetrics:      getEnvBool("ENABLE_METRICS", false),
-			WelcomeMessage:     getEnv("WELCOME_MESSAGE", "Seja bem-vindo(a), @numero!"),
-			FarewellMessage:    getEnv("FAREWELL_MESSAGE", "@numero saiu do grupo."),
+			WelcomeMessage:     getEnvAllowEmpty("WELCOME_MESSAGE", "Seja bem-vindo(a), @numero!"),
+			FarewellMessage:    getEnvAllowEmpty("FAREWELL_MESSAGE", "@numero saiu do grupo."),
 			DailySummaryGroups: getEnvSlice("DAILY_SUMMARY_GROUPS", []string{}),
 			MediaDownload: types.MediaDownloadConfig{
 				Image:    getEnvBool("DOWNLOAD_IMAGE", true),
@@ -83,6 +83,15 @@ func Validate(c *types.Config) error {
 // getEnv gets environment variable with default value
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+// getEnvAllowEmpty returns empty when the variable is explicitly set to empty.
+// It falls back only when the variable is not defined.
+func getEnvAllowEmpty(key, defaultValue string) string {
+	if value, ok := os.LookupEnv(key); ok {
 		return value
 	}
 	return defaultValue
