@@ -28,17 +28,53 @@ func (h *Handler) handleGroupInfoEvent(evt *events.GroupInfo) {
 		return
 	}
 
-	if len(evt.Join) > 0 && strings.TrimSpace(h.config.Bot.WelcomeMessage) != "" {
-		if err := h.sendParticipantStatusMessage(evt.JID, evt.Join, h.config.Bot.WelcomeMessage); err != nil {
-			h.logger.Error("Failed to send welcome message", "error", err, "chat_id", evt.JID.String())
-		}
-	}
+	leaveParticipants := evt.Leave
+	joinParticipants := filterParticipantsNotIn(evt.Join, leaveParticipants)
 
-	if len(evt.Leave) > 0 && strings.TrimSpace(h.config.Bot.FarewellMessage) != "" {
-		if err := h.sendParticipantStatusMessage(evt.JID, evt.Leave, h.config.Bot.FarewellMessage); err != nil {
+	if len(leaveParticipants) > 0 && strings.TrimSpace(h.config.Bot.FarewellMessage) != "" {
+		if err := h.sendParticipantStatusMessage(evt.JID, leaveParticipants, h.config.Bot.FarewellMessage); err != nil {
 			h.logger.Error("Failed to send farewell message", "error", err, "chat_id", evt.JID.String())
 		}
 	}
+
+	if len(joinParticipants) > 0 && strings.TrimSpace(h.config.Bot.WelcomeMessage) != "" {
+		if err := h.sendParticipantStatusMessage(evt.JID, joinParticipants, h.config.Bot.WelcomeMessage); err != nil {
+			h.logger.Error("Failed to send welcome message", "error", err, "chat_id", evt.JID.String())
+		}
+	}
+}
+
+// filterParticipantsNotIn removes participants from source that also appear in excluded.
+// This avoids sending conflicting welcome/farewell messages for the same user when
+// WhatsApp emits add/remove entries in the same metadata update.
+func filterParticipantsNotIn(source, excluded []types.JID) []types.JID {
+	if len(source) == 0 || len(excluded) == 0 {
+		return source
+	}
+
+	excludedJIDs := make(map[string]struct{}, len(excluded))
+	excludedUsers := make(map[string]struct{}, len(excluded))
+	for _, participant := range excluded {
+		excludedJIDs[participant.String()] = struct{}{}
+		if participant.User != "" {
+			excludedUsers[participant.User] = struct{}{}
+		}
+	}
+
+	filtered := make([]types.JID, 0, len(source))
+	for _, participant := range source {
+		if _, found := excludedJIDs[participant.String()]; found {
+			continue
+		}
+		if participant.User != "" {
+			if _, found := excludedUsers[participant.User]; found {
+				continue
+			}
+		}
+		filtered = append(filtered, participant)
+	}
+
+	return filtered
 }
 
 // sendParticipantStatusMessage sends one consolidated message for all participants.
