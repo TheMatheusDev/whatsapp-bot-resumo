@@ -128,7 +128,7 @@ func getEnvBool(key string, defaultValue bool) bool {
 }
 
 // getEnvSlicePipeAllowEmpty parses a pipe-separated ("|") env variable as a slice of strings,
-// trimming whitespace from each element and filtering empty entries.
+// trimming whitespace from each element and filtering empty entries and replacing literal \n with actual newlines.
 // Falls back to defaultValue only when the variable is not defined at all.
 func getEnvSlicePipeAllowEmpty(key string, defaultValue []string) []string {
 	value, ok := os.LookupEnv(key)
@@ -143,6 +143,7 @@ func getEnvSlicePipeAllowEmpty(key string, defaultValue []string) []string {
 	result := make([]string, 0, len(parts))
 	for _, p := range parts {
 		if t := strings.TrimSpace(p); t != "" {
+			t = strings.ReplaceAll(t, `\n`, "\n")
 			result = append(result, t)
 		}
 	}
