@@ -54,6 +54,7 @@ Ademais, quase todos os comandos possuem uma versão curta com a primeira letra,
 - `!pergunte <número> <pergunta>` (versão curta: `!p`) → Resume e responde uma pergunta
 - `!dia` (versão curta: `!d`) → Resumo diário (desde 4h)
 - `!help` (versão curta: `!h`) → Ajuda
+- `!regras` (versão curta: `!rg`) → Regras do grupo
 - `!version` (versão curta: `!v`) → Versão do bot
 - `!ping` → Teste de conectividade
 

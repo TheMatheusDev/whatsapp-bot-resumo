@@ -15,6 +15,7 @@ Prefixos de comando: !, - ou /
 - !p <número> <pergunta> → Responde a pergunta com base nas últimas X mensagens
 - !d ou !dia → Resume todas as msgs do dia (desde 4h da manhã)	
 - !help → Informações do bot
+- !regras → Exibe as regras do grupo
 - !version → Versão do bot
 - !ping → Verifica se o bot está online
 - !regras → Exibe as regras do grupo
