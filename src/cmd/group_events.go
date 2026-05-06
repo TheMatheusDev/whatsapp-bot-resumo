@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -28,15 +29,19 @@ func (h *Handler) handleGroupInfoEvent(evt *events.GroupInfo) {
 		return
 	}
 
-	if len(evt.Join) > 0 && strings.TrimSpace(h.config.Bot.WelcomeMessage) != "" {
-		if err := h.sendParticipantStatusMessage(evt.JID, evt.Join, h.config.Bot.WelcomeMessage); err != nil {
-			h.logger.Error("Failed to send welcome message", "error", err, "chat_id", evt.JID.String())
+	if len(evt.Join) > 0 {
+		if msg := pickRandom(h.config.Bot.WelcomeMessages); msg != "" {
+			if err := h.sendParticipantStatusMessage(evt.JID, evt.Join, msg); err != nil {
+				h.logger.Error("Failed to send welcome message", "error", err, "chat_id", evt.JID.String())
+			}
 		}
 	}
 
-	if len(evt.Leave) > 0 && strings.TrimSpace(h.config.Bot.FarewellMessage) != "" {
-		if err := h.sendParticipantStatusMessage(evt.JID, evt.Leave, h.config.Bot.FarewellMessage); err != nil {
-			h.logger.Error("Failed to send farewell message", "error", err, "chat_id", evt.JID.String())
+	if len(evt.Leave) > 0 {
+		if msg := pickRandom(h.config.Bot.FarewellMessages); msg != "" {
+			if err := h.sendParticipantStatusMessage(evt.JID, evt.Leave, msg); err != nil {
+				h.logger.Error("Failed to send farewell message", "error", err, "chat_id", evt.JID.String())
+			}
 		}
 	}
 }
@@ -75,4 +80,12 @@ func (h *Handler) sendParticipantStatusMessage(chatID types.JID, participants []
 	defer cancel()
 
 	return h.whatsappService.SendMentionMessage(ctx, chatID, messageText, mentionJIDs)
+}
+// pickRandom returns a random non-empty element from the pool.
+// Returns an empty string if the pool is nil or empty.
+func pickRandom(pool []string) string {
+	if len(pool) == 0 {
+		return ""
+	}
+	return pool[rand.Intn(len(pool))]
 }

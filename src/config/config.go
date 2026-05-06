@@ -47,8 +47,8 @@ func Load() (*types.Config, error) {
 			CacheTTL:           getEnv("CACHE_TTL", "10m"),
 			LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 			EnableMetrics:      getEnvBool("ENABLE_METRICS", false),
-			WelcomeMessage:     getEnvAllowEmpty("WELCOME_MESSAGE", "Seja bem-vindo(a), @numero!"),
-			FarewellMessage:    getEnvAllowEmpty("FAREWELL_MESSAGE", "@numero saiu do grupo."),
+			WelcomeMessages:    getEnvSlicePipeAllowEmpty("WELCOME_MESSAGES", []string{"Seja bem-vindo(a), @numero!"}),
+			FarewellMessages:   getEnvSlicePipeAllowEmpty("FAREWELL_MESSAGES", []string{"@numero saiu do grupo."}),
 			DailySummaryGroups: getEnvSlice("DAILY_SUMMARY_GROUPS", []string{}),
 			MediaDownload: types.MediaDownloadConfig{
 				Image:    getEnvBool("DOWNLOAD_IMAGE", true),
@@ -115,6 +115,28 @@ func getEnvBool(key string, defaultValue bool) bool {
 		}
 	}
 	return defaultValue
+}
+
+// getEnvSlicePipeAllowEmpty parses a pipe-separated ("|") env variable as a slice of strings,
+// trimming whitespace from each element and filtering empty entries.
+// Falls back to defaultValue only when the variable is not defined at all.
+func getEnvSlicePipeAllowEmpty(key string, defaultValue []string) []string {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return defaultValue
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return []string{}
+	}
+	parts := strings.Split(value, "|")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			result = append(result, t)
+		}
+	}
+	return result
 }
 
 // getEnvSlice gets environment variable as slice with default value

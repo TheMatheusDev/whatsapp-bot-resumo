@@ -152,8 +152,8 @@ type BotConfig struct {
 	CacheTTL           string              `json:"cache_ttl"`
 	LogLevel           string              `json:"log_level"`
 	EnableMetrics      bool                `json:"enable_metrics"`
-	WelcomeMessage     string              `json:"welcome_message"`
-	FarewellMessage    string              `json:"farewell_message"`
+	WelcomeMessages    []string            `json:"welcome_messages"`
+	FarewellMessages   []string            `json:"farewell_messages"`
 	DailySummaryGroups []string            `json:"daily_summary_groups"`
 	MediaDownload      MediaDownloadConfig `json:"media_download"`
 }
