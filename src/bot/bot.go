@@ -29,9 +29,10 @@ type Bot struct {
 	handler       *cmd.Handler
 	cache         types.CacheService
 	container     *sqlstore.Container
-	running       bool
-	botStartTime  time.Time
-	stopScheduler chan struct{}
+	running                    bool
+	botStartTime              time.Time
+	stopScheduler             chan struct{}
+	stopWeeklyRankingScheduler chan struct{}
 }
 
 // New creates a new bot instance with dependency injection
@@ -130,6 +131,9 @@ func (b *Bot) Start(ctx context.Context) error {
 	b.stopScheduler = make(chan struct{})
 	go b.startDailySummaryScheduler()
 
+	b.stopWeeklyRankingScheduler = make(chan struct{})
+	go b.startWeeklyRankingScheduler()
+
 	return nil
 }
 
@@ -171,6 +175,50 @@ func (b *Bot) startDailySummaryScheduler() {
 	}
 }
 
+// startWeeklyRankingScheduler fires the weekly message ranking every Monday at 12:00 local time.
+// It covers messages from the previous Monday 00:00:00 through Sunday 23:59:59.
+func (b *Bot) startWeeklyRankingScheduler() {
+	groups := b.config.WhatsApp.GroupWhitelist
+	if len(groups) == 0 {
+		b.logger.Info("WeeklyRankingScheduler: no groups configured, scheduler idle")
+		return
+	}
+
+	loc, err := time.LoadLocation(b.config.Bot.Timezone)
+	if err != nil {
+		loc = time.FixedZone(b.config.Bot.Timezone, -3*60*60)
+	}
+
+	for {
+		now := time.Now().In(loc)
+
+		// Calculate next Monday at 12:00 in the configured timezone.
+		// time.Weekday(): Sunday=0, Monday=1, ..., Saturday=6
+		daysUntilMonday := (int(time.Monday) - int(now.Weekday()) + 7) % 7
+		if daysUntilMonday == 0 && (now.Hour() > 12 || (now.Hour() == 12 && now.Minute() > 0)) {
+			// Already past noon on Monday — wait until next Monday
+			daysUntilMonday = 7
+		}
+		nextMonday := time.Date(now.Year(), now.Month(), now.Day()+daysUntilMonday, 12, 0, 0, 0, loc)
+		waitDuration := nextMonday.Sub(now)
+
+		b.logger.Info("WeeklyRankingScheduler: next run",
+			"in", waitDuration.Round(time.Second).String(),
+			"at", nextMonday.Format("2006-01-02 15:04:05"))
+
+		select {
+		case <-time.After(waitDuration):
+			b.logger.Info("WeeklyRankingScheduler: firing weekly rankings", "groups", len(groups))
+			for _, jid := range groups {
+				b.handler.RunAutoWeeklyRanking(jid)
+			}
+		case <-b.stopWeeklyRankingScheduler:
+			b.logger.Info("WeeklyRankingScheduler: stopped")
+			return
+		}
+	}
+}
+
 // Stop stops the bot
 func (b *Bot) Stop() error {
 	if !b.running {
@@ -181,6 +229,10 @@ func (b *Bot) Stop() error {
 
 	if b.stopScheduler != nil {
 		close(b.stopScheduler)
+	}
+
+	if b.stopWeeklyRankingScheduler != nil {
+		close(b.stopWeeklyRankingScheduler)
 	}
 
 	if b.whatsappSvc != nil {

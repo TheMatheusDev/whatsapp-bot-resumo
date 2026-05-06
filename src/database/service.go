@@ -248,6 +248,46 @@ func (s *Service) GetMessagesSinceTime(chatID string, sinceTime time.Time) ([]ty
 	return messages, nil
 }
 
+// GetMessagesBetween retrieves messages from a chat within an inclusive [from, to] time window.
+// Bot messages (ResumoBOT) are excluded and results are ordered chronologically.
+func (s *Service) GetMessagesBetween(chatID string, from, to time.Time) ([]types.Message, error) {
+	fromStr := from.Format("2006-01-02 15:04:05-07:00")
+	toStr := to.Format("2006-01-02 15:04:05-07:00")
+
+	query := `SELECT id, chat_id, sender, message, message_type, timestamp
+			  FROM group_messages
+			  WHERE chat_id = ?
+			  AND sender NOT LIKE 'ResumoBOT [VOCÊ]%'
+			  AND timestamp >= ?
+			  AND timestamp <= ?
+			  ORDER BY timestamp ASC`
+
+	rows, err := s.db.Query(query, chatID, fromStr, toStr)
+	if err != nil {
+		s.logger.Error("Failed to query messages between times", "error", err, "chat_id", chatID, "from", fromStr, "to", toStr)
+		return nil, fmt.Errorf("failed to query messages between times: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []types.Message
+	for rows.Next() {
+		var msg types.Message
+		err := rows.Scan(&msg.ID, &msg.ChatID, &msg.Sender, &msg.Content, &msg.MessageType, &msg.Timestamp)
+		if err != nil {
+			s.logger.Error("Failed to scan message row", "error", err)
+			return nil, fmt.Errorf("failed to scan message row: %w", err)
+		}
+		messages = append(messages, msg)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	s.logger.Debug("Retrieved messages between times", "chat_id", chatID, "from", fromStr, "to", toStr, "count", len(messages))
+	return messages, nil
+}
+
 // GetAllGroups retrieves a list of all groups with their message counts
 func (s *Service) GetAllGroups() ([]types.GroupSummary, error) {
 	query := `

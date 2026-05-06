@@ -60,6 +60,7 @@ type DatabaseService interface {
 	UpdateMessageContent(id int64, newContent string) error
 	GetGroupMessages(chatID string, count int) ([]Message, error)
 	GetMessagesSinceTime(chatID string, sinceTime time.Time) ([]Message, error)
+	GetMessagesBetween(chatID string, from, to time.Time) ([]Message, error)
 	GetAllGroups() ([]GroupSummary, error)
 
 	// Connection management

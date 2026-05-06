@@ -6,15 +6,16 @@ import (
 
 func (h *Handler) handleVersionCommand(msgTrigger types.MessageInfo) {
 	versionText := `
-ℹ️ ResumoBOT v2.4.2
+ℹ️ ResumoBOT v2.5.0
 
-📋 *O que há de novo:*
+📋 O que há de novo:
 
-🏷️ Bot renomeado para ResumoBOT
-🤖 Personalidade CLT como padrão — narrador esportivo e detetive noir removidos.
-⏰ Resumo diário automático às 00:00.
-🔁 IA com fallback duplo — modelos Gemini atualizados.
-🐛 Correções e melhorias internas de performance.
+📈 Top 3 Ativos: Adicionado ranking dos usuários mais ativos no rodapé do resumo diário.
+⚖️ Comando !regras: Agora você pode consultar as normas do grupo rapidamente.
+👋 Pool de Mensagens: Novas saudações e despedidas aleatórias ao entrar ou sair do chat.
+🎭 Refinamento de Persona: Ajustes finos para personalidades mais autênticas e consistentes.
+💬 Citações Inteligentes: Atribuição de falas garantida, independente da extensão do resumo.
+🐛 Correção de Métricas: Ajustado o cálculo de msgs/h que apresentava erro no fechamento do dia.
 
 🔗 Código: https://github.com/TheMatheusDev/whatsapp-bot-resumo`
 
