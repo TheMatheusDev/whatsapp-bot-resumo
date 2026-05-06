@@ -10,12 +10,13 @@ func (h *Handler) handleVersionCommand(msgTrigger types.MessageInfo) {
 
 📋 O que há de novo:
 
-📈 Top 3 Ativos: Adicionado ranking dos usuários mais ativos no rodapé do resumo diário.
-⚖️ Comando !regras: Agora você pode consultar as normas do grupo rapidamente.
-👋 Pool de Mensagens: Novas saudações e despedidas aleatórias ao entrar ou sair do chat.
-🎭 Refinamento de Persona: Ajustes finos para personalidades mais autênticas e consistentes.
-💬 Citações Inteligentes: Atribuição de falas garantida, independente da extensão do resumo.
-🐛 Correção de Métricas: Ajustado o cálculo de msgs/h que apresentava erro no fechamento do dia.
+- Adicionado ranking semanal de mensagens para os usuários mais ativos
+- Adicionado top 3 ativos do dia no rodapé do resumo do dia
+- Adicionado comando !regras
+- Adicionado pool de mensagens aleatórias de entrada/saída
+- Adicionado autoria das citações nos resumos
+- Pequenos refinamentos nas personalidades
+- Corrigido cálculo incorreto de msgs/h no rodapé do resumo do fim do dia
 
 🔗 Código: https://github.com/TheMatheusDev/whatsapp-bot-resumo`
 
