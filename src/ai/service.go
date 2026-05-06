@@ -189,7 +189,7 @@ func (s *Service) buildSystemPrompt(opts types.SummarizeOptions) string {
 	case "long":
 		lengthPrompt = LongLengthPrompt
 	default:
-		lengthPrompt = DefaultLengthPrompt
+		lengthPrompt = ShortLengthPrompt
 	}
 
 	// Add question-specific instructions if a question is provided
