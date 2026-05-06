@@ -180,6 +180,8 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 		h.handleVersionCommand(msgTrigger)
 	case "!ping", "--ping", "/ping":
 		h.handlePingCommand(msgTrigger)
+	case "!regras", "--regras", "/regras":
+		h.handleRulesCommand(msgTrigger)
 	default:
 		h.logger.Debug("Unknown command", "command", command)
 	}

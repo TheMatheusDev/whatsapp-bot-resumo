@@ -17,6 +17,7 @@ Prefixos de comando: !, - ou /
 - !help → Informações do bot
 - !version → Versão do bot
 - !ping → Verifica se o bot está online
+- !regras → Exibe as regras do grupo
 
 *Comandos de Personalidade:*
 - !clt <número> → Resumo com personalidade CLT (trabalhador cansado)

@@ -155,5 +155,6 @@ type BotConfig struct {
 	WelcomeMessages    []string            `json:"welcome_messages"`
 	FarewellMessages   []string            `json:"farewell_messages"`
 	DailySummaryGroups []string            `json:"daily_summary_groups"`
+	Rules              string              `json:"rules"`
 	MediaDownload      MediaDownloadConfig `json:"media_download"`
 }

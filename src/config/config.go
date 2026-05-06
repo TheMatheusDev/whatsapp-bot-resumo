@@ -50,6 +50,7 @@ func Load() (*types.Config, error) {
 			WelcomeMessages:    getEnvSlicePipeAllowEmpty("WELCOME_MESSAGES", []string{"Seja bem-vindo(a), @numero!"}),
 			FarewellMessages:   getEnvSlicePipeAllowEmpty("FAREWELL_MESSAGES", []string{"@numero saiu do grupo."}),
 			DailySummaryGroups: getEnvSlice("DAILY_SUMMARY_GROUPS", []string{}),
+			Rules:              getEnvAllowEmpty("GROUP_RULES", ""),
 			MediaDownload: types.MediaDownloadConfig{
 				Image:    getEnvBool("DOWNLOAD_IMAGE", true),
 				Video:    getEnvBool("DOWNLOAD_VIDEO", true),
@@ -58,6 +59,15 @@ func Load() (*types.Config, error) {
 				Sticker:  getEnvBool("DOWNLOAD_STICKER", true),
 			},
 		},
+	}
+
+	// Resolve {regras} placeholder in welcome/farewell messages
+	rules := config.Bot.Rules
+	for i, msg := range config.Bot.WelcomeMessages {
+		config.Bot.WelcomeMessages[i] = strings.ReplaceAll(msg, "{regras}", rules)
+	}
+	for i, msg := range config.Bot.FarewellMessages {
+		config.Bot.FarewellMessages[i] = strings.ReplaceAll(msg, "{regras}", rules)
 	}
 
 	if err := Validate(config); err != nil {
