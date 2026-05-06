@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -112,7 +113,7 @@ func (h *Handler) performAutoDailySummarization(chatJID types.JID) {
 	}
 
 	header := fmt.Sprintf("🌙 *Resumo do dia %s:*\n", fourAMYesterday.Format("02/01"))
-	footer := fmt.Sprintf("\n\n---\n📊 %d mensagens | ⏱️ %d msgs/h", messageCount, msgsPerHour)
+	footer := fmt.Sprintf("\n\n---\n📊 %d mensagens | ⏱️ %d msgs/h\n%s", messageCount, msgsPerHour, topTalkersFooter(messages))
 	h.whatsappService.EditMessage(chatJID, msgResp.ID, header+summary+footer)
 
 	h.logger.Info("AutoDailySummary completed",
@@ -245,7 +246,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 		msgsPerHour = int(float64(messageCount) / hours)
 	}
 
-	footer := fmt.Sprintf("\n\n---\n📊 %d mensagens | ⏱️ %d msgs/h", messageCount, msgsPerHour)
+	footer := fmt.Sprintf("\n\n---\n📊 %d mensagens | ⏱️ %d msgs/h\n%s", messageCount, msgsPerHour, topTalkersFooter(messages))
 	fullSummary := header + summary + footer
 
 	// Edit the loading message with the final summary
@@ -258,4 +259,48 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 		"personality", opts.Personality,
 		"since", fourAMToday.Format("2006-01-02 15:04:05"),
 	)
+}
+
+// topTalkersFooter builds the "🗣️ Mais ativos: ..." line from a message slice.
+// It returns the top 3 senders by message count, formatted as:
+//
+//	🗣️ Mais ativos: João (45) | Maria (30) | Pedro (15)
+func topTalkersFooter(messages []wstypes.Message) string {
+	counts := make(map[string]int)
+	for _, m := range messages {
+		name := m.Sender
+		// Strip the @s.whatsapp.net / @g.us suffix if present
+		if idx := strings.Index(name, "@"); idx >= 0 {
+			name = name[:idx]
+		}
+		if name != "" {
+			counts[name]++
+		}
+	}
+
+	type kv struct {
+		Name  string
+		Count int
+	}
+	var sorted []kv
+	for name, count := range counts {
+		sorted = append(sorted, kv{name, count})
+	}
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Count != sorted[j].Count {
+			return sorted[i].Count > sorted[j].Count
+		}
+		return sorted[i].Name < sorted[j].Name
+	})
+
+	const topN = 3
+	if len(sorted) > topN {
+		sorted = sorted[:topN]
+	}
+
+	parts := make([]string, 0, len(sorted))
+	for _, kv := range sorted {
+		parts = append(parts, fmt.Sprintf("%s (%d)", kv.Name, kv.Count))
+	}
+	return "🗣️ Mais ativos: " + strings.Join(parts, " | ")
 }
