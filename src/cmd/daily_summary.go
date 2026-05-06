@@ -97,9 +97,18 @@ func (h *Handler) performAutoDailySummarization(chatJID types.JID) {
 	// Build final message
 	messageCount := len(messages)
 	var msgsPerHour int
-	duration := now.Sub(fourAMYesterday)
-	if hours := duration.Hours(); hours > 0 {
-		msgsPerHour = int(float64(messageCount) / hours)
+	if messageCount > 0 && messages[0].Timestamp.After(fourAMYesterday) {
+		// Use first message timestamp as start time
+		duration := now.Sub(messages[0].Timestamp)
+		if hours := duration.Hours(); hours > 0 {
+			msgsPerHour = int(float64(messageCount) / hours)
+		}
+	} else {
+		// Fallback to 4 AM yesterday if no messages or invalid timestamp
+		duration := now.Sub(fourAMYesterday)
+		if hours := duration.Hours(); hours > 0 {
+			msgsPerHour = int(float64(messageCount) / hours)
+		}
 	}
 
 	header := fmt.Sprintf("🌙 *Resumo do dia %s:*\n", fourAMYesterday.Format("02/01"))
