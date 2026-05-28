@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -76,6 +77,15 @@ func (s *Service) initSchema() error {
 			timestamp DATETIME
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_group_messages_chat_timestamp ON group_messages(chat_id, timestamp ASC)`,
+		`CREATE TABLE IF NOT EXISTS group_settings (
+			chat_id                TEXT    PRIMARY KEY,
+			rules                  TEXT    NOT NULL DEFAULT '',
+			welcome_messages       TEXT    NOT NULL DEFAULT '[]',
+			farewell_messages      TEXT    NOT NULL DEFAULT '[]',
+			daily_summary_enabled  INTEGER NOT NULL DEFAULT 1,
+			weekly_ranking_enabled INTEGER NOT NULL DEFAULT 1,
+			updated_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 
 	for _, query := range queries {
@@ -322,6 +332,119 @@ func (s *Service) GetAllGroups() ([]types.GroupSummary, error) {
 
 	s.logger.Debug("Retrieved groups", "count", len(groups))
 	return groups, nil
+}
+
+// GetGroupSettings retrieves the per-group dynamic configuration from the database.
+// Returns (nil, nil) when no record exists for the given chatID — callers should
+// fall back to the global config defaults in that case.
+func (s *Service) GetGroupSettings(chatID string) (*types.GroupSettings, error) {
+	row := s.db.QueryRow(
+		`SELECT chat_id, rules, welcome_messages, farewell_messages,
+		        daily_summary_enabled, weekly_ranking_enabled
+		 FROM group_settings WHERE chat_id = ?`, chatID)
+
+	var gs types.GroupSettings
+	var welcomeJSON, farewellJSON string
+	var dailyEnabled, weeklyEnabled int
+
+	err := row.Scan(&gs.ChatID, &gs.Rules, &welcomeJSON, &farewellJSON,
+		&dailyEnabled, &weeklyEnabled)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan group_settings row: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(welcomeJSON), &gs.WelcomeMessages); err != nil {
+		gs.WelcomeMessages = []string{}
+	}
+	if err := json.Unmarshal([]byte(farewellJSON), &gs.FarewellMessages); err != nil {
+		gs.FarewellMessages = []string{}
+	}
+	gs.DailySummaryEnabled = dailyEnabled != 0
+	gs.WeeklyRankingEnabled = weeklyEnabled != 0
+
+	return &gs, nil
+}
+
+// UpsertGroupSettings inserts or replaces the per-group configuration.
+// The updated_at timestamp is refreshed on every upsert.
+func (s *Service) UpsertGroupSettings(settings types.GroupSettings) error {
+	welcomeJSON, err := json.Marshal(settings.WelcomeMessages)
+	if err != nil {
+		return fmt.Errorf("failed to marshal welcome_messages: %w", err)
+	}
+	farewellJSON, err := json.Marshal(settings.FarewellMessages)
+	if err != nil {
+		return fmt.Errorf("failed to marshal farewell_messages: %w", err)
+	}
+
+	dailyEnabled := 0
+	if settings.DailySummaryEnabled {
+		dailyEnabled = 1
+	}
+	weeklyEnabled := 0
+	if settings.WeeklyRankingEnabled {
+		weeklyEnabled = 1
+	}
+
+	_, err = s.db.Exec(
+		`INSERT INTO group_settings
+			(chat_id, rules, welcome_messages, farewell_messages,
+			 daily_summary_enabled, weekly_ranking_enabled, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		 ON CONFLICT(chat_id) DO UPDATE SET
+			rules                  = excluded.rules,
+			welcome_messages       = excluded.welcome_messages,
+			farewell_messages      = excluded.farewell_messages,
+			daily_summary_enabled  = excluded.daily_summary_enabled,
+			weekly_ranking_enabled = excluded.weekly_ranking_enabled,
+			updated_at             = excluded.updated_at`,
+		settings.ChatID, settings.Rules, string(welcomeJSON), string(farewellJSON),
+		dailyEnabled, weeklyEnabled,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to upsert group_settings: %w", err)
+	}
+	return nil
+}
+
+// GetGroupIDsWithDailySummaryEnabled returns chat_ids of all groups that
+// have the daily summary feature enabled in the database.
+func (s *Service) GetGroupIDsWithDailySummaryEnabled() ([]string, error) {
+	return s.queryGroupIDsByFlag("daily_summary_enabled")
+}
+
+// GetGroupIDsWithWeeklyRankingEnabled returns chat_ids of all groups that
+// have the weekly ranking feature enabled in the database.
+func (s *Service) GetGroupIDsWithWeeklyRankingEnabled() ([]string, error) {
+	return s.queryGroupIDsByFlag("weekly_ranking_enabled")
+}
+
+// queryGroupIDsByFlag is a helper that fetches chat_ids where the given
+// boolean column equals 1.
+func (s *Service) queryGroupIDsByFlag(column string) ([]string, error) {
+	// column is an internal constant — no risk of SQL injection here.
+	rows, err := s.db.Query(
+		`SELECT chat_id FROM group_settings WHERE `+column+` = 1`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query group IDs by flag %q: %w", column, err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan chat_id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	return ids, nil
 }
 
 // Ping checks if the database connection is alive

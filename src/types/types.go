@@ -43,6 +43,17 @@ type GroupSummary struct {
 	MessageCount int    `json:"message_count"`
 }
 
+// GroupSettings holds per-group dynamic configuration stored in the database.
+// When a field is zero/empty, callers should fall back to the global config defaults.
+type GroupSettings struct {
+	ChatID               string   `json:"chat_id"`
+	Rules                string   `json:"rules"`
+	WelcomeMessages      []string `json:"welcome_messages"`
+	FarewellMessages     []string `json:"farewell_messages"`
+	DailySummaryEnabled  bool     `json:"daily_summary_enabled"`
+	WeeklyRankingEnabled bool     `json:"weekly_ranking_enabled"`
+}
+
 // AIService defines the interface for AI operations
 type AIService interface {
 	SummarizeMessages(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
@@ -62,6 +73,12 @@ type DatabaseService interface {
 	GetMessagesSinceTime(chatID string, sinceTime time.Time) ([]Message, error)
 	GetMessagesBetween(chatID string, from, to time.Time) ([]Message, error)
 	GetAllGroups() ([]GroupSummary, error)
+
+	// Group settings operations
+	GetGroupSettings(chatID string) (*GroupSettings, error)
+	UpsertGroupSettings(settings GroupSettings) error
+	GetGroupIDsWithDailySummaryEnabled() ([]string, error)
+	GetGroupIDsWithWeeklyRankingEnabled() ([]string, error)
 
 	// Connection management
 	Close() error
