@@ -18,7 +18,6 @@ Prefixos de comando: !, - ou /
 - !regras → Exibe as regras do grupo
 - !version → Versão do bot
 - !ping → Verifica se o bot está online
-- !regras → Exibe as regras do grupo
 
 *Comandos de Personalidade:*
 - !clt <número> → Resumo com personalidade CLT (trabalhador cansado)
@@ -41,7 +40,17 @@ Prefixos de comando: !, - ou /
 - !p 100 --clt Teve alguma treta? → Responde a pergunta com personalidade CLT
 - !d → Resumo diário
 - !d --farialimer --longo → Resumo longo do dia com personalidade Faria Limmer
+
+⚙️ *Configurações do Grupo (somente admins):*
+- !setregras <texto> → Define as regras do grupo
+- !addwelcome <msg> → Adiciona mensagem de boas-vindas ({numero} = menção)
+- !delwelcome <n> → Remove boas-vindas pelo índice (sem índice lista as atuais)
+- !addfarewall <msg> → Adiciona mensagem de despedida ({numero} = menção)
+- !delfarewall <n> → Remove despedida pelo índice (sem índice lista as atuais)
+- !resumo on|off → Liga/desliga o resumo diário automático deste grupo
+- !ranking on|off → Liga/desliga o ranking semanal deste grupo
 `
 
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, infoText)
 }
+
