@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -25,6 +26,11 @@ type Handler struct {
 	timezone        *time.Location
 	everyoneHandler *EveryoneHandler
 	whitelistMap    map[string]bool
+
+	// settingsCache caches per-group settings to avoid DB round-trips on every
+	// message. Keys are chatID strings; values are *wstypes.GroupSettings.
+	// Invalidated explicitly when a group's settings are updated via admin commands.
+	settingsCache sync.Map
 
 	// weeklyRankingRunning is an atomic flag that prevents concurrent executions
 	// of the weekly ranking. It is set to 1 while performWeeklyRanking is running
@@ -79,6 +85,8 @@ func (h *Handler) HandleEvent(evt interface{}) {
 		// Handle presence updates if needed
 	case *events.GroupInfo:
 		h.handleGroupInfoEvent(v)
+	case *events.JoinedGroup:
+		h.handleJoinedGroupEvent(v)
 	case *events.HistorySync:
 		h.logger.Debug("History sync received", "type", v.Data.GetSyncType().String())
 	default:
@@ -112,7 +120,7 @@ func (h *Handler) handleMessage(evt *events.Message) {
 		Timestamp:   evt.Info.Timestamp.In(h.timezone),
 	}
 
-	// Save to database only for whitelisted groups.
+	// Save to database for all groups the bot is in.
 	// Messages sent before bot start are still stored for historical context.
 	msgID, err := h.saveMessage(message, evt.Info.Chat)
 	if err != nil {
@@ -169,7 +177,13 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 
 	switch command {
 	case "--resuma", "-r", "!resumo", "!resuma", "!r", "/resuma", "/resumo", "/r":
-		h.handleSummarizeCommand(parts[1:], msgTrigger)
+		// !resumo on / !resumo off toggles the automatic daily summary for this group.
+		// Any other argument (or no argument) falls through to the summarize command.
+		if len(parts) > 1 && (strings.ToLower(parts[1]) == "on" || strings.ToLower(parts[1]) == "off") {
+			h.handleDailySummaryToggle(strings.ToLower(parts[1]), msgTrigger)
+		} else {
+			h.handleSummarizeCommand(parts[1:], msgTrigger)
+		}
 	case "-clt", "!clt", "--clt", "/clt":
 		h.handleSummarizeCltCommand(parts[1:], msgTrigger)
 	case "--farialimer", "-fl", "!farialimer", "!fl", "/farialimer", "/fl":
@@ -188,7 +202,47 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 		h.handlePingCommand(msgTrigger)
 	case "!regras", "--regras", "/regras", "!rg", "--rg", "/rg":
 		h.handleRulesCommand(msgTrigger)
+	// --- per-group admin commands ---
+	case "!setregras":
+		h.handleSetRulesCommand(parts[1:], msgTrigger)
+	case "!addwelcome":
+		h.handleAddWelcomeCommand(parts[1:], msgTrigger)
+	case "!delwelcome":
+		h.handleDelWelcomeCommand(parts[1:], msgTrigger)
+	case "!addfarewall":
+		h.handleAddFarewallCommand(parts[1:], msgTrigger)
+	case "!delfarewall":
+		h.handleDelFarewallCommand(parts[1:], msgTrigger)
+	case "!ranking":
+		h.handleWeeklyRankingToggle(parts[1:], msgTrigger)
 	default:
 		h.logger.Debug("Unknown command", "command", command)
 	}
+}
+
+// getGroupSettings returns the cached GroupSettings for a group, fetching from
+// the DB on a cache miss. Returns nil when the group has no DB record yet
+// (callers should fall back to global config defaults in that case).
+func (h *Handler) getGroupSettings(chatID string) *wstypes.GroupSettings {
+	if v, ok := h.settingsCache.Load(chatID); ok {
+		if gs, ok := v.(*wstypes.GroupSettings); ok {
+			return gs
+		}
+	}
+
+	gs, err := h.dbService.GetGroupSettings(chatID)
+	if err != nil {
+		h.logger.Error("getGroupSettings: DB error", "chat_id", chatID, "error", err)
+		return nil
+	}
+	if gs != nil {
+		h.settingsCache.Store(chatID, gs)
+	}
+	return gs
+}
+
+// invalidateGroupSettings removes a group's settings from the in-memory cache,
+// forcing the next getGroupSettings call to re-fetch from the DB.
+func (h *Handler) invalidateGroupSettings(chatID string) {
+	h.settingsCache.Delete(chatID)
 }

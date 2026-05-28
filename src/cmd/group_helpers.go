@@ -34,13 +34,12 @@ func (h *Handler) getGroupName(chat types.JID) string {
 	return groupName
 }
 
-// saveMessage saves a message to the database and returns the inserted row ID
+// saveMessage saves a message to the database and returns the inserted row ID.
+// All group messages are persisted regardless of whitelist status.
 func (h *Handler) saveMessage(message wstypes.Message, chat types.JID) (int64, error) {
-	// Only persist messages from whitelisted groups.
-	if !h.isWhitelistedGroup(chat) {
+	if chat.Server != types.GroupServer {
 		return 0, nil
 	}
-
 	groupName := h.getGroupName(chat)
 	return h.dbService.SaveGroupMessageReturningID(message, groupName)
 }
