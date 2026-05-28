@@ -10,7 +10,8 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 )
 
-// handleGroupInfoEvent handles participant join/leave events for whitelisted groups.
+// handleGroupInfoEvent handles participant join/leave events for all groups
+// the bot belongs to.
 func (h *Handler) handleGroupInfoEvent(evt *events.GroupInfo) {
 	if evt == nil {
 		return
@@ -25,12 +26,11 @@ func (h *Handler) handleGroupInfoEvent(evt *events.GroupInfo) {
 		return
 	}
 
-	if !h.whitelistMap[evt.JID.User] {
-		return
-	}
+	chatID := evt.JID.User
 
 	if len(evt.Join) > 0 {
-		if msg := pickRandom(h.config.Bot.WelcomeMessages); msg != "" {
+		pool := h.resolveWelcomePool(chatID)
+		if msg := pickRandom(pool); msg != "" {
 			if err := h.sendParticipantStatusMessage(evt.JID, evt.Join, msg); err != nil {
 				h.logger.Error("Failed to send welcome message", "error", err, "chat_id", evt.JID.String())
 			}
@@ -38,7 +38,8 @@ func (h *Handler) handleGroupInfoEvent(evt *events.GroupInfo) {
 	}
 
 	if len(evt.Leave) > 0 {
-		if msg := pickRandom(h.config.Bot.FarewellMessages); msg != "" {
+		pool := h.resolveFarewellPool(chatID)
+		if msg := pickRandom(pool); msg != "" {
 			if err := h.sendParticipantStatusMessage(evt.JID, evt.Leave, msg); err != nil {
 				h.logger.Error("Failed to send farewell message", "error", err, "chat_id", evt.JID.String())
 			}
@@ -46,13 +47,35 @@ func (h *Handler) handleGroupInfoEvent(evt *events.GroupInfo) {
 	}
 }
 
+// resolveWelcomePool returns the welcome message pool for a group.
+// Per-group messages from the DB take priority; falls back to the global config.
+func (h *Handler) resolveWelcomePool(chatID string) []string {
+	if s := h.getGroupSettings(chatID); s != nil && len(s.WelcomeMessages) > 0 {
+		return s.WelcomeMessages
+	}
+	return h.config.Bot.WelcomeMessages
+}
+
+// resolveFarewellPool returns the farewell message pool for a group.
+// Per-group messages from the DB take priority; falls back to the global config.
+func (h *Handler) resolveFarewellPool(chatID string) []string {
+	if s := h.getGroupSettings(chatID); s != nil && len(s.FarewellMessages) > 0 {
+		return s.FarewellMessages
+	}
+	return h.config.Bot.FarewellMessages
+}
+
 // sendParticipantStatusMessage sends one consolidated message for all participants.
-// If the template contains @numero, it is replaced by all participant numbers and they are mentioned.
+// Both {numero} and @numero placeholders are treated as equivalent and replaced
+// by participant mentions when present in the template.
 func (h *Handler) sendParticipantStatusMessage(chatID types.JID, participants []types.JID, template string) error {
 	template = strings.TrimSpace(template)
 	if template == "" {
 		return nil
 	}
+
+	// Normalise both placeholder styles to @numero for internal processing.
+	template = strings.ReplaceAll(template, "{numero}", "@numero")
 
 	if !strings.Contains(template, "@numero") {
 		return h.whatsappService.SendMessage(chatID, template)
@@ -81,6 +104,7 @@ func (h *Handler) sendParticipantStatusMessage(chatID types.JID, participants []
 
 	return h.whatsappService.SendMentionMessage(ctx, chatID, messageText, mentionJIDs)
 }
+
 // pickRandom returns a random non-empty element from the pool.
 // Returns an empty string if the pool is nil or empty.
 func pickRandom(pool []string) string {
@@ -89,3 +113,4 @@ func pickRandom(pool []string) string {
 	}
 	return pool[rand.Intn(len(pool))]
 }
+
