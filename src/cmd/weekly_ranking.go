@@ -15,6 +15,9 @@ import (
 // It is called by the scheduler every Monday at 12:00 and covers messages from the
 // previous Monday 00:00:00 through Sunday 23:59:59.
 // Accepts both bare numbers ("120363XXX") and full JIDs ("120363XXX@g.us"), trimming spaces.
+//
+// Only one execution is allowed at a time. If the ranking is already running when this
+// function is called (e.g. due to a scheduler race), the call is silently skipped.
 func (h *Handler) RunAutoWeeklyRanking(chatJIDStr string) {
 	chatJIDStr = strings.TrimSpace(chatJIDStr)
 	if chatJIDStr == "" {
@@ -32,9 +35,18 @@ func (h *Handler) RunAutoWeeklyRanking(chatJIDStr string) {
 		return
 	}
 
+	// Prevent concurrent or back-to-back executions triggered by scheduler races.
+	if !h.weeklyRankingRunning.CompareAndSwap(false, true) {
+		h.logger.Warn("WeeklyRanking: already running, skipping duplicate dispatch", "jid", chatJIDStr)
+		return
+	}
+
 	chatJID := types.JID{User: userPart, Server: "g.us"}
 	h.logger.Info("WeeklyRanking: queuing", "chat", chatJID.User)
-	go h.performWeeklyRanking(chatJID)
+	go func() {
+		defer h.weeklyRankingRunning.Store(false)
+		h.performWeeklyRanking(chatJID)
+	}()
 }
 
 // performWeeklyRanking queries messages from the previous Mon 00:00 – Sun 23:59:59,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"go.mau.fi/whatsmeow/types"
@@ -24,6 +25,11 @@ type Handler struct {
 	timezone        *time.Location
 	everyoneHandler *EveryoneHandler
 	whitelistMap    map[string]bool
+
+	// weeklyRankingRunning is an atomic flag that prevents concurrent executions
+	// of the weekly ranking. It is set to 1 while performWeeklyRanking is running
+	// and reset to 0 when it finishes.
+	weeklyRankingRunning atomic.Bool
 }
 
 // NewHandler creates a new message handler
