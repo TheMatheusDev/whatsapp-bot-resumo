@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -138,16 +139,10 @@ func (b *Bot) Start(ctx context.Context) error {
 }
 
 // startDailySummaryScheduler runs a goroutine that fires the automatic daily summary at 00:00 every day.
+// The list of target groups is resolved dynamically at each tick by merging:
+//   - Groups with daily_summary_enabled = 1 in the DB
+//   - Groups listed in DailySummaryGroups / GroupWhitelist from .env (retrocompatibility)
 func (b *Bot) startDailySummaryScheduler() {
-	groups := b.config.Bot.DailySummaryGroups
-	if len(groups) == 0 {
-		groups = b.config.WhatsApp.GroupWhitelist
-	}
-	if len(groups) == 0 {
-		b.logger.Info("DailySummaryScheduler: no groups configured, scheduler idle")
-		return
-	}
-
 	// Parse timezone from config
 	loc, err := time.LoadLocation(b.config.Bot.Timezone)
 	if err != nil {
@@ -164,6 +159,17 @@ func (b *Bot) startDailySummaryScheduler() {
 
 		select {
 		case <-time.After(waitDuration):
+			// Resolve groups at firing time so toggles take effect without restart.
+			dbGroups, err := b.dbService.GetGroupIDsWithDailySummaryEnabled()
+			if err != nil {
+				b.logger.Error("DailySummaryScheduler: failed to query DB groups", "error", err)
+			}
+			// Merge with .env config groups (retrocompatibility for pre-DB deployments).
+			configGroups := b.config.Bot.DailySummaryGroups
+			if len(configGroups) == 0 {
+				configGroups = b.config.WhatsApp.GroupWhitelist
+			}
+			groups := mergeUnique(configGroups, dbGroups)
 			b.logger.Info("DailySummaryScheduler: firing daily summaries", "groups", len(groups))
 			for _, jid := range groups {
 				b.handler.RunAutoDailySummary(jid)
@@ -177,13 +183,10 @@ func (b *Bot) startDailySummaryScheduler() {
 
 // startWeeklyRankingScheduler fires the weekly message ranking every Monday at 12:00 local time.
 // It covers messages from the previous Monday 00:00:00 through Sunday 23:59:59.
+// The list of target groups is resolved dynamically at each tick by merging:
+//   - Groups with weekly_ranking_enabled = 1 in the DB
+//   - Groups listed in GroupWhitelist from .env (retrocompatibility)
 func (b *Bot) startWeeklyRankingScheduler() {
-	groups := b.config.WhatsApp.GroupWhitelist
-	if len(groups) == 0 {
-		b.logger.Info("WeeklyRankingScheduler: no groups configured, scheduler idle")
-		return
-	}
-
 	loc, err := time.LoadLocation(b.config.Bot.Timezone)
 	if err != nil {
 		loc = time.FixedZone(b.config.Bot.Timezone, -3*60*60)
@@ -197,8 +200,6 @@ func (b *Bot) startWeeklyRankingScheduler() {
 		daysUntilMonday := (int(time.Monday) - int(now.Weekday()) + 7) % 7
 
 		// Use total minutes to cover the exact 12:00:00 edge case.
-		// The previous condition `now.Hour() > 12 || (now.Hour() == 12 && now.Minute() > 0)`
-		// missed Hour==12 && Minute==0, causing waitDuration≈0 and an infinite loop.
 		nowMinutes := now.Hour()*60 + now.Minute()
 		if daysUntilMonday == 0 && nowMinutes >= 12*60 {
 			// Already at or past noon on Monday — wait until next Monday
@@ -213,6 +214,12 @@ func (b *Bot) startWeeklyRankingScheduler() {
 
 		select {
 		case <-time.After(waitDuration):
+			// Resolve groups at firing time so toggles take effect without restart.
+			dbGroups, err := b.dbService.GetGroupIDsWithWeeklyRankingEnabled()
+			if err != nil {
+				b.logger.Error("WeeklyRankingScheduler: failed to query DB groups", "error", err)
+			}
+			groups := mergeUnique(b.config.WhatsApp.GroupWhitelist, dbGroups)
 			b.logger.Info("WeeklyRankingScheduler: firing weekly rankings", "groups", len(groups))
 			for _, jid := range groups {
 				b.handler.RunAutoWeeklyRanking(jid)
@@ -230,6 +237,28 @@ func (b *Bot) startWeeklyRankingScheduler() {
 			return
 		}
 	}
+}
+
+// mergeUnique merges two string slices into one, deduplicating entries.
+// The .env config values are the base; DB values are appended if not already present.
+func mergeUnique(base, extra []string) []string {
+	seen := make(map[string]bool, len(base)+len(extra))
+	result := make([]string, 0, len(base)+len(extra))
+	for _, v := range base {
+		v = strings.TrimSpace(v)
+		if v != "" && !seen[v] {
+			seen[v] = true
+			result = append(result, v)
+		}
+	}
+	for _, v := range extra {
+		v = strings.TrimSpace(v)
+		if v != "" && !seen[v] {
+			seen[v] = true
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 // Stop stops the bot
