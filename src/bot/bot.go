@@ -195,8 +195,13 @@ func (b *Bot) startWeeklyRankingScheduler() {
 		// Calculate next Monday at 12:00 in the configured timezone.
 		// time.Weekday(): Sunday=0, Monday=1, ..., Saturday=6
 		daysUntilMonday := (int(time.Monday) - int(now.Weekday()) + 7) % 7
-		if daysUntilMonday == 0 && (now.Hour() > 12 || (now.Hour() == 12 && now.Minute() > 0)) {
-			// Already past noon on Monday — wait until next Monday
+
+		// Use total minutes to cover the exact 12:00:00 edge case.
+		// The previous condition `now.Hour() > 12 || (now.Hour() == 12 && now.Minute() > 0)`
+		// missed Hour==12 && Minute==0, causing waitDuration≈0 and an infinite loop.
+		nowMinutes := now.Hour()*60 + now.Minute()
+		if daysUntilMonday == 0 && nowMinutes >= 12*60 {
+			// Already at or past noon on Monday — wait until next Monday
 			daysUntilMonday = 7
 		}
 		nextMonday := time.Date(now.Year(), now.Month(), now.Day()+daysUntilMonday, 12, 0, 0, 0, loc)
@@ -211,6 +216,14 @@ func (b *Bot) startWeeklyRankingScheduler() {
 			b.logger.Info("WeeklyRankingScheduler: firing weekly rankings", "groups", len(groups))
 			for _, jid := range groups {
 				b.handler.RunAutoWeeklyRanking(jid)
+			}
+			// Sleep before recalculating to ensure 'now' is past noon on the next
+			// iteration, acting as a second guard against the infinite-loop race.
+			select {
+			case <-time.After(2 * time.Minute):
+			case <-b.stopWeeklyRankingScheduler:
+				b.logger.Info("WeeklyRankingScheduler: stopped")
+				return
 			}
 		case <-b.stopWeeklyRankingScheduler:
 			b.logger.Info("WeeklyRankingScheduler: stopped")
