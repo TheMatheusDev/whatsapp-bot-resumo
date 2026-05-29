@@ -32,6 +32,11 @@ type Handler struct {
 	// Invalidated explicitly when a group's settings are updated via admin commands.
 	settingsCache sync.Map
 
+	// groupInfoCache caches WhatsApp GroupInfo responses to avoid a network
+	// round-trip on every admin command. Keys are JID strings; values are
+	// cachedGroupInfo (info + expiresAt). TTL is groupInfoTTL (5 min).
+	groupInfoCache sync.Map
+
 	// joiningGroups is an atomic set (sync.Map used as map[string]struct{}) that
 	// prevents duplicate onboarding when rapid reconnects fire multiple
 	// JoinedGroup events for the same group concurrently. LoadOrStore ensures
