@@ -45,16 +45,13 @@ Prefixos de comando: !, - ou /
 - !setregras <texto> → Define as regras do grupo
 - !addwelcome <msg> → Adiciona mensagem de boas-vindas ({numero} = menção)
 - !delwelcome <n> → Remove boas-vindas pelo índice (sem índice lista as atuais)
-- !addfarewall <msg> → Adiciona mensagem de despedida ({numero} = menção)
-- !delfarewall <n> → Remove despedida pelo índice (sem índice lista as atuais)
+- !welcome → Lista as mensagens de boas-vindas configuradas
+- !addfarewell <msg> → Adiciona mensagem de despedida ({numero} = menção)
+- !delfarewell <n> → Remove despedida pelo índice (sem índice lista as atuais)
+- !farewell → Lista as mensagens de despedida configuradas
 - !resumo on|off → Liga/desliga o resumo diário automático deste grupo
 - !ranking on|off → Liga/desliga o ranking semanal deste grupo
-
-📋 *Informações do Grupo (todos os membros):*
-- !welcome → Lista as mensagens de boas-vindas configuradas
-- !farewall → Lista as mensagens de despedida configuradas
 `
 
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, infoText)
 }
-

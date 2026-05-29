@@ -183,13 +183,13 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 }
 
 // ---------------------------------------------------------------------------
-// !addfarewall / !delfarewall
+// !addfarewell / !delfarewell
 // ---------------------------------------------------------------------------
 
-// handleAddFarewallCommand appends a farewell message template to the group's pool.
+// handleAddFarewellCommand appends a farewell message template to the group's pool.
 //
-// Usage:  !addfarewall Até mais, {numero}! 👋
-func (h *Handler) handleAddFarewallCommand(args []string, msgTrigger types.MessageInfo) {
+// Usage:  !addfarewell Até mais, {numero}! 👋
+func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
 	}
@@ -200,7 +200,7 @@ func (h *Handler) handleAddFarewallCommand(args []string, msgTrigger types.Messa
 	if len(args) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 			"❌ Informe o texto da mensagem de despedida.\n"+
-				"Exemplo: !addfarewall Até mais, {numero}! 👋")
+				"Exemplo: !addfarewell Até mais, {numero}! 👋")
 		return
 	}
 
@@ -209,7 +209,7 @@ func (h *Handler) handleAddFarewallCommand(args []string, msgTrigger types.Messa
 	settings.FarewellMessages = append(settings.FarewellMessages, template)
 
 	if err := h.saveAndInvalidate(settings); err != nil {
-		h.logger.Error("handleAddFarewallCommand: failed to save settings", "error", err)
+		h.logger.Error("handleAddFarewellCommand: failed to save settings", "error", err)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 			"❌ Erro ao salvar mensagem. Tente novamente.")
 		return
@@ -220,14 +220,14 @@ func (h *Handler) handleAddFarewallCommand(args []string, msgTrigger types.Messa
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, reply)
 }
 
-// handleDelFarewallCommand removes a farewell message by its 1-based index.
+// handleDelFarewellCommand removes a farewell message by its 1-based index.
 // When called without an index, it lists the current messages.
 //
 // Usage:
 //
-//	!delfarewall      → lists current messages with indices
-//	!delfarewall <n>  → removes message at index n
-func (h *Handler) handleDelFarewallCommand(args []string, msgTrigger types.MessageInfo) {
+//	!delfarewell      → lists current messages with indices
+//	!delfarewell <n>  → removes message at index n
+func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
 	}
@@ -240,14 +240,14 @@ func (h *Handler) handleDelFarewallCommand(args []string, msgTrigger types.Messa
 	if len(args) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 			formatMessageList("Mensagens de despedida atuais", settings.FarewellMessages,
-				"!delfarewall"))
+				"!delfarewell"))
 		return
 	}
 
 	idx, err := strconv.Atoi(args[0])
 	if err != nil || idx < 1 || idx > len(settings.FarewellMessages) {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
-			"❌ Índice inválido. Use !delfarewall (sem número) para ver a lista.")
+			"❌ Índice inválido. Use !delfarewell (sem número) para ver a lista.")
 		return
 	}
 
@@ -258,7 +258,7 @@ func (h *Handler) handleDelFarewallCommand(args []string, msgTrigger types.Messa
 	)
 
 	if err := h.saveAndInvalidate(settings); err != nil {
-		h.logger.Error("handleDelFarewallCommand: failed to save settings", "error", err)
+		h.logger.Error("handleDelFarewellCommand: failed to save settings", "error", err)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 			"❌ Erro ao salvar. Tente novamente.")
 		return
@@ -353,11 +353,14 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 // ---------------------------------------------------------------------------
 
 // handleListWelcomeCommand lists the welcome message templates configured for
-// this group. Any member can use this command.
+// this group. Only group admins can use this command.
 //
 // Usage: !welcome
 func (h *Handler) handleListWelcomeCommand(msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
+		return
+	}
+	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
 	pool := h.resolveWelcomePool(msgTrigger.Chat.User)
@@ -366,15 +369,18 @@ func (h *Handler) handleListWelcomeCommand(msgTrigger types.MessageInfo) {
 }
 
 // ---------------------------------------------------------------------------
-// !farewall  (list farewell messages — open to all members)
+// !farewell  (list farewell messages — open to all members)
 // ---------------------------------------------------------------------------
 
-// handleListFarewallCommand lists the farewell message templates configured for
-// this group. Any member can use this command.
+// handleListFarewellCommand lists the farewell message templates configured for
+// this group. Only group admins can use this command.
 //
-// Usage: !farewall
-func (h *Handler) handleListFarewallCommand(msgTrigger types.MessageInfo) {
+// Usage: !farewell
+func (h *Handler) handleListFarewellCommand(msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
+		return
+	}
+	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
 	pool := h.resolveFarewellPool(msgTrigger.Chat.User)
