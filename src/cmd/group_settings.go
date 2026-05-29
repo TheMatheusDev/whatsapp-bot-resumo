@@ -16,8 +16,16 @@ import (
 const errNotAdmin = "❌ Apenas admins do grupo podem usar este comando."
 
 // requireGroupAdmin checks if the sender is a native group admin.
-// If not, sends errNotAdmin and returns false.
+// OWNER_JID is treated as a universal admin across all groups — the check
+// short-circuits before any WhatsApp API call, so there is no network cost.
+// If the sender is not the owner and not a native admin, sends errNotAdmin
+// and returns false.
 func (h *Handler) requireGroupAdmin(msgTrigger types.MessageInfo) bool {
+	// OWNER_JID is always allowed, regardless of native group admin status.
+	if h.config.WhatsApp.OwnerJID != "" && msgTrigger.Sender.User == h.config.WhatsApp.OwnerJID {
+		return true
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if !h.isGroupAdmin(ctx, msgTrigger.Chat, msgTrigger.Sender.User) {
