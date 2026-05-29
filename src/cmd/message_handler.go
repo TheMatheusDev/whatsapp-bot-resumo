@@ -187,14 +187,10 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 	command := strings.ToLower(parts[0])
 
 	switch command {
-	case "--resuma", "-r", "!resumo", "!resuma", "!r", "/resuma", "/resumo", "/r":
-		// !resumo on / !resumo off toggles the automatic daily summary for this group.
-		// Any other argument (or no argument) falls through to the summarize command.
-		if len(parts) > 1 && (strings.ToLower(parts[1]) == "on" || strings.ToLower(parts[1]) == "off") {
-			h.handleDailySummaryToggle(strings.ToLower(parts[1]), msgTrigger)
-		} else {
-			h.handleSummarizeCommand(parts[1:], msgTrigger)
-		}
+	case "--resuma", "-r", "!resuma", "!r", "/resuma", "/resumo", "/r":
+		h.handleSummarizeCommand(parts[1:], msgTrigger)
+	case "!resumo":
+		h.handleDailySummaryToggle(parts[1:], msgTrigger)
 	case "-clt", "!clt", "--clt", "/clt":
 		h.handleSummarizeCltCommand(parts[1:], msgTrigger)
 	case "--farialimer", "-fl", "!farialimer", "!fl", "/farialimer", "/fl":

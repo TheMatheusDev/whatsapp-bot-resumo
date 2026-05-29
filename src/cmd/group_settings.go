@@ -297,15 +297,22 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 // for this group. Only group admins can use this command.
 //
 // Usage:  !resumo on | !resumo off
-func (h *Handler) handleDailySummaryToggle(state string, msgTrigger types.MessageInfo) {
+func (h *Handler) handleDailySummaryToggle(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
 	}
+
+	if len(args) == 0 || (strings.ToLower(args[0]) != "on" && strings.ToLower(args[0]) != "off") {
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+			"ℹ️ Use: !resumo on ou !resumo off")
+		return
+	}
+
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
 
-	enabled := state == "on"
+	enabled := strings.ToLower(args[0]) == "on"
 	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
 	settings.DailySummaryEnabled = enabled
 
