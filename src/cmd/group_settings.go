@@ -97,10 +97,14 @@ func (h *Handler) handleSetRulesCommand(args []string, msgTrigger types.MessageI
 // !addwelcome / !delwelcome
 // ---------------------------------------------------------------------------
 
-// handleAddWelcomeCommand appends a welcome message template to the group's pool.
-// Use {numero} in the template to mention the joining participant(s).
+// handleAddWelcomeCommand appends one or more welcome message templates to the
+// group's pool. Separate multiple messages with | to add them all at once.
+// Use {numero} in templates to mention the joining participant(s).
 //
-// Usage:  !addwelcome Olá {numero}! Seja bem-vindo(a)!
+// Usage:
+//
+//	!addwelcome Olá {numero}! Seja bem-vindo(a)!
+//	!addwelcome Oi {numero}!|Bem-vindo(a), {numero}! 🎉
 func (h *Handler) handleAddWelcomeCommand(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
@@ -112,13 +116,20 @@ func (h *Handler) handleAddWelcomeCommand(args []string, msgTrigger types.Messag
 	if len(args) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 			"❌ Informe o texto da mensagem de boas-vindas.\n"+
-				"Exemplo: !addwelcome Olá {numero}! Seja bem-vindo(a)!")
+				"Exemplo: !addwelcome Olá {numero}! Seja bem-vindo(a)!\n"+
+				"Separe múltiplas mensagens com |")
 		return
 	}
 
-	template := strings.Join(args, " ")
+	newMessages := splitPipe(strings.Join(args, " "))
+	if len(newMessages) == 0 {
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+			"❌ Nenhuma mensagem válida encontrada.")
+		return
+	}
+
 	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
-	settings.WelcomeMessages = append(settings.WelcomeMessages, template)
+	settings.WelcomeMessages = append(settings.WelcomeMessages, newMessages...)
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleAddWelcomeCommand: failed to save settings", "error", err)
@@ -127,9 +138,8 @@ func (h *Handler) handleAddWelcomeCommand(args []string, msgTrigger types.Messag
 		return
 	}
 
-	reply := fmt.Sprintf("✅ Mensagem de boas-vindas adicionada (total: %d):\n\n_%s_",
-		len(settings.WelcomeMessages), template)
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, reply)
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		formatAddedMessages("boas-vindas", newMessages, len(settings.WelcomeMessages)))
 }
 
 // handleDelWelcomeCommand removes a welcome message by its 1-based index.
@@ -186,10 +196,14 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 // !addfarewell / !delfarewell
 // ---------------------------------------------------------------------------
 
-// handleAddFarewellCommand appends a farewell message template to the group's pool.
+// handleAddFarewallCommand appends one or more farewell message templates to the
+// group's pool. Separate multiple messages with | to add them all at once.
 //
-// Usage:  !addfarewell Até mais, {numero}! 👋
-func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.MessageInfo) {
+// Usage:
+//
+//	!addfarewall Até mais, {numero}! 👋
+//	!addfarewall Tchau {numero}!|Até mais, {numero}! 👋
+func (h *Handler) handleAddFarewallCommand(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
 	}
@@ -200,24 +214,30 @@ func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.Messa
 	if len(args) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 			"❌ Informe o texto da mensagem de despedida.\n"+
-				"Exemplo: !addfarewell Até mais, {numero}! 👋")
+				"Exemplo: !addfarewall Até mais, {numero}! 👋\n"+
+				"Separe múltiplas mensagens com |")
 		return
 	}
 
-	template := strings.Join(args, " ")
+	newMessages := splitPipe(strings.Join(args, " "))
+	if len(newMessages) == 0 {
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+			"❌ Nenhuma mensagem válida encontrada.")
+		return
+	}
+
 	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
-	settings.FarewellMessages = append(settings.FarewellMessages, template)
+	settings.FarewellMessages = append(settings.FarewellMessages, newMessages...)
 
 	if err := h.saveAndInvalidate(settings); err != nil {
-		h.logger.Error("handleAddFarewellCommand: failed to save settings", "error", err)
+		h.logger.Error("handleAddFarewallCommand: failed to save settings", "error", err)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 			"❌ Erro ao salvar mensagem. Tente novamente.")
 		return
 	}
 
-	reply := fmt.Sprintf("✅ Mensagem de despedida adicionada (total: %d):\n\n_%s_",
-		len(settings.FarewellMessages), template)
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, reply)
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		formatAddedMessages("despedida", newMessages, len(settings.FarewellMessages)))
 }
 
 // handleDelFarewellCommand removes a farewell message by its 1-based index.
@@ -391,6 +411,34 @@ func (h *Handler) handleListFarewellCommand(msgTrigger types.MessageInfo) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// splitPipe splits a string by the | separator, trims whitespace from each
+// part, and discards empty parts. Used to support bulk-add via pipe syntax.
+func splitPipe(s string) []string {
+	parts := strings.Split(s, "|")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			result = append(result, t)
+		}
+	}
+	return result
+}
+
+// formatAddedMessages builds a confirmation reply after adding one or more
+// message templates to a pool.
+func formatAddedMessages(kind string, added []string, total int) string {
+	var sb strings.Builder
+	if len(added) == 1 {
+		sb.WriteString(fmt.Sprintf("✅ Mensagem de %s adicionada (total: %d):\n\n", kind, total))
+	} else {
+		sb.WriteString(fmt.Sprintf("✅ %d mensagens de %s adicionadas (total: %d):\n\n", len(added), kind, total))
+	}
+	for i, m := range added {
+		sb.WriteString(fmt.Sprintf("%d. _%s_\n", i+1, m))
+	}
+	return sb.String()
+}
 
 // formatMessageList builds a numbered list of message templates for display.
 // When deleteCmd is empty, the "Para remover:" hint is omitted.
