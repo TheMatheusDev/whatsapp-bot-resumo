@@ -14,9 +14,9 @@ Fui adicionado a este grupo e já estou pronto para resumir conversas com IA!
 ⚙️ *Configurações do grupo (somente admins):*
 • !setregras <texto> — Define as regras do grupo
 • !addwelcome <msg> — Adiciona mensagem de boas-vindas (use {numero} para mencionar quem entrou)
-• !addfarewall <msg> — Adiciona mensagem de despedida (use {numero} para mencionar quem saiu)
+• !addfarewell <msg> — Adiciona mensagem de despedida (use {numero} para mencionar quem saiu)
 • !delwelcome <n> — Remove boas-vindas pelo índice (sem índice lista as atuais)
-• !delfarewall <n> — Remove despedida pelo índice (sem índice lista as atuais)
+• !delfarewell <n> — Remove despedida pelo índice (sem índice lista as atuais)
 
 🔔 *Status atual:*
 • Resumo diário automático: ✅ ligado (desligue com !resumo off)
