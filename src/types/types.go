@@ -138,6 +138,7 @@ type GeminiConfig struct {
 	Model        string `json:"model"`
 	ModelBackup  string `json:"model_backup"`
 	ModelBackup2 string `json:"model_backup2"`
+	ApiLogs      bool   `json:"api_logs"`
 }
 
 // DatabaseConfig holds database configuration
