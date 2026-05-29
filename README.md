@@ -41,10 +41,9 @@ ou use o `build.bat` em Windows para compilar para Android ARM64 (Termux) e Wind
 
 ## 📝 Comandos
 
-São aceitos os prefixos: `--`, `-`, `/` e `!`.
+Prefixo de comando: `!`.
 
-Ademais, quase todos os comandos possuem uma versão curta com a primeira letra, ex: `!r` para `!resuma`, `!p` para `!pergunte`. Opções de personalidade possuem comandos curtos como: `!fl` para `--farialimer`, `!z` para `--zoomer`.
-
+Ademais, quase todos os comandos possuem uma versão curta com a primeira letra, ex: `!r` para `!resuma`, `!p` para `!pergunte`. Opções de personalidade possuem comandos curtos como: `!fl` para `!farialimer`, `!z` para `!zoomer`.
 **Comandos:**
 
 - `!resuma <número>` (versão curta: `!r`) → Resume mensagens do chat atual

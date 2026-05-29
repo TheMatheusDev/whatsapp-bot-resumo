@@ -187,29 +187,27 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 	command := strings.ToLower(parts[0])
 
 	switch command {
-	case "--resuma", "-r", "!resuma", "!r", "/resuma", "/resumo", "/r":
+	case "!resuma", "!r":
 		h.handleSummarizeCommand(parts[1:], msgTrigger)
-	case "!resumo":
-		h.handleDailySummaryToggle(parts[1:], msgTrigger)
-	case "-clt", "!clt", "--clt", "/clt":
+	case "!clt":
 		h.handleSummarizeCltCommand(parts[1:], msgTrigger)
-	case "--farialimer", "-fl", "!farialimer", "!fl", "/farialimer", "/fl":
+	case "!farialimer", "!fl":
 		h.handleSummarizeFariaLimerCommand(parts[1:], msgTrigger)
-	case "--zoomer", "-z", "!zoomer", "!z", "/zoomer", "/z":
+	case "!zoomer", "!z":
 		h.handleSummarizeZoomerCommand(parts[1:], msgTrigger)
-	case "--pergunte", "-p", "!pergunte", "!p", "/pergunte", "/p":
+	case "!pergunta", "!p":
 		h.handleAskQuestionCommand(parts[1:], msgTrigger)
-	case "--dia", "-d", "!dia", "!d", "/dia", "/d", "--daily", "/daily":
+	case "!dia", "!d":
 		h.handleDailySummaryCommand(parts[1:], msgTrigger)
-	case "--help", "-h", "!help", "!h", "/help", "/h":
+	case "!help", "!h":
 		h.handleHelpCommand(msgTrigger)
-	case "--version", "-v", "!version", "!v", "/version", "/v":
+	case "!version", "!v":
 		h.handleVersionCommand(msgTrigger)
-	case "!ping", "--ping", "/ping":
+	case "!ping":
 		h.handlePingCommand(msgTrigger)
-	case "!regras", "--regras", "/regras", "!rg", "--rg", "/rg":
+	case "!regras", "!rg":
 		h.handleRulesCommand(msgTrigger)
-	// --- per-group admin commands ---
+		// --- per-group admin commands ---
 	case "!setregras":
 		h.handleSetRulesCommand(parts[1:], msgTrigger)
 	case "!addwelcome":
@@ -220,6 +218,8 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 		h.handleAddFarewellCommand(parts[1:], msgTrigger)
 	case "!delfarewell":
 		h.handleDelFarewellCommand(parts[1:], msgTrigger)
+	case "!resumo":
+		h.handleDailySummaryToggle(parts[1:], msgTrigger)
 	case "!ranking":
 		h.handleWeeklyRankingToggle(parts[1:], msgTrigger)
 	case "!admincache":
