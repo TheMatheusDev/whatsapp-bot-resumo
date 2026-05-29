@@ -369,7 +369,31 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 }
 
 // ---------------------------------------------------------------------------
-// !welcome  (list welcome messages — open to all members)
+// !admincache  (flush GroupInfo cache for this group)
+// ---------------------------------------------------------------------------
+
+// handleAdminCacheCommand evicts the cached GroupInfo for the current group,
+// forcing the next admin check to fetch fresh data from the WhatsApp API.
+// Useful after promoting or demoting participants when you don't want to wait
+// for the 5-minute TTL to expire.
+//
+// Usage: !admincache
+func (h *Handler) handleAdminCacheCommand(msgTrigger types.MessageInfo) {
+	if !msgTrigger.IsGroup {
+		return
+	}
+	if !h.requireGroupAdmin(msgTrigger) {
+		return
+	}
+
+	h.invalidateGroupInfoCache(msgTrigger.Chat.String())
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		"🔄 Cache de admins atualizado! A próxima validação buscará dados frescos do WhatsApp.")
+	h.logger.Info("Admin cache flushed manually", "chat", msgTrigger.Chat.User)
+}
+
+// ---------------------------------------------------------------------------
+// !welcome  (list welcome messages — admin only)
 // ---------------------------------------------------------------------------
 
 // handleListWelcomeCommand lists the welcome message templates configured for

@@ -226,7 +226,9 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 		h.handleDelFarewellCommand(parts[1:], msgTrigger)
 	case "!ranking":
 		h.handleWeeklyRankingToggle(parts[1:], msgTrigger)
-	// --- per-group read-only commands (any member) ---
+	case "!admincache":
+		h.handleAdminCacheCommand(msgTrigger)
+	// --- per-group read-only commands (admin only) ---
 	case "!welcome":
 		h.handleListWelcomeCommand(msgTrigger)
 	case "!farewell":
