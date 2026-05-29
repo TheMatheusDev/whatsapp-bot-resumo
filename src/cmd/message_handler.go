@@ -32,6 +32,12 @@ type Handler struct {
 	// Invalidated explicitly when a group's settings are updated via admin commands.
 	settingsCache sync.Map
 
+	// joiningGroups is an atomic set (sync.Map used as map[string]struct{}) that
+	// prevents duplicate onboarding when rapid reconnects fire multiple
+	// JoinedGroup events for the same group concurrently. LoadOrStore ensures
+	// only one goroutine proceeds; the entry is deleted when onboarding finishes.
+	joiningGroups sync.Map
+
 	// weeklyRankingRunning is an atomic flag that prevents concurrent executions
 	// of the weekly ranking. It is set to 1 while performWeeklyRanking is running
 	// and reset to 0 when it finishes.

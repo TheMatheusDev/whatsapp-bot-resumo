@@ -31,8 +31,15 @@ Fui adicionado a este grupo e já estou pronto para resumir conversas com IA!
 // handleJoinedGroupEvent is triggered when the bot is added to a new group.
 // It creates a default GroupSettings record in the DB (daily summary and weekly
 // ranking enabled by default) and sends an onboarding message in the group.
-// The function is idempotent: if the group already has a record in the DB (e.g.
-// after a bot reconnect), it logs and returns without sending the message again.
+//
+// Thread-safety: rapid reconnects can fire multiple JoinedGroup events for the
+// same group in quick succession. The joiningGroups sync.Map is used as an
+// atomic set — only the first goroutine to acquire the slot for a given chatID
+// proceeds with onboarding; all others return immediately. The slot is released
+// via defer so that future legitimate re-joins (bot removed then re-added) are
+// handled correctly. The DB upsert is inherently idempotent (ON CONFLICT DO
+// UPDATE), so even if two goroutines race through, the data remains consistent
+// and only the message send is guarded by the in-process lock.
 func (h *Handler) handleJoinedGroupEvent(evt *events.JoinedGroup) {
 	if evt == nil {
 		return
@@ -40,7 +47,19 @@ func (h *Handler) handleJoinedGroupEvent(evt *events.JoinedGroup) {
 
 	chatID := evt.JID.User
 
-	// Check if already registered to ensure idempotency on reconnects.
+	// Atomic guard: only the first goroutine for this chatID proceeds.
+	// LoadOrStore returns (existingValue, true) if the key was already present,
+	// or (storedValue, false) if this goroutine just stored it.
+	if _, alreadyProcessing := h.joiningGroups.LoadOrStore(chatID, struct{}{}); alreadyProcessing {
+		h.logger.Debug("JoinedGroup: onboarding already in progress, skipping duplicate event",
+			"chat", chatID)
+		return
+	}
+	// Release the slot when done so future re-joins are processed correctly.
+	defer h.joiningGroups.Delete(chatID)
+
+	// Secondary idempotency check against the DB: handles the case where the
+	// bot reconnects after a clean shutdown and the group is already registered.
 	existing, err := h.dbService.GetGroupSettings(chatID)
 	if err != nil {
 		h.logger.Error("JoinedGroup: failed to check existing settings",
