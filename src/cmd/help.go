@@ -49,6 +49,10 @@ Prefixos de comando: !, - ou /
 - !delfarewall <n> → Remove despedida pelo índice (sem índice lista as atuais)
 - !resumo on|off → Liga/desliga o resumo diário automático deste grupo
 - !ranking on|off → Liga/desliga o ranking semanal deste grupo
+
+📋 *Informações do Grupo (todos os membros):*
+- !welcome → Lista as mensagens de boas-vindas configuradas
+- !farewall → Lista as mensagens de despedida configuradas
 `
 
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, infoText)

@@ -215,6 +215,11 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 		h.handleDelFarewallCommand(parts[1:], msgTrigger)
 	case "!ranking":
 		h.handleWeeklyRankingToggle(parts[1:], msgTrigger)
+	// --- per-group read-only commands (any member) ---
+	case "!welcome":
+		h.handleListWelcomeCommand(msgTrigger)
+	case "!farewall":
+		h.handleListFarewallCommand(msgTrigger)
 	default:
 		h.logger.Debug("Unknown command", "command", command)
 	}

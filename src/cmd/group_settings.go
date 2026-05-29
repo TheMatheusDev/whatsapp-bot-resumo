@@ -349,10 +349,45 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 }
 
 // ---------------------------------------------------------------------------
+// !welcome  (list welcome messages — open to all members)
+// ---------------------------------------------------------------------------
+
+// handleListWelcomeCommand lists the welcome message templates configured for
+// this group. Any member can use this command.
+//
+// Usage: !welcome
+func (h *Handler) handleListWelcomeCommand(msgTrigger types.MessageInfo) {
+	if !msgTrigger.IsGroup {
+		return
+	}
+	pool := h.resolveWelcomePool(msgTrigger.Chat.User)
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		formatMessageList("Mensagens de boas-vindas", pool, ""))
+}
+
+// ---------------------------------------------------------------------------
+// !farewall  (list farewell messages — open to all members)
+// ---------------------------------------------------------------------------
+
+// handleListFarewallCommand lists the farewell message templates configured for
+// this group. Any member can use this command.
+//
+// Usage: !farewall
+func (h *Handler) handleListFarewallCommand(msgTrigger types.MessageInfo) {
+	if !msgTrigger.IsGroup {
+		return
+	}
+	pool := h.resolveFarewellPool(msgTrigger.Chat.User)
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		formatMessageList("Mensagens de despedida", pool, ""))
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 // formatMessageList builds a numbered list of message templates for display.
+// When deleteCmd is empty, the "Para remover:" hint is omitted.
 func formatMessageList(title string, messages []string, deleteCmd string) string {
 	if len(messages) == 0 {
 		return fmt.Sprintf("ℹ️ %s: nenhuma mensagem configurada.", title)
@@ -362,6 +397,8 @@ func formatMessageList(title string, messages []string, deleteCmd string) string
 	for i, msg := range messages {
 		sb.WriteString(fmt.Sprintf("%d. _%s_\n", i+1, msg))
 	}
-	sb.WriteString(fmt.Sprintf("\nPara remover: %s <número>", deleteCmd))
+	if deleteCmd != "" {
+		sb.WriteString(fmt.Sprintf("\nPara remover: %s <número>", deleteCmd))
+	}
 	return sb.String()
 }
