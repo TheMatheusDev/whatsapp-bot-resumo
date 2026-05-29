@@ -203,7 +203,7 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 //
 //	!addfarewall Até mais, {numero}! 👋
 //	!addfarewall Tchau {numero}!|Até mais, {numero}! 👋
-func (h *Handler) handleAddFarewallCommand(args []string, msgTrigger types.MessageInfo) {
+func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
 	}

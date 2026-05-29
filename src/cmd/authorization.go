@@ -41,7 +41,7 @@ func (h *Handler) isAuthorized(info watypes.MessageInfo) bool {
 // The cache is intentionally short-lived so that admin promotions/demotions
 // take effect within minutes without requiring a bot restart.
 // On any fetch error the function returns false (fail-safe: deny on doubt).
-func (h *Handler) isGroupAdmin(ctx context.Context, chat types.JID, senderJIDUser string) bool {
+func (h *Handler) isGroupAdmin(ctx context.Context, chat watypes.JID, senderJIDUser string) bool {
 	info := h.cachedGetGroupInfo(ctx, chat)
 	if info == nil {
 		return false
@@ -59,7 +59,7 @@ func (h *Handler) isGroupAdmin(ctx context.Context, chat types.JID, senderJIDUse
 // A sync.Mutex per cache slot is not needed here: the worst case of a
 // cache miss race is two concurrent fetches for the same group, which is
 // benign (both store the same data and the last write wins in sync.Map).
-func (h *Handler) cachedGetGroupInfo(ctx context.Context, chat types.JID) *watypes.GroupInfo {
+func (h *Handler) cachedGetGroupInfo(ctx context.Context, chat watypes.JID) *watypes.GroupInfo {
 	key := chat.String()
 
 	if v, ok := h.groupInfoCache.Load(key); ok {
