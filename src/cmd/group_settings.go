@@ -290,31 +290,23 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 }
 
 // ---------------------------------------------------------------------------
-// !resumo on|off  (daily summary toggle)
+// !resumo  (daily summary toggle)
 // ---------------------------------------------------------------------------
 
-// handleDailySummaryToggle enables or disables the automatic daily summary
-// for this group. Only group admins can use this command.
+// handleDailySummaryToggle flips the automatic daily summary on/off for this
+// group. Only group admins can use this command.
 //
-// Usage:  !resumo on | !resumo off
+// Usage: !resumo
 func (h *Handler) handleDailySummaryToggle(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
 	}
-
-	if len(args) == 0 || (strings.ToLower(args[0]) != "on" && strings.ToLower(args[0]) != "off") {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
-			"ℹ️ Use: !resumo on ou !resumo off")
-		return
-	}
-
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
 
-	enabled := strings.ToLower(args[0]) == "on"
 	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
-	settings.DailySummaryEnabled = enabled
+	settings.DailySummaryEnabled = !settings.DailySummaryEnabled
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleDailySummaryToggle: failed to save settings", "error", err)
@@ -324,40 +316,32 @@ func (h *Handler) handleDailySummaryToggle(args []string, msgTrigger types.Messa
 	}
 
 	status := "✅ ligado"
-	if !enabled {
+	if !settings.DailySummaryEnabled {
 		status = "⛔ desligado"
 	}
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 		fmt.Sprintf("🌙 Resumo diário automático: *%s*", status))
-	h.logger.Info("Daily summary toggled", "chat", msgTrigger.Chat.User, "enabled", enabled)
+	h.logger.Info("Daily summary toggled", "chat", msgTrigger.Chat.User, "enabled", settings.DailySummaryEnabled)
 }
 
 // ---------------------------------------------------------------------------
-// !ranking on|off  (weekly ranking toggle)
+// !ranking  (weekly ranking toggle)
 // ---------------------------------------------------------------------------
 
-// handleWeeklyRankingToggle enables or disables the automatic weekly ranking
-// for this group. Only group admins can use this command.
+// handleWeeklyRankingToggle flips the automatic weekly ranking on/off for this
+// group. Only group admins can use this command.
 //
-// Usage:  !ranking on | !ranking off
+// Usage: !ranking
 func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
 	}
-
-	if len(args) == 0 || (strings.ToLower(args[0]) != "on" && strings.ToLower(args[0]) != "off") {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
-			"ℹ️ Use: !ranking on ou !ranking off")
-		return
-	}
-
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
 
-	enabled := strings.ToLower(args[0]) == "on"
 	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
-	settings.WeeklyRankingEnabled = enabled
+	settings.WeeklyRankingEnabled = !settings.WeeklyRankingEnabled
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleWeeklyRankingToggle: failed to save settings", "error", err)
@@ -367,12 +351,12 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 	}
 
 	status := "✅ ligado"
-	if !enabled {
+	if !settings.WeeklyRankingEnabled {
 		status = "⛔ desligado"
 	}
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 		fmt.Sprintf("🏆 Ranking semanal: *%s*", status))
-	h.logger.Info("Weekly ranking toggled", "chat", msgTrigger.Chat.User, "enabled", enabled)
+	h.logger.Info("Weekly ranking toggled", "chat", msgTrigger.Chat.User, "enabled", settings.WeeklyRankingEnabled)
 }
 
 // ---------------------------------------------------------------------------
