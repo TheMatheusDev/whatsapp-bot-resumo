@@ -40,7 +40,6 @@ func Load() (*types.Config, error) {
 		},
 		WhatsApp: types.WhatsAppConfig{
 			OwnerJID:       getEnv("OWNER_JID", ""),
-			GroupWhitelist: getEnvSlice("GROUP_WHITELIST", []string{}),
 			EveryoneAdmins: getEnvSlice("EVERYONE_ADMINS", []string{}),
 		},
 		Bot: types.BotConfig{
@@ -50,7 +49,6 @@ func Load() (*types.Config, error) {
 			EnableMetrics:      getEnvBool("ENABLE_METRICS", false),
 			WelcomeMessages:    getEnvSlicePipeAllowEmpty("WELCOME_MESSAGES", []string{"Seja bem-vindo(a), @numero!"}),
 			FarewellMessages:   getEnvSlicePipeAllowEmpty("FAREWELL_MESSAGES", []string{"@numero saiu do grupo."}),
-			DailySummaryGroups: getEnvSlice("DAILY_SUMMARY_GROUPS", []string{}),
 			Rules:              strings.ReplaceAll(getEnvAllowEmpty("GROUP_RULES", ""), `\n`, "\n"),
 			OnboardingMessage:  strings.ReplaceAll(getEnvAllowEmpty("BOT_ONBOARDING_MESSAGE", ""), `\n`, "\n"),
 			MediaDownload: types.MediaDownloadConfig{

@@ -153,7 +153,6 @@ type DatabaseConfig struct {
 // WhatsAppConfig holds WhatsApp configuration
 type WhatsAppConfig struct {
 	OwnerJID       string   `json:"owner_jid"`
-	GroupWhitelist []string `json:"group_whitelist"`
 	EveryoneAdmins []string `json:"everyone_admins"`
 }
 
@@ -174,7 +173,6 @@ type BotConfig struct {
 	EnableMetrics      bool                `json:"enable_metrics"`
 	WelcomeMessages    []string            `json:"welcome_messages"`
 	FarewellMessages   []string            `json:"farewell_messages"`
-	DailySummaryGroups []string            `json:"daily_summary_groups"`
 	Rules              string              `json:"rules"`
 	OnboardingMessage  string              `json:"onboarding_message"`
 	MediaDownload      MediaDownloadConfig `json:"media_download"`

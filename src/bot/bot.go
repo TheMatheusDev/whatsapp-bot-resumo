@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -139,9 +138,7 @@ func (b *Bot) Start(ctx context.Context) error {
 }
 
 // startDailySummaryScheduler runs a goroutine that fires the automatic daily summary at 00:00 every day.
-// The list of target groups is resolved dynamically at each tick by merging:
-//   - Groups with daily_summary_enabled = 1 in the DB
-//   - Groups listed in DailySummaryGroups / GroupWhitelist from .env (retrocompatibility)
+// The list of target groups is resolved dynamically at each tick by querying groups with daily_summary_enabled = 1 in the DB.
 func (b *Bot) startDailySummaryScheduler() {
 	// Parse timezone from config
 	loc, err := time.LoadLocation(b.config.Bot.Timezone)
@@ -164,14 +161,8 @@ func (b *Bot) startDailySummaryScheduler() {
 			if err != nil {
 				b.logger.Error("DailySummaryScheduler: failed to query DB groups", "error", err)
 			}
-			// Merge with .env config groups (retrocompatibility for pre-DB deployments).
-			configGroups := b.config.Bot.DailySummaryGroups
-			if len(configGroups) == 0 {
-				configGroups = b.config.WhatsApp.GroupWhitelist
-			}
-			groups := mergeUnique(configGroups, dbGroups)
-			b.logger.Info("DailySummaryScheduler: firing daily summaries", "groups", len(groups))
-			for _, jid := range groups {
+			b.logger.Info("DailySummaryScheduler: firing daily summaries", "groups", len(dbGroups))
+			for _, jid := range dbGroups {
 				b.handler.RunAutoDailySummary(jid)
 			}
 		case <-b.stopScheduler:
@@ -183,9 +174,7 @@ func (b *Bot) startDailySummaryScheduler() {
 
 // startWeeklyRankingScheduler fires the weekly message ranking every Monday at 12:00 local time.
 // It covers messages from the previous Monday 00:00:00 through Sunday 23:59:59.
-// The list of target groups is resolved dynamically at each tick by merging:
-//   - Groups with weekly_ranking_enabled = 1 in the DB
-//   - Groups listed in GroupWhitelist from .env (retrocompatibility)
+// The list of target groups is resolved dynamically at each tick by querying groups with weekly_ranking_enabled = 1 in the DB.
 func (b *Bot) startWeeklyRankingScheduler() {
 	loc, err := time.LoadLocation(b.config.Bot.Timezone)
 	if err != nil {
@@ -219,9 +208,8 @@ func (b *Bot) startWeeklyRankingScheduler() {
 			if err != nil {
 				b.logger.Error("WeeklyRankingScheduler: failed to query DB groups", "error", err)
 			}
-			groups := mergeUnique(b.config.WhatsApp.GroupWhitelist, dbGroups)
-			b.logger.Info("WeeklyRankingScheduler: firing weekly rankings", "groups", len(groups))
-			for _, jid := range groups {
+			b.logger.Info("WeeklyRankingScheduler: firing weekly rankings", "groups", len(dbGroups))
+			for _, jid := range dbGroups {
 				b.handler.RunAutoWeeklyRanking(jid)
 			}
 			// Sleep before recalculating to ensure 'now' is past noon on the next
@@ -239,27 +227,7 @@ func (b *Bot) startWeeklyRankingScheduler() {
 	}
 }
 
-// mergeUnique merges two string slices into one, deduplicating entries.
-// The .env config values are the base; DB values are appended if not already present.
-func mergeUnique(base, extra []string) []string {
-	seen := make(map[string]bool, len(base)+len(extra))
-	result := make([]string, 0, len(base)+len(extra))
-	for _, v := range base {
-		v = strings.TrimSpace(v)
-		if v != "" && !seen[v] {
-			seen[v] = true
-			result = append(result, v)
-		}
-	}
-	for _, v := range extra {
-		v = strings.TrimSpace(v)
-		if v != "" && !seen[v] {
-			seen[v] = true
-			result = append(result, v)
-		}
-	}
-	return result
-}
+
 
 // Stop stops the bot
 func (b *Bot) Stop() error {
