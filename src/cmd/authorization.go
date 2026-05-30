@@ -9,7 +9,7 @@ import (
 )
 
 // groupInfoTTL is how long a cached GroupInfo entry is considered fresh.
-// 5 minutes balances staleness (admin promotions/demotions) against network
+// 6 hours balances staleness (admin promotions/demotions) against network
 // cost and WhatsApp rate-limit risk.
 const groupInfoTTL = 6 * time.Hour
 
@@ -36,7 +36,7 @@ func (h *Handler) isAuthorized(info watypes.MessageInfo) bool {
 // isGroupAdmin checks if senderJIDUser is a native WhatsApp admin or superadmin
 // of the given group.
 //
-// GroupInfo is cached per chat JID for groupInfoTTL (5 min) to avoid a
+// GroupInfo is cached per chat JID for groupInfoTTL (6 hours) to avoid a
 // round-trip to the WhatsApp API on every admin command invocation.
 // The cache is intentionally short-lived so that admin promotions/demotions
 // take effect within minutes without requiring a bot restart.

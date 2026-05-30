@@ -34,7 +34,7 @@ type Handler struct {
 
 	// groupInfoCache caches WhatsApp GroupInfo responses to avoid a network
 	// round-trip on every admin command. Keys are JID strings; values are
-	// cachedGroupInfo (info + expiresAt). TTL is groupInfoTTL (5 min).
+	// cachedGroupInfo (info + expiresAt). TTL is groupInfoTTL (6 hours).
 	groupInfoCache sync.Map
 
 	// joiningGroups is an atomic set (sync.Map used as map[string]struct{}) that
