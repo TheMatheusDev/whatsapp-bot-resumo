@@ -47,8 +47,8 @@ func Load() (*types.Config, error) {
 			CacheTTL:           getEnv("CACHE_TTL", "10m"),
 			LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 			EnableMetrics:      getEnvBool("ENABLE_METRICS", false),
-			WelcomeMessages:    getEnvSlicePipeAllowEmpty("WELCOME_MESSAGES", []string{"Seja bem-vindo(a), @numero!"}),
-			FarewellMessages:   getEnvSlicePipeAllowEmpty("FAREWELL_MESSAGES", []string{"@numero saiu do grupo."}),
+			WelcomeMessages:    getEnvSlicePipeAllowEmpty("WELCOME_MESSAGES", []string{"Seja bem-vindo(a), {numero}!"}),
+			FarewellMessages:   getEnvSlicePipeAllowEmpty("FAREWELL_MESSAGES", []string{"{numero} saiu do grupo."}),
 			Rules:              strings.ReplaceAll(getEnvAllowEmpty("GROUP_RULES", ""), `\n`, "\n"),
 			OnboardingMessage:  strings.ReplaceAll(getEnvAllowEmpty("BOT_ONBOARDING_MESSAGE", ""), `\n`, "\n"),
 			MediaDownload: types.MediaDownloadConfig{

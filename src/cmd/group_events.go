@@ -76,18 +76,14 @@ func (h *Handler) resolveFarewellPool(chatID string) []string {
 }
 
 // sendParticipantStatusMessage sends one consolidated message for all participants.
-// Both {numero} and @numero placeholders are treated as equivalent and replaced
-// by participant mentions when present in the template.
+// The {numero} placeholder is replaced by participant mentions when present in the template.
 func (h *Handler) sendParticipantStatusMessage(chatID types.JID, participants []types.JID, template string) error {
 	template = strings.TrimSpace(template)
 	if template == "" {
 		return nil
 	}
 
-	// Normalise both placeholder styles to @numero for internal processing.
-	template = strings.ReplaceAll(template, "{numero}", "@numero")
-
-	if !strings.Contains(template, "@numero") {
+	if !strings.Contains(template, "{numero}") {
 		return h.whatsappService.SendMessage(chatID, template)
 	}
 
@@ -103,11 +99,11 @@ func (h *Handler) sendParticipantStatusMessage(chatID types.JID, participants []
 	}
 
 	if len(mentionTexts) == 0 {
-		messageText := strings.ReplaceAll(template, "@numero", "")
+		messageText := strings.ReplaceAll(template, "{numero}", "")
 		return h.whatsappService.SendMessage(chatID, strings.TrimSpace(messageText))
 	}
 
-	messageText := strings.ReplaceAll(template, "@numero", strings.Join(mentionTexts, ", "))
+	messageText := strings.ReplaceAll(template, "{numero}", strings.Join(mentionTexts, ", "))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
