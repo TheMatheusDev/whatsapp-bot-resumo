@@ -2,36 +2,25 @@ package cmd
 
 import (
 	"context"
+	"time"
 
 	"go.mau.fi/whatsmeow/types"
 
 	wstypes "whatsapp-summarizer/src/types"
 )
 
-// getGroupName gets the group name, using cache when possible
+// getGroupName gets the group name, using the shared groupInfoCache when possible
 func (h *Handler) getGroupName(chat types.JID) string {
 	if chat.Server != types.GroupServer {
 		return "Direct Chat"
 	}
 
-	chatID := chat.User
-
-	// Try to get from cache first
-	if name, exists := h.cache.GetGroupName(chatID); exists {
-		return name
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if info := h.cachedGetGroupInfo(ctx, chat); info != nil {
+		return info.Name
 	}
-
-	// Cache miss, fetch from WhatsApp API
-	groupInfo, err := h.whatsappService.GetGroupInfo(context.Background(), chat)
-	groupName := chatID // fallback to chat ID
-	if err == nil && groupInfo != nil {
-		groupName = groupInfo.Name
-	}
-
-	// Update cache
-	h.cache.SetGroupName(chatID, groupName)
-
-	return groupName
+	return chat.User
 }
 
 // saveMessage saves a message to the database and returns the inserted row ID.
