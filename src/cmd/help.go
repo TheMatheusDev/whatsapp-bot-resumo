@@ -52,7 +52,7 @@ Prefixos de comando: !, - ou /
 - !resumo → Liga/desliga o resumo diário automático deste grupo (toggle)
 - !ranking → Liga/desliga o ranking semanal deste grupo (toggle)
 - !config → Exibe todas as configurações do grupo
-- !admincache → Força atualização do cache de admins (útil após promover/rebaixar membros)
+- !cache → Força atualização do cache do grupo
 `
 
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, infoText)

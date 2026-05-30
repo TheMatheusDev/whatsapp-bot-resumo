@@ -219,7 +219,7 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 		h.handleDailySummaryToggle(parts[1:], msgTrigger)
 	case "!ranking":
 		h.handleWeeklyRankingToggle(parts[1:], msgTrigger)
-	case "!admincache":
+	case "!cache":
 		h.handleAdminCacheCommand(msgTrigger)
 	// --- per-group read-only commands (admin only) ---
 	case "!welcome":

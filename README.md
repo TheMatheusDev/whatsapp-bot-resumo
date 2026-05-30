@@ -56,6 +56,7 @@ Ademais, quase todos os comandos possuem uma versão curta com a primeira letra,
 - `!regras` (versão curta: `!rg`) → Regras do grupo
 - `!version` (versão curta: `!v`) → Versão do bot
 - `!ping` → Teste de conectividade
+- `!cache` → Força atualização do cache do grupo
 
 **Opções de Resumo:**
 

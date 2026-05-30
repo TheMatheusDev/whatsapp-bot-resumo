@@ -373,7 +373,7 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 }
 
 // ---------------------------------------------------------------------------
-// !admincache  (flush GroupInfo cache for this group)
+// !cache  (flush GroupInfo cache for this group)
 // ---------------------------------------------------------------------------
 
 // handleAdminCacheCommand evicts the cached GroupInfo for the current group,
@@ -381,7 +381,7 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 // Useful after promoting or demoting participants when you don't want to wait
 // for the 5-minute TTL to expire.
 //
-// Usage: !admincache
+// Usage: !cache
 func (h *Handler) handleAdminCacheCommand(msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
