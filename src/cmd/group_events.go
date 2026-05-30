@@ -45,6 +45,16 @@ func (h *Handler) handleGroupInfoEvent(evt *events.GroupInfo) {
 			}
 		}
 	}
+
+	// Invalidate the GroupInfo cache whenever admin roles change so that the
+	// next isGroupAdmin call fetches a fresh participant list from the API.
+	if len(evt.Promote) > 0 || len(evt.Demote) > 0 {
+		h.invalidateGroupInfoCache(evt.JID.String())
+		h.logger.Info("GroupInfo cache invalidated due to admin role change",
+			"chat_id", evt.JID.String(),
+			"promoted", len(evt.Promote),
+			"demoted", len(evt.Demote))
+	}
 }
 
 // resolveWelcomePool returns the welcome message pool for a group.
