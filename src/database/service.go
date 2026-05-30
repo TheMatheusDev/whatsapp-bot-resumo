@@ -67,6 +67,14 @@ func NewService(cfg *types.DatabaseConfig, logger types.Logger) (*Service, error
 
 // initSchema creates the necessary tables and indexes
 func (s *Service) initSchema() error {
+	// Enable WAL mode for better concurrent read/write performance.
+	if _, err := s.db.Exec(`PRAGMA journal_mode=WAL`); err != nil {
+		return fmt.Errorf("failed to enable WAL mode: %w", err)
+	}
+	if _, err := s.db.Exec(`PRAGMA synchronous=NORMAL`); err != nil {
+		return fmt.Errorf("failed to set synchronous mode: %w", err)
+	}
+
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS group_messages (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,6 +94,8 @@ func (s *Service) initSchema() error {
 			weekly_ranking_enabled INTEGER NOT NULL DEFAULT 1,
 			updated_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE INDEX IF NOT EXISTS idx_gs_daily_enabled  ON group_settings(daily_summary_enabled)  WHERE daily_summary_enabled  = 1`,
+		`CREATE INDEX IF NOT EXISTS idx_gs_weekly_enabled ON group_settings(weekly_ranking_enabled) WHERE weekly_ranking_enabled = 1`,
 	}
 
 	for _, query := range queries {
@@ -425,9 +435,16 @@ func (s *Service) GetGroupIDsWithWeeklyRankingEnabled() ([]string, error) {
 // queryGroupIDsByFlag is a helper that fetches chat_ids where the given
 // boolean column equals 1.
 func (s *Service) queryGroupIDsByFlag(column string) ([]string, error) {
-	// column is an internal constant — no risk of SQL injection here.
-	rows, err := s.db.Query(
-		`SELECT chat_id FROM group_settings WHERE `+column+` = 1`)
+	var query string
+	switch column {
+	case "daily_summary_enabled":
+		query = `SELECT chat_id FROM group_settings WHERE daily_summary_enabled = 1`
+	case "weekly_ranking_enabled":
+		query = `SELECT chat_id FROM group_settings WHERE weekly_ranking_enabled = 1`
+	default:
+		return nil, fmt.Errorf("queryGroupIDsByFlag: unknown column %q", column)
+	}
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query group IDs by flag %q: %w", column, err)
 	}
