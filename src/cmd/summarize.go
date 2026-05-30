@@ -71,7 +71,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 			Text: proto.String(loadingMessage),
 			ContextInfo: &waE2E.ContextInfo{
 				StanzaID:    proto.String(msgTrigger.ID),
-				Participant: proto.String(msgTrigger.Sender.String()),
+				Participant: proto.String(msgTrigger.Sender.ToNonAD().String()),
 			},
 		},
 	})

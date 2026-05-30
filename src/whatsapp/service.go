@@ -159,7 +159,7 @@ func (s *Service) SendMessageReply(chatID types.JID, senderJID types.JID, replyT
 			Text: proto.String(message),
 			ContextInfo: &waE2E.ContextInfo{
 				StanzaID:    proto.String(replyTo),
-				Participant: proto.String(senderJID.String()),
+				Participant: proto.String(senderJID.ToNonAD().String()),
 			},
 		},
 	}
