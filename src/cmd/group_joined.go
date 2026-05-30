@@ -10,29 +10,7 @@ import (
 	wstypes "whatsapp-summarizer/src/types"
 )
 
-// defaultOnboardingTemplate is used when BOT_ONBOARDING_MESSAGE is not set in .env.
-// %s placeholders are filled with the actual DailySummary and WeeklyRanking status.
-const defaultOnboardingTemplate = `👋 *Olá! Sou o ResumoBOT.*
 
-Fui adicionado a este grupo e já estou pronto para resumir conversas com IA!
-
-⚙️ *Configurações do grupo (somente admins):*
-• !setregras <texto> — Define as regras do grupo
-• !addwelcome <msg> — Adiciona mensagem de boas-vindas (use {numero} para mencionar quem entrou)
-• !addfarewell <msg> — Adiciona mensagem de despedida (use {numero} para mencionar quem saiu)
-• !delwelcome <n> — Remove boas-vindas pelo índice (use !welcome para ver a lista)
-• !delfarewell <n> — Remove despedida pelo índice (use !farewell para ver a lista)
-
-🔔 *Status atual:*
-• Resumo diário automático: %s (alterne com !resumo)
-• Ranking semanal: %s (alterne com !ranking)
-
-📖 *Comandos gerais:*
-• !help — Lista todos os comandos disponíveis
-• !resuma <n> ou !r <n> — Resume as últimas N mensagens
-• !dia ou !d — Resume as mensagens do dia
-• !regras — Exibe as regras do grupo
-• !config — Exibe as configurações atuais do grupo`
 
 // handleJoinedGroupEvent is triggered when the bot is added to a new group.
 // It creates a default GroupSettings record in the DB (daily summary and weekly
@@ -94,9 +72,11 @@ func (h *Handler) handleJoinedGroupEvent(evt *events.JoinedGroup) {
 	}
 
 	msg := h.buildOnboardingMessage(settings)
-	if err := h.whatsappService.SendMessage(evt.JID, msg); err != nil {
-		h.logger.Error("JoinedGroup: failed to send onboarding message",
-			"error", err, "chat", chatID)
+	if strings.TrimSpace(msg) != "" {
+		if err := h.whatsappService.SendMessage(evt.JID, msg); err != nil {
+			h.logger.Error("JoinedGroup: failed to send onboarding message",
+				"error", err, "chat", chatID)
+		}
 	}
 
 	// Notify the owner via DM about the new group.
@@ -107,12 +87,11 @@ func (h *Handler) handleJoinedGroupEvent(evt *events.JoinedGroup) {
 }
 
 // buildOnboardingMessage returns the onboarding message for a newly joined group.
-// If BOT_ONBOARDING_MESSAGE is set in the environment, it is used as-is.
-// Otherwise, the default template is filled with the actual feature status.
+// It uses BOT_ONBOARDING_MESSAGE from the environment and replaces status placeholders.
 func (h *Handler) buildOnboardingMessage(settings wstypes.GroupSettings) string {
-	// Allow operators to override the entire onboarding text via .env.
-	if override := h.config.Bot.OnboardingMessage; strings.TrimSpace(override) != "" {
-		return override
+	msg := h.config.Bot.OnboardingMessage
+	if strings.TrimSpace(msg) == "" {
+		return ""
 	}
 
 	dailyStatus := "✅ ligado"
@@ -123,7 +102,11 @@ func (h *Handler) buildOnboardingMessage(settings wstypes.GroupSettings) string 
 	if !settings.WeeklyRankingEnabled {
 		weeklyStatus = "⛔ desligado"
 	}
-	return fmt.Sprintf(defaultOnboardingTemplate, dailyStatus, weeklyStatus)
+	
+	msg = strings.ReplaceAll(msg, "{daily_status}", dailyStatus)
+	msg = strings.ReplaceAll(msg, "{weekly_status}", weeklyStatus)
+	
+	return msg
 }
 
 // notifyOwnerNewGroup sends a DM to OWNER_JID informing that the bot was added
