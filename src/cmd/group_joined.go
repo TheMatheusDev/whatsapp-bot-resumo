@@ -1,13 +1,18 @@
 package cmd
 
 import (
+	"fmt"
+	"strings"
+
+	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 
 	wstypes "whatsapp-summarizer/src/types"
 )
 
-// onboardingMessage is sent to a group the first time the bot joins it.
-const onboardingMessage = `👋 *Olá! Sou o ResumoBOT.*
+// defaultOnboardingTemplate is used when BOT_ONBOARDING_MESSAGE is not set in .env.
+// %s placeholders are filled with the actual DailySummary and WeeklyRanking status.
+const defaultOnboardingTemplate = `👋 *Olá! Sou o ResumoBOT.*
 
 Fui adicionado a este grupo e já estou pronto para resumir conversas com IA!
 
@@ -15,18 +20,19 @@ Fui adicionado a este grupo e já estou pronto para resumir conversas com IA!
 • !setregras <texto> — Define as regras do grupo
 • !addwelcome <msg> — Adiciona mensagem de boas-vindas (use {numero} para mencionar quem entrou)
 • !addfarewell <msg> — Adiciona mensagem de despedida (use {numero} para mencionar quem saiu)
-• !delwelcome <n> — Remove boas-vindas pelo índice (sem índice lista as atuais)
-• !delfarewell <n> — Remove despedida pelo índice (sem índice lista as atuais)
+• !delwelcome <n> — Remove boas-vindas pelo índice (use !welcome para ver a lista)
+• !delfarewell <n> — Remove despedida pelo índice (use !farewell para ver a lista)
 
 🔔 *Status atual:*
-• Resumo diário automático: ✅ ligado (desligue com !resumo off)
-• Ranking semanal: ✅ ligado (desligue com !ranking off)
+• Resumo diário automático: %s (alterne com !resumo)
+• Ranking semanal: %s (alterne com !ranking)
 
 📖 *Comandos gerais:*
 • !help — Lista todos os comandos disponíveis
-• !resumo <n> ou !r <n> — Resume as últimas N mensagens
+• !resuma <n> ou !r <n> — Resume as últimas N mensagens
 • !dia ou !d — Resume as mensagens do dia
-• !regras — Exibe as regras do grupo`
+• !regras — Exibe as regras do grupo
+• !config — Exibe as configurações atuais do grupo`
 
 // handleJoinedGroupEvent is triggered when the bot is added to a new group.
 // It creates a default GroupSettings record in the DB (daily summary and weekly
@@ -87,11 +93,50 @@ func (h *Handler) handleJoinedGroupEvent(evt *events.JoinedGroup) {
 		// Don't abort — still send the onboarding message so admins know the bot is here.
 	}
 
-	if err := h.whatsappService.SendMessage(evt.JID, onboardingMessage); err != nil {
+	msg := h.buildOnboardingMessage(settings)
+	if err := h.whatsappService.SendMessage(evt.JID, msg); err != nil {
 		h.logger.Error("JoinedGroup: failed to send onboarding message",
 			"error", err, "chat", chatID)
 	}
 
+	// Notify the owner via DM about the new group.
+	h.notifyOwnerNewGroup(evt.JID)
+
 	h.logger.Info("JoinedGroup: registered new group with default settings and sent onboarding",
 		"chat", chatID)
+}
+
+// buildOnboardingMessage returns the onboarding message for a newly joined group.
+// If BOT_ONBOARDING_MESSAGE is set in the environment, it is used as-is.
+// Otherwise, the default template is filled with the actual feature status.
+func (h *Handler) buildOnboardingMessage(settings wstypes.GroupSettings) string {
+	// Allow operators to override the entire onboarding text via .env.
+	if override := h.config.Bot.OnboardingMessage; strings.TrimSpace(override) != "" {
+		return override
+	}
+
+	dailyStatus := "✅ ligado"
+	if !settings.DailySummaryEnabled {
+		dailyStatus = "⛔ desligado"
+	}
+	weeklyStatus := "✅ ligado"
+	if !settings.WeeklyRankingEnabled {
+		weeklyStatus = "⛔ desligado"
+	}
+	return fmt.Sprintf(defaultOnboardingTemplate, dailyStatus, weeklyStatus)
+}
+
+// notifyOwnerNewGroup sends a DM to OWNER_JID informing that the bot was added
+// to a new group. Failures are logged but do not affect the onboarding flow.
+func (h *Handler) notifyOwnerNewGroup(groupJID types.JID) {
+	if h.config.WhatsApp.OwnerJID == "" {
+		return
+	}
+
+	groupName := h.getGroupName(groupJID)
+	ownerJID := types.NewJID(h.config.WhatsApp.OwnerJID, types.DefaultUserServer)
+	msg := fmt.Sprintf("🤖 Bot adicionado ao grupo *%s* (`%s`)", groupName, groupJID.User)
+	if err := h.whatsappService.SendMessage(ownerJID, msg); err != nil {
+		h.logger.Warn("JoinedGroup: failed to notify owner", "error", err, "chat", groupJID.User)
+	}
 }

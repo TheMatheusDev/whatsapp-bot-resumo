@@ -52,6 +52,7 @@ func Load() (*types.Config, error) {
 			FarewellMessages:   getEnvSlicePipeAllowEmpty("FAREWELL_MESSAGES", []string{"@numero saiu do grupo."}),
 			DailySummaryGroups: getEnvSlice("DAILY_SUMMARY_GROUPS", []string{}),
 			Rules:              strings.ReplaceAll(getEnvAllowEmpty("GROUP_RULES", ""), `\n`, "\n"),
+			OnboardingMessage:  strings.ReplaceAll(getEnvAllowEmpty("BOT_ONBOARDING_MESSAGE", ""), `\n`, "\n"),
 			MediaDownload: types.MediaDownloadConfig{
 				Image:    getEnvBool("DOWNLOAD_IMAGE", true),
 				Video:    getEnvBool("DOWNLOAD_VIDEO", true),

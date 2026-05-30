@@ -176,5 +176,6 @@ type BotConfig struct {
 	FarewellMessages   []string            `json:"farewell_messages"`
 	DailySummaryGroups []string            `json:"daily_summary_groups"`
 	Rules              string              `json:"rules"`
+	OnboardingMessage  string              `json:"onboarding_message"`
 	MediaDownload      MediaDownloadConfig `json:"media_download"`
 }
