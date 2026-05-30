@@ -19,15 +19,6 @@ type cachedGroupInfo struct {
 	expiresAt time.Time
 }
 
-// isWhitelistedGroup checks if a group JID is whitelisted for bot operations.
-func (h *Handler) isWhitelistedGroup(chat watypes.JID) bool {
-	if chat.Server != watypes.GroupServer {
-		return false
-	}
-
-	return h.whitelistMap[chat.User]
-}
-
 // isAuthorized checks if the user is authorized to use bot commands
 func (h *Handler) isAuthorized(info watypes.MessageInfo) bool {
 	return info.IsGroup

@@ -25,7 +25,6 @@ type Handler struct {
 	botStartTime    time.Time
 	timezone        *time.Location
 	everyoneHandler *EveryoneHandler
-	whitelistMap    map[string]bool
 
 	// settingsCache caches per-group settings to avoid DB round-trips on every
 	// message. Keys are chatID strings; values are *wstypes.GroupSettings.
@@ -65,12 +64,6 @@ func NewHandler(
 		loc = time.FixedZone(config.Bot.Timezone, -3*60*60)
 	}
 
-	// Build whitelist map for O(1) lookups
-	whitelistMap := make(map[string]bool, len(config.WhatsApp.GroupWhitelist))
-	for _, gid := range config.WhatsApp.GroupWhitelist {
-		whitelistMap[gid] = true
-	}
-
 	return &Handler{
 		config:          config,
 		aiService:       aiService,
@@ -81,7 +74,6 @@ func NewHandler(
 		botStartTime:    botStartTime,
 		timezone:        loc,
 		everyoneHandler: NewEveryoneHandler(config, logger, loc, whatsappService),
-		whitelistMap:    whitelistMap,
 	}, nil
 }
 
