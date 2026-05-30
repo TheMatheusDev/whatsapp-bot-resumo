@@ -42,16 +42,16 @@ Prefixos de comando: !, - ou /
 - !d --farialimer --longo → Resumo longo do dia com personalidade Faria Limmer
 
 ⚙️ *Configurações do Grupo (somente admins):*
-- !setregras <texto> → Define as regras do grupo (reage com ✅ ao salvar)
-- !addwelcome <msg> → Adiciona mensagem de boas-vindas ({numero} = menção, {regras} = regras), separe múltiplas com |
+- !config → Exibe todas as configurações do grupo
+- !setregras <texto> → Define as regras do grupo
+- !addwelcome <msg> → Adiciona mensagem de boas-vindas ({numero} = menciona quem entrou, {regras} = para inserir regras), separe múltiplas com |
 - !delwelcome <n> → Remove boas-vindas pelo índice
 - !welcome → Lista as mensagens de boas-vindas configuradas
-- !addfarewell <msg> → Adiciona mensagem de despedida ({numero} = menção, {regras} = regras), separe múltiplas com |
+- !addfarewell <msg> → Adiciona mensagem de despedida ({numero} = menciona quem saiu), separe múltiplas com |
 - !delfarewell <n> → Remove despedida pelo índice
 - !farewell → Lista as mensagens de despedida configuradas
 - !resumo → Liga/desliga o resumo diário automático deste grupo (toggle)
 - !ranking → Liga/desliga o ranking semanal deste grupo (toggle)
-- !config → Exibe todas as configurações do grupo
 - !cache → Força atualização do cache do grupo
 `
 
