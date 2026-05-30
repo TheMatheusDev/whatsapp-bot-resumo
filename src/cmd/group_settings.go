@@ -96,8 +96,14 @@ func (h *Handler) handleSetRulesCommand(args []string, msgTrigger types.MessageI
 		return
 	}
 
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
-		"✅ Regras do grupo atualizadas!\n\nUse !regras para visualizá-las.")
+	// React with ✅ to confirm the rules were saved.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := h.whatsappService.ReactToMessage(ctx, msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "✅"); err != nil {
+		h.logger.Warn("handleSetRulesCommand: failed to send reaction, falling back to reply", "error", err)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+			"✅ Regras do grupo atualizadas! Use !regras para visualizá-las.")
+	}
 	h.logger.Info("Group rules updated", "chat", msgTrigger.Chat.User)
 }
 
@@ -303,6 +309,7 @@ func (h *Handler) handleDailySummaryToggle(args []string, msgTrigger types.Messa
 	}
 
 	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
+	prevEnabled := settings.DailySummaryEnabled
 	settings.DailySummaryEnabled = !settings.DailySummaryEnabled
 
 	if err := h.saveAndInvalidate(settings); err != nil {
@@ -312,12 +319,16 @@ func (h *Handler) handleDailySummaryToggle(args []string, msgTrigger types.Messa
 		return
 	}
 
-	status := "✅ ligado"
+	prevStatus := "✅ ligado"
+	if !prevEnabled {
+		prevStatus = "⛔ desligado"
+	}
+	newStatus := "✅ ligado"
 	if !settings.DailySummaryEnabled {
-		status = "⛔ desligado"
+		newStatus = "⛔ desligado"
 	}
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
-		fmt.Sprintf("🌙 Resumo diário automático: *%s*", status))
+		fmt.Sprintf("🌙 Resumo diário automático: %s → *%s*", prevStatus, newStatus))
 	h.logger.Info("Daily summary toggled", "chat", msgTrigger.Chat.User, "enabled", settings.DailySummaryEnabled)
 }
 
@@ -338,6 +349,7 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 	}
 
 	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
+	prevEnabled := settings.WeeklyRankingEnabled
 	settings.WeeklyRankingEnabled = !settings.WeeklyRankingEnabled
 
 	if err := h.saveAndInvalidate(settings); err != nil {
@@ -347,12 +359,16 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 		return
 	}
 
-	status := "✅ ligado"
+	prevStatus := "✅ ligado"
+	if !prevEnabled {
+		prevStatus = "⛔ desligado"
+	}
+	newStatus := "✅ ligado"
 	if !settings.WeeklyRankingEnabled {
-		status = "⛔ desligado"
+		newStatus = "⛔ desligado"
 	}
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
-		fmt.Sprintf("🏆 Ranking semanal: *%s*", status))
+		fmt.Sprintf("🏆 Ranking semanal: %s → *%s*", prevStatus, newStatus))
 	h.logger.Info("Weekly ranking toggled", "chat", msgTrigger.Chat.User, "enabled", settings.WeeklyRankingEnabled)
 }
 

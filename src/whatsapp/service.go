@@ -270,6 +270,24 @@ func (s *Service) GetBotJID() types.JID {
 	return s.client.Store.LID.ToNonAD()
 }
 
+// ReactToMessage sends an emoji reaction to a specific message.
+func (s *Service) ReactToMessage(ctx context.Context, chatID types.JID, senderJID types.JID, msgID types.MessageID, emoji string) error {
+	if s.client == nil {
+		return fmt.Errorf("client not initialized")
+	}
+	if !s.connected {
+		return fmt.Errorf("not connected to WhatsApp")
+	}
+	reaction := s.client.BuildReaction(chatID, senderJID, msgID, emoji)
+	_, err := s.client.SendMessage(ctx, chatID, reaction)
+	if err != nil {
+		s.logger.Error("Failed to send reaction", "error", err, "chat_id", chatID.String(), "msg_id", msgID)
+		return fmt.Errorf("failed to send reaction: %w", err)
+	}
+	s.logger.Debug("Reaction sent", "chat_id", chatID.String(), "emoji", emoji)
+	return nil
+}
+
 // SendMentionMessage sends a message that mentions specific users
 func (s *Service) SendMentionMessage(ctx context.Context, chatID types.JID, text string, mentionedJIDs []string) error {
 	if s.client == nil {
