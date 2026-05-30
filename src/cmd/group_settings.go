@@ -114,10 +114,11 @@ func (h *Handler) handleSetRulesCommand(args []string, msgTrigger types.MessageI
 // handleAddWelcomeCommand appends one or more welcome message templates to the
 // group's pool. Separate multiple messages with | to add them all at once.
 // Use {numero} in templates to mention the joining participant(s).
+// Use {regras} in templates to insert the group rules.
 //
 // Usage:
 //
-//	!addwelcome Olá {numero}! Seja bem-vindo(a)!
+//	!addwelcome Olá {numero}! Seja bem-vindo(a)! Leia as regras: {regras}
 //	!addwelcome Oi {numero}!|Bem-vindo(a), {numero}! 🎉
 func (h *Handler) handleAddWelcomeCommand(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
@@ -130,7 +131,7 @@ func (h *Handler) handleAddWelcomeCommand(args []string, msgTrigger types.Messag
 	if len(args) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 			"❌ Informe o texto da mensagem de boas-vindas.\n"+
-				"Exemplo: !addwelcome Olá {numero}! Seja bem-vindo(a)!\n"+
+				"Exemplo: !addwelcome Olá {numero}! Leia: {regras}\n"+
 				"Separe múltiplas mensagens com |")
 		return
 	}
@@ -206,10 +207,12 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 
 // handleAddFarewellCommand appends one or more farewell message templates to the
 // group's pool. Separate multiple messages with | to add them all at once.
+// Use {numero} in templates to mention the leaving participant(s).
+// Use {regras} in templates to insert the group rules.
 //
 // Usage:
 //
-//	!addfarewell Até mais, {numero}! 👋
+//	!addfarewell Até mais, {numero}! 👋 Leia as regras: {regras}
 //	!addfarewell Tchau {numero}!|Até mais, {numero}! 👋
 func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
@@ -222,7 +225,7 @@ func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.Messa
 	if len(args) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 			"❌ Informe o texto da mensagem de despedida.\n"+
-				"Exemplo: !addfarewell Até mais, {numero}! 👋\n"+
+				"Exemplo: !addfarewell Até mais, {numero}! 👋 Leia: {regras}\n"+
 				"Separe múltiplas mensagens com |")
 		return
 	}

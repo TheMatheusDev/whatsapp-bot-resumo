@@ -83,6 +83,14 @@ func (h *Handler) sendParticipantStatusMessage(chatID types.JID, participants []
 		return nil
 	}
 
+	if strings.Contains(template, "{regras}") {
+		rules := h.config.Bot.Rules
+		if s := h.getGroupSettings(chatID.User); s != nil && s.Rules != "" {
+			rules = s.Rules
+		}
+		template = strings.ReplaceAll(template, "{regras}", rules)
+	}
+
 	if !strings.Contains(template, "{numero}") {
 		return h.whatsappService.SendMessage(chatID, template)
 	}

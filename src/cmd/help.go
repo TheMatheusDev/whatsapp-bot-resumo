@@ -43,10 +43,10 @@ Prefixos de comando: !, - ou /
 
 ⚙️ *Configurações do Grupo (somente admins):*
 - !setregras <texto> → Define as regras do grupo (reage com ✅ ao salvar)
-- !addwelcome <msg> → Adiciona mensagem de boas-vindas ({numero} = menção), separe múltiplas com |
+- !addwelcome <msg> → Adiciona mensagem de boas-vindas ({numero} = menção, {regras} = regras), separe múltiplas com |
 - !delwelcome <n> → Remove boas-vindas pelo índice
 - !welcome → Lista as mensagens de boas-vindas configuradas
-- !addfarewell <msg> → Adiciona mensagem de despedida ({numero} = menção), separe múltiplas com |
+- !addfarewell <msg> → Adiciona mensagem de despedida ({numero} = menção, {regras} = regras), separe múltiplas com |
 - !delfarewell <n> → Remove despedida pelo índice
 - !farewell → Lista as mensagens de despedida configuradas
 - !resumo → Liga/desliga o resumo diário automático deste grupo (toggle)
