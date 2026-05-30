@@ -46,6 +46,11 @@ type Handler struct {
 	// of the weekly ranking. It is set to 1 while performWeeklyRanking is running
 	// and reset to 0 when it finishes.
 	weeklyRankingRunning atomic.Bool
+
+	// sumRateLimitCache enforces a per-user cooldown on summarize commands.
+	// Keys are "chatID:senderUser" strings; values are time.Time (last execution).
+	// Prevents a single user from flooding the Gemini API.
+	sumRateLimitCache sync.Map
 }
 
 // NewHandler creates a new message handler

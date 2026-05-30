@@ -13,10 +13,20 @@ import (
 	"whatsapp-summarizer/src/utils"
 )
 
+// summarizeCooldown is the minimum interval between summarize requests per user.
+const summarizeCooldown = 30 * time.Second
+
 // handleSummarizeCommand handles the summarize command
 func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
 		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Número de mensagens não especificado")
+		return
+	}
+
+	// Enforce per-user rate limit to prevent Gemini API flooding.
+	if wait := h.checkSummarizeRateLimit(msgTrigger); wait > 0 {
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+			fmt.Sprintf("⏳ Aguarde *%.0fs* antes de pedir outro resumo.", wait.Seconds()))
 		return
 	}
 
@@ -30,6 +40,23 @@ func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.Message
 
 	// Start summarization in goroutine
 	go h.performSummarization(opts, msgTrigger)
+}
+
+// checkSummarizeRateLimit returns the remaining cooldown duration for the sender,
+// or 0 if the user may proceed. When the user may proceed, it also records the
+// current time so the next call sees the cooldown.
+func (h *Handler) checkSummarizeRateLimit(msgTrigger types.MessageInfo) time.Duration {
+	key := msgTrigger.Chat.User + ":" + msgTrigger.Sender.User
+	now := time.Now()
+	if v, loaded := h.sumRateLimitCache.Load(key); loaded {
+		if last, ok := v.(time.Time); ok {
+			if remaining := summarizeCooldown - now.Sub(last); remaining > 0 {
+				return remaining
+			}
+		}
+	}
+	h.sumRateLimitCache.Store(key, now)
+	return 0
 }
 
 // performSummarization performs the actual summarization
