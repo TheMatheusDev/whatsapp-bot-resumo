@@ -226,8 +226,8 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 		h.handleListWelcomeCommand(msgTrigger)
 	case "!farewell":
 		h.handleListFarewellCommand(msgTrigger)
-	case "!configs":
-		h.handleConfigsCommand(msgTrigger)
+	case "!config":
+		h.handleConfigCommand(msgTrigger)
 	default:
 		h.logger.Debug("Unknown command", "command", command)
 	}
