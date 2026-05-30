@@ -16,11 +16,11 @@ var fariaLimerCountMessages = CountValidationMessages{
 // handleSummarizeFariaLimerCommand handles the farialimer command (shortcut for -r with --farialimer flag)
 func (h *Handler) handleSummarizeFariaLimerCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Número de mensagens não especificado")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Número de mensagens não especificado")
 		return
 	}
 
-	count, ok := h.parseAndValidateCount(msgTrigger.Chat, args[0], fariaLimerCountMessages)
+	count, ok := h.parseAndValidateCount(msgTrigger, args[0], fariaLimerCountMessages)
 	if !ok {
 		return
 	}

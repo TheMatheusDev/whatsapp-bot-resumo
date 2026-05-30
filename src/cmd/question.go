@@ -12,11 +12,11 @@ import (
 // handleAskQuestionCommand handles the --pergunte/-p command
 func (h *Handler) handleAskQuestionCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) < 2 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Uso: -p <número> [opções] <pergunta>\n\nOpções: --clt, --curto, --medio, --longo\n\nExemplos:\n• -p 50 Quem foi o usuário mais ativo?\n• -p 100 --clt Qual foi o assunto principal?\n• -p 200 --longo --clt Houve conflitos?")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Uso: -p <número> [opções] <pergunta>\n\nOpções: --clt, --curto, --medio, --longo\n\nExemplos:\n• -p 50 Quem foi o usuário mais ativo?\n• -p 100 --clt Qual foi o assunto principal?\n• -p 200 --longo --clt Houve conflitos?")
 		return
 	}
 
-	count, ok := h.parseAndValidateCount(msgTrigger.Chat, args[0], DefaultCountMessages)
+	count, ok := h.parseAndValidateCount(msgTrigger, args[0], DefaultCountMessages)
 	if !ok {
 		return
 	}
@@ -28,7 +28,7 @@ func (h *Handler) handleAskQuestionCommand(args []string, msgTrigger types.Messa
 	question := strings.Join(questionParts, " ")
 
 	if question == "" {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Você precisa fazer uma pergunta!")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Você precisa fazer uma pergunta!")
 		return
 	}
 

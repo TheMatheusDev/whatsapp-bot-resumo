@@ -16,11 +16,11 @@ var zoomerCountMessages = CountValidationMessages{
 // handleSummarizeZoomerCommand handles the zoomer command (shortcut for -r with --zoomer flag)
 func (h *Handler) handleSummarizeZoomerCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ número de mensagens não especificado")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ número de mensagens não especificado")
 		return
 	}
 
-	count, ok := h.parseAndValidateCount(msgTrigger.Chat, args[0], zoomerCountMessages)
+	count, ok := h.parseAndValidateCount(msgTrigger, args[0], zoomerCountMessages)
 	if !ok {
 		return
 	}

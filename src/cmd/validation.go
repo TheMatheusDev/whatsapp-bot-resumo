@@ -22,25 +22,25 @@ var DefaultCountMessages = CountValidationMessages{
 
 // parseAndValidateCount parses the count from args[0] and validates it.
 // Returns the parsed count and true if valid, or 0 and false if invalid (error message already sent).
-func (h *Handler) parseAndValidateCount(chat types.JID, countStr string, msgs CountValidationMessages) (int, bool) {
+func (h *Handler) parseAndValidateCount(msgTrigger types.MessageInfo, countStr string, msgs CountValidationMessages) (int, bool) {
 	count, err := strconv.Atoi(countStr)
 	if err != nil || count <= 0 {
-		h.whatsappService.SendMessage(chat, "❌ Número de mensagens inválido")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Número de mensagens inválido")
 		return 0, false
 	}
 
 	if count <= 3 {
-		h.whatsappService.SendMessage(chat, msgs.TooFewJoke)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, msgs.TooFewJoke)
 		return 0, false
 	}
 
 	if count <= 10 {
-		h.whatsappService.SendMessage(chat, msgs.TooFew)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, msgs.TooFew)
 		return 0, false
 	}
 
 	if count > 9000 {
-		h.whatsappService.SendMessage(chat, msgs.TooMany)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, msgs.TooMany)
 		return 0, false
 	}
 

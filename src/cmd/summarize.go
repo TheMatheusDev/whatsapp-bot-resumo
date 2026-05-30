@@ -19,7 +19,7 @@ const summarizeCooldown = 30 * time.Second
 // handleSummarizeCommand handles the summarize command
 func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Número de mensagens não especificado")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Número de mensagens não especificado")
 		return
 	}
 
@@ -30,7 +30,7 @@ func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.Message
 		return
 	}
 
-	count, ok := h.parseAndValidateCount(msgTrigger.Chat, args[0], DefaultCountMessages)
+	count, ok := h.parseAndValidateCount(msgTrigger, args[0], DefaultCountMessages)
 	if !ok {
 		return
 	}
@@ -77,7 +77,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 	})
 	if err != nil {
 		h.logger.Error("Failed to send loading message", "error", err)
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Erro ao enviar mensagem")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Erro ao enviar mensagem")
 		return
 	}
 
