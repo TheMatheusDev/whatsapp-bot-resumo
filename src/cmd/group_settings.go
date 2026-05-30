@@ -204,13 +204,13 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 // !addfarewell / !delfarewell
 // ---------------------------------------------------------------------------
 
-// handleAddFarewallCommand appends one or more farewell message templates to the
+// handleAddFarewellCommand appends one or more farewell message templates to the
 // group's pool. Separate multiple messages with | to add them all at once.
 //
 // Usage:
 //
-//	!addfarewall Até mais, {numero}! 👋
-//	!addfarewall Tchau {numero}!|Até mais, {numero}! 👋
+//	!addfarewell Até mais, {numero}! 👋
+//	!addfarewell Tchau {numero}!|Até mais, {numero}! 👋
 func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
@@ -222,7 +222,7 @@ func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.Messa
 	if len(args) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 			"❌ Informe o texto da mensagem de despedida.\n"+
-				"Exemplo: !addfarewall Até mais, {numero}! 👋\n"+
+				"Exemplo: !addfarewell Até mais, {numero}! 👋\n"+
 				"Separe múltiplas mensagens com |")
 		return
 	}
@@ -238,7 +238,7 @@ func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.Messa
 	settings.FarewellMessages = append(settings.FarewellMessages, newMessages...)
 
 	if err := h.saveAndInvalidate(settings); err != nil {
-		h.logger.Error("handleAddFarewallCommand: failed to save settings", "error", err)
+		h.logger.Error("handleAddFarewellCommand: failed to save settings", "error", err)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
 			"❌ Erro ao salvar mensagem. Tente novamente.")
 		return
@@ -412,7 +412,7 @@ func (h *Handler) handleListWelcomeCommand(msgTrigger types.MessageInfo) {
 }
 
 // ---------------------------------------------------------------------------
-// !farewell  (list farewell messages — open to all members)
+// !farewell  (list farewell messages — admin only)
 // ---------------------------------------------------------------------------
 
 // handleListFarewellCommand lists the farewell message templates configured for
