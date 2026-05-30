@@ -160,7 +160,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 	messages, err := h.dbService.GetMessagesSinceTime(msgTrigger.Chat.User, fourAMToday)
 	if err != nil {
 		h.logger.Error("Failed to get messages since time", "error", err)
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, "❌ Erro ao buscar mensagens do banco de dados")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Erro ao buscar mensagens do banco de dados")
 		return
 	}
 
@@ -177,7 +177,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 	})
 	if err != nil {
 		h.logger.Error("Failed to send loading message", "error", err)
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, "❌ Erro ao enviar mensagem")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Erro ao enviar mensagem")
 		return
 	}
 

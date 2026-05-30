@@ -25,7 +25,7 @@ func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.Message
 
 	// Enforce per-user rate limit to prevent Gemini API flooding.
 	if wait := h.checkSummarizeRateLimit(msgTrigger); wait > 0 {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			fmt.Sprintf("⏳ Aguarde *%.0fs* antes de pedir outro resumo.", wait.Seconds()))
 		return
 	}
@@ -170,7 +170,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 	if err != nil {
 		h.logger.Error("Failed to edit message with summary", "error", err)
 		// Fallback: send summary as new message
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, finalSummary)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, finalSummary)
 	}
 
 	// Save summary as a message

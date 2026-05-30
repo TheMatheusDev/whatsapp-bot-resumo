@@ -143,7 +143,7 @@ func (s *Service) SendMessage(chatID types.JID, message string) error {
 	return nil
 }
 
-func (s *Service) SendMessageReply(chatID types.JID, replyTo types.MessageID, message string) error {
+func (s *Service) SendMessageReply(chatID types.JID, senderJID types.JID, replyTo types.MessageID, message string) error {
 	if s.client == nil {
 		return fmt.Errorf("client not initialized")
 	}
@@ -159,7 +159,7 @@ func (s *Service) SendMessageReply(chatID types.JID, replyTo types.MessageID, me
 			Text: proto.String(message),
 			ContextInfo: &waE2E.ContextInfo{
 				StanzaID:    proto.String(replyTo),
-				Participant: proto.String(chatID.User),
+				Participant: proto.String(senderJID.String()),
 			},
 		},
 	}

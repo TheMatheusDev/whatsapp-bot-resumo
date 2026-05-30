@@ -15,5 +15,5 @@ func (h *Handler) handlePingCommand(msgTrigger types.MessageInfo) {
 	uptimeStr := fmt.Sprintf("%dh %02dm", hours, minutes)
 	response := fmt.Sprintf("Pong! 🏓 (%02d:%02d %02d/%02d) | ⏱️ uptime: %s",
 		now.Hour(), now.Minute(), now.Day(), int(now.Month()), uptimeStr)
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, response)
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, response)
 }

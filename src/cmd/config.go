@@ -60,5 +60,5 @@ func (h *Handler) handleConfigCommand(msgTrigger types.MessageInfo) {
 		weeklyStatus,
 	)
 
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, msg)
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, msg)
 }

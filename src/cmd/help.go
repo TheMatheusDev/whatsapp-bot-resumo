@@ -55,5 +55,5 @@ Prefixos de comando: !, - ou /
 - !cache → Força atualização do cache do grupo
 `
 
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, infoText)
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, infoText)
 }

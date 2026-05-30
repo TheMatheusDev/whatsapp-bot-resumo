@@ -29,7 +29,7 @@ func (h *Handler) requireGroupAdmin(msgTrigger types.MessageInfo) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if !h.isGroupAdmin(ctx, msgTrigger.Chat, msgTrigger.Sender.User) {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, errNotAdmin)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, errNotAdmin)
 		return false
 	}
 	return true
@@ -91,7 +91,7 @@ func (h *Handler) handleSetRulesCommand(args []string, msgTrigger types.MessageI
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleSetRulesCommand: failed to save settings", "error", err)
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar regras. Tente novamente.")
 		return
 	}
@@ -101,7 +101,7 @@ func (h *Handler) handleSetRulesCommand(args []string, msgTrigger types.MessageI
 	defer cancel()
 	if err := h.whatsappService.ReactToMessage(ctx, msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "✅"); err != nil {
 		h.logger.Warn("handleSetRulesCommand: failed to send reaction, falling back to reply", "error", err)
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"✅ Regras do grupo atualizadas! Use !regras para visualizá-las.")
 	}
 	h.logger.Info("Group rules updated", "chat", msgTrigger.Chat.User)
@@ -129,7 +129,7 @@ func (h *Handler) handleAddWelcomeCommand(args []string, msgTrigger types.Messag
 	}
 
 	if len(args) == 0 {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Informe o texto da mensagem de boas-vindas.\n"+
 				"Exemplo: !addwelcome Olá {numero}! Leia: {regras}\n"+
 				"Separe múltiplas mensagens com |")
@@ -138,7 +138,7 @@ func (h *Handler) handleAddWelcomeCommand(args []string, msgTrigger types.Messag
 
 	newMessages := splitPipe(strings.Join(args, " "))
 	if len(newMessages) == 0 {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Nenhuma mensagem válida encontrada.")
 		return
 	}
@@ -148,12 +148,12 @@ func (h *Handler) handleAddWelcomeCommand(args []string, msgTrigger types.Messag
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleAddWelcomeCommand: failed to save settings", "error", err)
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar mensagem. Tente novamente.")
 		return
 	}
 
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		formatAddedMessages("boas-vindas", newMessages, len(settings.WelcomeMessages)))
 }
 
@@ -170,7 +170,7 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 	}
 
 	if len(args) == 0 {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Informe o índice da mensagem a remover. Use !welcome para ver a lista.")
 		return
 	}
@@ -178,7 +178,7 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
 	idx, err := strconv.Atoi(args[0])
 	if err != nil || idx < 1 || idx > len(settings.WelcomeMessages) {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			fmt.Sprintf("❌ Índice inválido. Use !welcome para ver a lista (total: %d).", len(settings.WelcomeMessages)))
 		return
 	}
@@ -191,12 +191,12 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleDelWelcomeCommand: failed to save settings", "error", err)
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar. Tente novamente.")
 		return
 	}
 
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("✅ Mensagem de boas-vindas #%d removida:\n\n_%s_\n\nTotal restante: %d",
 			idx, removed, len(settings.WelcomeMessages)))
 }
@@ -223,7 +223,7 @@ func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.Messa
 	}
 
 	if len(args) == 0 {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Informe o texto da mensagem de despedida.\n"+
 				"Exemplo: !addfarewell Até mais, {numero}! 👋 Leia: {regras}\n"+
 				"Separe múltiplas mensagens com |")
@@ -232,7 +232,7 @@ func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.Messa
 
 	newMessages := splitPipe(strings.Join(args, " "))
 	if len(newMessages) == 0 {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Nenhuma mensagem válida encontrada.")
 		return
 	}
@@ -242,12 +242,12 @@ func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.Messa
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleAddFarewellCommand: failed to save settings", "error", err)
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar mensagem. Tente novamente.")
 		return
 	}
 
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		formatAddedMessages("despedida", newMessages, len(settings.FarewellMessages)))
 }
 
@@ -264,7 +264,7 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 	}
 
 	if len(args) == 0 {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Informe o índice da mensagem a remover. Use !farewell para ver a lista.")
 		return
 	}
@@ -272,7 +272,7 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
 	idx, err := strconv.Atoi(args[0])
 	if err != nil || idx < 1 || idx > len(settings.FarewellMessages) {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			fmt.Sprintf("❌ Índice inválido. Use !farewell para ver a lista (total: %d).", len(settings.FarewellMessages)))
 		return
 	}
@@ -285,12 +285,12 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleDelFarewellCommand: failed to save settings", "error", err)
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar. Tente novamente.")
 		return
 	}
 
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("✅ Mensagem de despedida #%d removida:\n\n_%s_\n\nTotal restante: %d",
 			idx, removed, len(settings.FarewellMessages)))
 }
@@ -317,7 +317,7 @@ func (h *Handler) handleDailySummaryToggle(args []string, msgTrigger types.Messa
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleDailySummaryToggle: failed to save settings", "error", err)
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar configuração. Tente novamente.")
 		return
 	}
@@ -330,7 +330,7 @@ func (h *Handler) handleDailySummaryToggle(args []string, msgTrigger types.Messa
 	if !settings.DailySummaryEnabled {
 		newStatus = "⛔ desligado"
 	}
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("🌙 Resumo diário automático: %s → *%s*", prevStatus, newStatus))
 	h.logger.Info("Daily summary toggled", "chat", msgTrigger.Chat.User, "enabled", settings.DailySummaryEnabled)
 }
@@ -357,7 +357,7 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleWeeklyRankingToggle: failed to save settings", "error", err)
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar configuração. Tente novamente.")
 		return
 	}
@@ -370,7 +370,7 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 	if !settings.WeeklyRankingEnabled {
 		newStatus = "⛔ desligado"
 	}
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("🏆 Ranking semanal: %s → *%s*", prevStatus, newStatus))
 	h.logger.Info("Weekly ranking toggled", "chat", msgTrigger.Chat.User, "enabled", settings.WeeklyRankingEnabled)
 }
@@ -394,7 +394,7 @@ func (h *Handler) handleAdminCacheCommand(msgTrigger types.MessageInfo) {
 	}
 
 	h.invalidateGroupInfoCache(msgTrigger.Chat.String())
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		"🔄 Cache de admins atualizado! A próxima validação buscará dados frescos do WhatsApp.")
 	h.logger.Info("Admin cache flushed manually", "chat", msgTrigger.Chat.User)
 }
@@ -415,7 +415,7 @@ func (h *Handler) handleListWelcomeCommand(msgTrigger types.MessageInfo) {
 		return
 	}
 	pool := h.resolveWelcomePool(msgTrigger.Chat.User)
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		formatMessageList("Mensagens de boas-vindas", pool, ""))
 }
 
@@ -435,7 +435,7 @@ func (h *Handler) handleListFarewellCommand(msgTrigger types.MessageInfo) {
 		return
 	}
 	pool := h.resolveFarewellPool(msgTrigger.Chat.User)
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		formatMessageList("Mensagens de despedida", pool, ""))
 }
 
@@ -492,7 +492,7 @@ func (h *Handler) handleConfigsCommand(msgTrigger types.MessageInfo) {
 		rulesDisplay,
 	)
 
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, msg)
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, msg)
 }
 
 // ---------------------------------------------------------------------------

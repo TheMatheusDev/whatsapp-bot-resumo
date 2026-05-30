@@ -21,7 +21,7 @@ type mockWhatsAppService struct {
 }
 
 func (m *mockWhatsAppService) SendMessage(_ types.JID, _ string) error                { return nil }
-func (m *mockWhatsAppService) SendMessageReply(_ types.JID, _ types.MessageID, _ string) error {
+func (m *mockWhatsAppService) SendMessageReply(_ types.JID, _ types.JID, _ types.MessageID, _ string) error {
 	return nil
 }
 func (m *mockWhatsAppService) EditMessage(_ types.JID, _ types.MessageID, _ string) error {
