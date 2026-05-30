@@ -151,12 +151,9 @@ func (h *Handler) handleAddWelcomeCommand(args []string, msgTrigger types.Messag
 }
 
 // handleDelWelcomeCommand removes a welcome message by its 1-based index.
-// When called without an index, it lists the current messages.
+// To list the current messages, use !welcome.
 //
-// Usage:
-//
-//	!delwelcome      → lists current messages with indices
-//	!delwelcome <n>  → removes message at index n
+// Usage:  !delwelcome <n>  — removes message at index n
 func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
@@ -165,20 +162,17 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 		return
 	}
 
-	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
-
-	// No argument: list current messages.
 	if len(args) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
-			formatMessageList("Mensagens de boas-vindas atuais", settings.WelcomeMessages,
-				"!delwelcome"))
+			"❌ Informe o índice da mensagem a remover. Use !welcome para ver a lista.")
 		return
 	}
 
+	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
 	idx, err := strconv.Atoi(args[0])
 	if err != nil || idx < 1 || idx > len(settings.WelcomeMessages) {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
-			fmt.Sprintf("❌ Índice inválido. Use !delwelcome (sem número) para ver a lista."))
+			fmt.Sprintf("❌ Índice inválido. Use !welcome para ver a lista (total: %d).", len(settings.WelcomeMessages)))
 		return
 	}
 
@@ -196,8 +190,8 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 	}
 
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
-		fmt.Sprintf("✅ Mensagem de boas-vindas #%d removida:\n\n_%s_\n\n"+
-			"Total restante: %d", idx, removed, len(settings.WelcomeMessages)))
+		fmt.Sprintf("✅ Mensagem de boas-vindas #%d removida:\n\n_%s_\n\nTotal restante: %d",
+			idx, removed, len(settings.WelcomeMessages)))
 }
 
 // ---------------------------------------------------------------------------
@@ -249,12 +243,9 @@ func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.Messa
 }
 
 // handleDelFarewellCommand removes a farewell message by its 1-based index.
-// When called without an index, it lists the current messages.
+// To list the current messages, use !farewell.
 //
-// Usage:
-//
-//	!delfarewell      → lists current messages with indices
-//	!delfarewell <n>  → removes message at index n
+// Usage:  !delfarewell <n>  — removes message at index n
 func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
@@ -263,19 +254,17 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 		return
 	}
 
-	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
-
 	if len(args) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
-			formatMessageList("Mensagens de despedida atuais", settings.FarewellMessages,
-				"!delfarewell"))
+			"❌ Informe o índice da mensagem a remover. Use !farewell para ver a lista.")
 		return
 	}
 
+	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
 	idx, err := strconv.Atoi(args[0])
 	if err != nil || idx < 1 || idx > len(settings.FarewellMessages) {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
-			"❌ Índice inválido. Use !delfarewell (sem número) para ver a lista.")
+			fmt.Sprintf("❌ Índice inválido. Use !farewell para ver a lista (total: %d).", len(settings.FarewellMessages)))
 		return
 	}
 
@@ -293,8 +282,8 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 	}
 
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID,
-		fmt.Sprintf("✅ Mensagem de despedida #%d removida:\n\n_%s_\n\n"+
-			"Total restante: %d", idx, removed, len(settings.FarewellMessages)))
+		fmt.Sprintf("✅ Mensagem de despedida #%d removida:\n\n_%s_\n\nTotal restante: %d",
+			idx, removed, len(settings.FarewellMessages)))
 }
 
 // ---------------------------------------------------------------------------
