@@ -79,13 +79,12 @@ func New() (*Bot, error) {
 	}
 
 	b := &Bot{
-		config:       cfg,
-		logger:       l,
-		aiService:    aiService,
-		dbService:    dbService,
-		cache:        cache,
-		container:    container,
-		botStartTime: time.Now(),
+		config:    cfg,
+		logger:    l,
+		aiService: aiService,
+		dbService: dbService,
+		cache:     cache,
+		container: container,
 	}
 
 	whatsappSvc, err := whatsapp.NewService(container, l, b.handleWhatsAppEvent)
