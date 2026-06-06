@@ -38,7 +38,11 @@ func (h *Handler) RunAutoDailySummary(chatJIDStr string) {
 
 	chatJID := types.JID{User: userPart, Server: "g.us"}
 	h.logger.Info("AutoDailySummary: queuing", "chat", chatJID.User)
-	go h.performAutoDailySummarization(chatJID)
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		h.performAutoDailySummarization(chatJID)
+	}()
 }
 
 // performAutoDailySummarization performs the automatic daily summarization without a message trigger.
@@ -139,7 +143,11 @@ func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.Mess
 	}
 
 	// Start summarization in goroutine
-	go h.performDailySummarization(opts, msgTrigger)
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		h.performDailySummarization(opts, msgTrigger)
+	}()
 }
 
 // performDailySummarization performs the daily summarization (since 4 AM)

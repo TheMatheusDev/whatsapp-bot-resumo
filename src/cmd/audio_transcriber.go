@@ -31,7 +31,10 @@ func (h *Handler) tryDownloadAudioToMemory(audioMsg *waE2E.AudioMessage) ([]byte
 
 // transcribeAudioAsync runs the audio transcription in a goroutine and updates the database
 func (h *Handler) transcribeAudioAsync(msgID int64, audioData []byte, mimeType string) {
+	h.wg.Add(1)
 	go func() {
+		defer h.wg.Done()
+
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
