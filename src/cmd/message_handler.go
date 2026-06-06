@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -24,7 +23,6 @@ type Handler struct {
 	logger          wstypes.Logger
 	botStartTime    time.Time
 	timezone        *time.Location
-	everyoneHandler *EveryoneHandler
 
 	// settingsCache caches per-group settings to avoid DB round-trips on every
 	// message. Keys are chatID strings; values are *wstypes.GroupSettings.
@@ -78,7 +76,6 @@ func NewHandler(
 		logger:          logger,
 		botStartTime:    botStartTime,
 		timezone:        loc,
-		everyoneHandler: NewEveryoneHandler(config, logger, loc, whatsappService),
 	}, nil
 }
 
@@ -104,7 +101,6 @@ func (h *Handler) HandleEvent(evt interface{}) {
 
 // handleMessage processes incoming messages
 func (h *Handler) handleMessage(evt *events.Message) {
-	ctx := context.Background()
 	msg := evt.Message
 	if msg == nil {
 		return
@@ -153,19 +149,6 @@ func (h *Handler) handleMessage(evt *events.Message) {
 			"timestamp", evt.Info.Timestamp,
 			"bot_start_time", h.botStartTime)
 		return
-	}
-
-	// Check for @everyone mentions (only for new messages)
-	// Extract only the current message text (without quoted message) for @everyone check
-	currentMessageText := h.extractCurrentMessageText(msg)
-	if h.everyoneHandler.ContainsEveryoneMention(currentMessageText) && h.isAuthorized(evt.Info) {
-		// Check if user is authorized to use @everyone (by JID, not display name)
-		senderJID := evt.Info.Sender.User
-		if h.everyoneHandler.IsEveryoneAdmin(ctx, evt.Info.Chat, senderJID) {
-			h.everyoneHandler.HandleEveryoneCommand(evt.Info.Chat, h.dbService, h.cache, currentMessageText)
-		} else {
-			h.logger.Info("Unauthorized @everyone attempt", "sender_jid", senderJID)
-		}
 	}
 
 	// Process commands if from authorized users (only for new messages)
