@@ -442,61 +442,6 @@ func (h *Handler) handleListFarewellCommand(msgTrigger types.MessageInfo) {
 		formatMessageList("Mensagens de despedida", pool, ""))
 }
 
-// ---------------------------------------------------------------------------
-// !configs  (settings panel — admin only)
-// ---------------------------------------------------------------------------
-
-// handleConfigsCommand replies with a summary panel of all current group
-// settings. Only group admins can use this command.
-//
-// Usage: !configs
-func (h *Handler) handleConfigsCommand(msgTrigger types.MessageInfo) {
-	if !msgTrigger.IsGroup {
-		return
-	}
-	if !h.requireGroupAdmin(msgTrigger) {
-		return
-	}
-
-	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
-
-	// Booleans formatted as emoji labels.
-	boolLabel := func(enabled bool) string {
-		if enabled {
-			return "✅ ligado"
-		}
-		return "⛔ desligado"
-	}
-
-	// Rules display: show first 120 chars to keep the panel compact.
-	rulesDisplay := "_nenhuma definida_"
-	if settings.Rules != "" {
-		if len(settings.Rules) > 120 {
-			rulesDisplay = settings.Rules[:120] + "…"
-		} else {
-			rulesDisplay = settings.Rules
-		}
-	}
-
-	welcomeCount := len(settings.WelcomeMessages)
-	farewellCount := len(settings.FarewellMessages)
-
-	msg := fmt.Sprintf(
-		"⚙️ *Configurações do grupo*\n\n"+
-			"👋 Boas-vindas: *%d* mensagem(s)\n"+
-			"👋 Despedidas: *%d* mensagem(s)\n"+
-			"🌙 Resumo diário: *%s*\n"+
-			"🏆 Ranking semanal: *%s*\n"+
-			"📜 Regras: %s",
-		welcomeCount,
-		farewellCount,
-		boolLabel(settings.DailySummaryEnabled),
-		boolLabel(settings.WeeklyRankingEnabled),
-		rulesDisplay,
-	)
-
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, msg)
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
