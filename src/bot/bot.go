@@ -229,24 +229,65 @@ func (b *Bot) startWeeklyRankingScheduler() {
 
 
 
-// Stop stops the bot
+// Stop performs a phased graceful shutdown:
+//  1. Drain handler — stop accepting new WhatsApp events and wait for inflight goroutines.
+//  2. Disconnect WhatsApp — send a clean presence-unavailable to the server.
+//  3. Stop schedulers — signal daily and weekly goroutines to exit.
+//  4. Close resources — DB, sqlstore container, AI service, cache.
+//  5. Flush logger — log the final "stopped" line, then close the log file.
+//
+// An overall 30-second timeout guards against a stuck goroutine hanging the process.
 func (b *Bot) Stop() error {
 	if !b.running {
 		return nil
 	}
 
-	b.logger.Info("Stopping bot...")
+	b.logger.Info("Stopping bot — initiating graceful shutdown...")
 
+	// Overall shutdown timeout.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Phase 1: stop accepting new events and drain inflight handler goroutines.
+	if b.handler != nil {
+		b.logger.Info("Waiting for inflight goroutines to finish...")
+		done := make(chan struct{})
+		go func() {
+			b.handler.Shutdown()
+			close(done)
+		}()
+		select {
+		case <-done:
+			b.logger.Info("Handler drained")
+		case <-shutdownCtx.Done():
+			b.logger.Warn("Timed out waiting for handler to drain — proceeding")
+		}
+	}
+
+	// Phase 2: disconnect from WhatsApp gracefully.
+	if b.whatsappSvc != nil {
+		b.whatsappSvc.Disconnect()
+	}
+
+	// Phase 3: stop scheduler goroutines.
 	if b.stopScheduler != nil {
 		close(b.stopScheduler)
 	}
-
 	if b.stopWeeklyRankingScheduler != nil {
 		close(b.stopWeeklyRankingScheduler)
 	}
 
-	if b.whatsappSvc != nil {
-		b.whatsappSvc.Disconnect()
+	// Phase 4: close database, sqlstore container, AI service, and cache.
+	if b.dbService != nil {
+		if err := b.dbService.Close(); err != nil {
+			b.logger.Error("Failed to close database service", "error", err)
+		}
+	}
+
+	if b.container != nil {
+		if err := b.container.Close(); err != nil {
+			b.logger.Error("Failed to close WhatsApp store container", "error", err)
+		}
 	}
 
 	if b.aiService != nil {
@@ -255,24 +296,19 @@ func (b *Bot) Stop() error {
 		}
 	}
 
-	if b.dbService != nil {
-		if err := b.dbService.Close(); err != nil {
-			b.logger.Error("Failed to close database service", "error", err)
-		}
-	}
-
 	if b.cache != nil {
 		b.cache.Clear()
 	}
 
+	// Phase 5: flush and close the logger — must be the very last step.
+	b.running = false
+	b.logger.Info("Bot stopped successfully")
 	if simpleLogger, ok := b.logger.(*logger.SimpleLogger); ok {
 		if err := simpleLogger.Close(); err != nil {
 			log.Printf("Failed to close logger: %v", err)
 		}
 	}
 
-	b.running = false
-	b.logger.Info("Bot stopped successfully")
 	return nil
 }
 
