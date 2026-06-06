@@ -49,6 +49,14 @@ type Handler struct {
 	// Keys are "chatID:senderUser" strings; values are time.Time (last execution).
 	// Prevents a single user from flooding the Gemini API.
 	sumRateLimitCache sync.Map
+
+	// shutdownCh is closed when the handler is shutting down. All goroutines
+	// spawned by the handler should select on this channel to detect shutdown.
+	shutdownCh chan struct{}
+
+	// wg tracks all inflight goroutines spawned by the handler. Shutdown() waits
+	// on wg so that every in-progress operation finishes before resources are torn down.
+	wg sync.WaitGroup
 }
 
 // NewHandler creates a new message handler
@@ -76,11 +84,32 @@ func NewHandler(
 		logger:          logger,
 		botStartTime:    botStartTime,
 		timezone:        loc,
+		shutdownCh:      make(chan struct{}),
 	}, nil
+}
+
+// Shutdown signals the handler to stop accepting new events and waits for all
+// inflight goroutines to finish. It is safe to call Shutdown more than once.
+func (h *Handler) Shutdown() {
+	select {
+	case <-h.shutdownCh:
+		// already closed
+	default:
+		close(h.shutdownCh)
+	}
+	h.wg.Wait()
 }
 
 // HandleEvent handles WhatsApp events
 func (h *Handler) HandleEvent(evt interface{}) {
+	// Reject new events when the handler is shutting down.
+	select {
+	case <-h.shutdownCh:
+		h.logger.Debug("HandleEvent: handler is shutting down, dropping event", "type", fmt.Sprintf("%T", evt))
+		return
+	default:
+	}
+
 	switch v := evt.(type) {
 	case *events.Message:
 		h.handleMessage(v)
