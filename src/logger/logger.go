@@ -13,14 +13,21 @@ type SimpleLogger struct {
 	logFile *os.File
 }
 
-// New creates a new logger that writes to both console and file
-func New() (*SimpleLogger, error) {
-	logFile, err := os.OpenFile("bot_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open log file: %w", err)
+// New creates a new logger. When apiLogs is true, output is tee'd to
+// bot_debug.log in addition to stdout. When false, only stdout is used.
+func New(apiLogs bool) (*SimpleLogger, error) {
+	var multiWriter io.Writer = os.Stdout
+	var logFile *os.File
+
+	if apiLogs {
+		f, err := os.OpenFile("bot_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open log file: %w", err)
+		}
+		logFile = f
+		multiWriter = io.MultiWriter(os.Stdout, logFile)
 	}
 
-	multiWriter := io.MultiWriter(os.Stdout, logFile)
 	l := log.New(multiWriter, "", log.LstdFlags)
 
 	return &SimpleLogger{

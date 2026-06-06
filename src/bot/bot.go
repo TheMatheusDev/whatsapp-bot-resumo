@@ -37,17 +37,19 @@ type Bot struct {
 
 // New creates a new bot instance with dependency injection
 func New() (*Bot, error) {
-	l, err := logger.New()
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	l, err := logger.New(cfg.Gemini.ApiLogs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create logger: %w", err)
 	}
 
 	l.Info("Bot starting up...")
-	l.Info("Logs will be saved to bot_debug.log")
-
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+	if cfg.Gemini.ApiLogs {
+		l.Info("Logs will be saved to bot_debug.log")
 	}
 
 	l.Info("Configuration loaded successfully")
