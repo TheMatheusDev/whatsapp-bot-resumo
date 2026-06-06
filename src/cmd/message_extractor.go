@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"strings"
-
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 )
@@ -36,11 +34,7 @@ func (h *Handler) extractMessageContent(msg *waE2E.Message) string {
 	}
 
 	// Handle audio messages - return placeholder for transcription
-	if audioMsg := msg.GetAudioMessage(); audioMsg != nil {
-		mimetype := audioMsg.GetMimetype()
-		if strings.Contains(mimetype, "audio/ogg") || strings.Contains(mimetype, "opus") {
-			return "[Áudio Não Transcrito]"
-		}
+	if msg.GetAudioMessage() != nil {
 		return "[Áudio Não Transcrito]"
 	}
 
@@ -92,19 +86,7 @@ func (h *Handler) extractQuotedMessageText(msg *waE2E.Message) string {
 	return "[Unknown message type]"
 }
 
-// extractCurrentMessageText extracts only the current message text without quoted message info
-// This is used for command processing and mention detection
-func (h *Handler) extractCurrentMessageText(msg *waE2E.Message) string {
-	if msg.GetConversation() != "" {
-		return msg.GetConversation()
-	}
 
-	if extMsg := msg.GetExtendedTextMessage(); extMsg != nil {
-		return extMsg.GetText()
-	}
-
-	return ""
-}
 
 // getSenderName gets the sender name for a message
 func (h *Handler) getSenderName(info types.MessageInfo) string {
