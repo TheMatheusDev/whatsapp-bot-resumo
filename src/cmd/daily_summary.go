@@ -38,7 +38,11 @@ func (h *Handler) RunAutoDailySummary(chatJIDStr string) {
 
 	chatJID := types.JID{User: userPart, Server: "g.us"}
 	h.logger.Info("AutoDailySummary: queuing", "chat", chatJID.User)
-	go h.performAutoDailySummarization(chatJID)
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		h.performAutoDailySummarization(chatJID)
+	}()
 }
 
 // performAutoDailySummarization performs the automatic daily summarization without a message trigger.
@@ -139,7 +143,11 @@ func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.Mess
 	}
 
 	// Start summarization in goroutine
-	go h.performDailySummarization(opts, msgTrigger)
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		h.performDailySummarization(opts, msgTrigger)
+	}()
 }
 
 // performDailySummarization performs the daily summarization (since 4 AM)
@@ -160,7 +168,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 	messages, err := h.dbService.GetMessagesSinceTime(msgTrigger.Chat.User, fourAMToday)
 	if err != nil {
 		h.logger.Error("Failed to get messages since time", "error", err)
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, "❌ Erro ao buscar mensagens do banco de dados")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Erro ao buscar mensagens do banco de dados")
 		return
 	}
 
@@ -177,7 +185,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 	})
 	if err != nil {
 		h.logger.Error("Failed to send loading message", "error", err)
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, "❌ Erro ao enviar mensagem")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Erro ao enviar mensagem")
 		return
 	}
 

@@ -13,14 +13,24 @@ import (
 	"whatsapp-summarizer/src/utils"
 )
 
+// summarizeCooldown is the minimum interval between summarize requests per user.
+const summarizeCooldown = 30 * time.Second
+
 // handleSummarizeCommand handles the summarize command
 func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Número de mensagens não especificado")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Número de mensagens não especificado")
 		return
 	}
 
-	count, ok := h.parseAndValidateCount(msgTrigger.Chat, args[0], DefaultCountMessages)
+	// Enforce per-user rate limit to prevent Gemini API flooding.
+	if wait := h.checkSummarizeRateLimit(msgTrigger); wait > 0 {
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			fmt.Sprintf("⏳ Aguarde *%.0fs* antes de pedir outro resumo.", wait.Seconds()))
+		return
+	}
+
+	count, ok := h.parseAndValidateCount(msgTrigger, args[0], DefaultCountMessages)
 	if !ok {
 		return
 	}
@@ -30,6 +40,23 @@ func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.Message
 
 	// Start summarization in goroutine
 	go h.performSummarization(opts, msgTrigger)
+}
+
+// checkSummarizeRateLimit returns the remaining cooldown duration for the sender,
+// or 0 if the user may proceed. When the user may proceed, it also records the
+// current time so the next call sees the cooldown.
+func (h *Handler) checkSummarizeRateLimit(msgTrigger types.MessageInfo) time.Duration {
+	key := msgTrigger.Chat.User + ":" + msgTrigger.Sender.User
+	now := time.Now()
+	if v, loaded := h.sumRateLimitCache.Load(key); loaded {
+		if last, ok := v.(time.Time); ok {
+			if remaining := summarizeCooldown - now.Sub(last); remaining > 0 {
+				return remaining
+			}
+		}
+	}
+	h.sumRateLimitCache.Store(key, now)
+	return 0
 }
 
 // performSummarization performs the actual summarization
@@ -44,13 +71,13 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 			Text: proto.String(loadingMessage),
 			ContextInfo: &waE2E.ContextInfo{
 				StanzaID:    proto.String(msgTrigger.ID),
-				Participant: proto.String(msgTrigger.Sender.String()),
+				Participant: proto.String(msgTrigger.Sender.ToNonAD().String()),
 			},
 		},
 	})
 	if err != nil {
 		h.logger.Error("Failed to send loading message", "error", err)
-		h.whatsappService.SendMessage(msgTrigger.Chat, "❌ Erro ao enviar mensagem")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Erro ao enviar mensagem")
 		return
 	}
 
@@ -143,7 +170,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 	if err != nil {
 		h.logger.Error("Failed to edit message with summary", "error", err)
 		// Fallback: send summary as new message
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, finalSummary)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, finalSummary)
 	}
 
 	// Save summary as a message

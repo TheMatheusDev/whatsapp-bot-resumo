@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -23,13 +23,40 @@ type Handler struct {
 	logger          wstypes.Logger
 	botStartTime    time.Time
 	timezone        *time.Location
-	everyoneHandler *EveryoneHandler
-	whitelistMap    map[string]bool
+
+	// settingsCache caches per-group settings to avoid DB round-trips on every
+	// message. Keys are chatID strings; values are *wstypes.GroupSettings.
+	// Invalidated explicitly when a group's settings are updated via admin commands.
+	settingsCache sync.Map
+
+	// groupInfoCache caches WhatsApp GroupInfo responses to avoid a network
+	// round-trip on every admin command. Keys are JID strings; values are
+	// cachedGroupInfo (info + expiresAt). TTL is groupInfoTTL (6 hours).
+	groupInfoCache sync.Map
+
+	// joiningGroups is an atomic set (sync.Map used as map[string]struct{}) that
+	// prevents duplicate onboarding when rapid reconnects fire multiple
+	// JoinedGroup events for the same group concurrently. LoadOrStore ensures
+	// only one goroutine proceeds; the entry is deleted when onboarding finishes.
+	joiningGroups sync.Map
 
 	// weeklyRankingRunning is an atomic flag that prevents concurrent executions
 	// of the weekly ranking. It is set to 1 while performWeeklyRanking is running
 	// and reset to 0 when it finishes.
 	weeklyRankingRunning atomic.Bool
+
+	// sumRateLimitCache enforces a per-user cooldown on summarize commands.
+	// Keys are "chatID:senderUser" strings; values are time.Time (last execution).
+	// Prevents a single user from flooding the Gemini API.
+	sumRateLimitCache sync.Map
+
+	// shutdownCh is closed when the handler is shutting down. All goroutines
+	// spawned by the handler should select on this channel to detect shutdown.
+	shutdownCh chan struct{}
+
+	// wg tracks all inflight goroutines spawned by the handler. Shutdown() waits
+	// on wg so that every in-progress operation finishes before resources are torn down.
+	wg sync.WaitGroup
 }
 
 // NewHandler creates a new message handler
@@ -48,12 +75,6 @@ func NewHandler(
 		loc = time.FixedZone(config.Bot.Timezone, -3*60*60)
 	}
 
-	// Build whitelist map for O(1) lookups
-	whitelistMap := make(map[string]bool, len(config.WhatsApp.GroupWhitelist))
-	for _, gid := range config.WhatsApp.GroupWhitelist {
-		whitelistMap[gid] = true
-	}
-
 	return &Handler{
 		config:          config,
 		aiService:       aiService,
@@ -63,13 +84,32 @@ func NewHandler(
 		logger:          logger,
 		botStartTime:    botStartTime,
 		timezone:        loc,
-		everyoneHandler: NewEveryoneHandler(config, logger, loc, whatsappService),
-		whitelistMap:    whitelistMap,
+		shutdownCh:      make(chan struct{}),
 	}, nil
+}
+
+// Shutdown signals the handler to stop accepting new events and waits for all
+// inflight goroutines to finish. It is safe to call Shutdown more than once.
+func (h *Handler) Shutdown() {
+	select {
+	case <-h.shutdownCh:
+		// already closed
+	default:
+		close(h.shutdownCh)
+	}
+	h.wg.Wait()
 }
 
 // HandleEvent handles WhatsApp events
 func (h *Handler) HandleEvent(evt interface{}) {
+	// Reject new events when the handler is shutting down.
+	select {
+	case <-h.shutdownCh:
+		h.logger.Debug("HandleEvent: handler is shutting down, dropping event", "type", fmt.Sprintf("%T", evt))
+		return
+	default:
+	}
+
 	switch v := evt.(type) {
 	case *events.Message:
 		h.handleMessage(v)
@@ -79,6 +119,8 @@ func (h *Handler) HandleEvent(evt interface{}) {
 		// Handle presence updates if needed
 	case *events.GroupInfo:
 		h.handleGroupInfoEvent(v)
+	case *events.JoinedGroup:
+		h.handleJoinedGroupEvent(v)
 	case *events.HistorySync:
 		h.logger.Debug("History sync received", "type", v.Data.GetSyncType().String())
 	default:
@@ -88,7 +130,6 @@ func (h *Handler) HandleEvent(evt interface{}) {
 
 // handleMessage processes incoming messages
 func (h *Handler) handleMessage(evt *events.Message) {
-	ctx := context.Background()
 	msg := evt.Message
 	if msg == nil {
 		return
@@ -112,7 +153,7 @@ func (h *Handler) handleMessage(evt *events.Message) {
 		Timestamp:   evt.Info.Timestamp.In(h.timezone),
 	}
 
-	// Save to database only for whitelisted groups.
+	// Save to database for all groups the bot is in.
 	// Messages sent before bot start are still stored for historical context.
 	msgID, err := h.saveMessage(message, evt.Info.Chat)
 	if err != nil {
@@ -139,19 +180,6 @@ func (h *Handler) handleMessage(evt *events.Message) {
 		return
 	}
 
-	// Check for @everyone mentions (only for new messages)
-	// Extract only the current message text (without quoted message) for @everyone check
-	currentMessageText := h.extractCurrentMessageText(msg)
-	if h.everyoneHandler.ContainsEveryoneMention(currentMessageText) && h.isAuthorized(evt.Info) {
-		// Check if user is authorized to use @everyone (by JID, not display name)
-		senderJID := evt.Info.Sender.User
-		if h.everyoneHandler.IsEveryoneAdmin(ctx, evt.Info.Chat, senderJID) {
-			h.everyoneHandler.HandleEveryoneCommand(evt.Info.Chat, h.dbService, h.cache, currentMessageText)
-		} else {
-			h.logger.Info("Unauthorized @everyone attempt", "sender_jid", senderJID)
-		}
-	}
-
 	// Process commands if from authorized users (only for new messages)
 	if h.isAuthorized(evt.Info) && h.isCommand(content) {
 		h.handleCommand(content, evt.Info)
@@ -167,28 +195,89 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 
 	command := strings.ToLower(parts[0])
 
+	// rawArgs is the text after the command with newlines preserved.
+	// Finds the first whitespace character (space, \t, \n or \r) and takes everything after it.
+	// Commands with no arguments result in an empty string — handlers should use
+	// strings.TrimSpace(rawArgs) == "" to detect missing args.
+	rawArgs := ""
+	if idx := strings.IndexAny(content, " \t\n\r"); idx >= 0 {
+		rawArgs = content[idx+1:]
+	}
+
 	switch command {
-	case "--resuma", "-r", "!resumo", "!resuma", "!r", "/resuma", "/resumo", "/r":
+	case "!resuma", "!r":
 		h.handleSummarizeCommand(parts[1:], msgTrigger)
-	case "-clt", "!clt", "--clt", "/clt":
+	case "!clt":
 		h.handleSummarizeCltCommand(parts[1:], msgTrigger)
-	case "--farialimer", "-fl", "!farialimer", "!fl", "/farialimer", "/fl":
+	case "!farialimer", "!fl":
 		h.handleSummarizeFariaLimerCommand(parts[1:], msgTrigger)
-	case "--zoomer", "-z", "!zoomer", "!z", "/zoomer", "/z":
+	case "!zoomer", "!z":
 		h.handleSummarizeZoomerCommand(parts[1:], msgTrigger)
-	case "--pergunte", "-p", "!pergunte", "!p", "/pergunte", "/p":
+	case "!pergunta", "!p":
 		h.handleAskQuestionCommand(parts[1:], msgTrigger)
-	case "--dia", "-d", "!dia", "!d", "/dia", "/d", "--daily", "/daily":
+	case "!dia", "!d":
 		h.handleDailySummaryCommand(parts[1:], msgTrigger)
-	case "--help", "-h", "!help", "!h", "/help", "/h":
+	case "!help", "!h":
 		h.handleHelpCommand(msgTrigger)
-	case "--version", "-v", "!version", "!v", "/version", "/v":
+	case "!version", "!v":
 		h.handleVersionCommand(msgTrigger)
-	case "!ping", "--ping", "/ping":
+	case "!ping":
 		h.handlePingCommand(msgTrigger)
-	case "!regras", "--regras", "/regras", "!rg", "--rg", "/rg":
+	case "!regras", "!rg":
 		h.handleRulesCommand(msgTrigger)
+		// --- per-group admin commands ---
+	// These three receive rawArgs to preserve newlines in free-form text:
+	case "!setregras":
+		h.handleSetRulesCommand(rawArgs, msgTrigger)
+	case "!addwelcome":
+		h.handleAddWelcomeCommand(rawArgs, msgTrigger)
+	case "!delwelcome":
+		h.handleDelWelcomeCommand(parts[1:], msgTrigger)
+	case "!addfarewell":
+		h.handleAddFarewellCommand(rawArgs, msgTrigger)
+	case "!delfarewell":
+		h.handleDelFarewellCommand(parts[1:], msgTrigger)
+	case "!resumo":
+		h.handleDailySummaryToggle(parts[1:], msgTrigger)
+	case "!ranking":
+		h.handleWeeklyRankingToggle(parts[1:], msgTrigger)
+	case "!cache":
+		h.handleAdminCacheCommand(msgTrigger)
+	// --- per-group read-only commands (admin only) ---
+	case "!welcome":
+		h.handleListWelcomeCommand(msgTrigger)
+	case "!farewell":
+		h.handleListFarewellCommand(msgTrigger)
+	case "!config":
+		h.handleConfigCommand(msgTrigger)
 	default:
 		h.logger.Debug("Unknown command", "command", command)
 	}
+}
+
+// getGroupSettings returns the cached GroupSettings for a group, fetching from
+// the DB on a cache miss. Returns nil when the group has no DB record yet
+// (callers should fall back to global config defaults in that case).
+func (h *Handler) getGroupSettings(chatID string) *wstypes.GroupSettings {
+	if v, ok := h.settingsCache.Load(chatID); ok {
+		if gs, ok := v.(*wstypes.GroupSettings); ok {
+			return gs
+		}
+	}
+
+	gs, err := h.dbService.GetGroupSettings(chatID)
+	if err != nil {
+		h.logger.Error("getGroupSettings: DB error", "chat_id", chatID, "error", err)
+		return nil
+	}
+	if gs != nil {
+		h.settingsCache.Store(chatID, gs)
+	}
+	return gs
+}
+
+// invalidateGroupSettings removes a group's settings from the in-memory cache,
+// forcing the next getGroupSettings call to re-fetch from the DB.
+func (h *Handler) invalidateGroupSettings(chatID string) {
+	h.settingsCache.Delete(chatID)
 }

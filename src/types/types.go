@@ -43,6 +43,17 @@ type GroupSummary struct {
 	MessageCount int    `json:"message_count"`
 }
 
+// GroupSettings holds per-group dynamic configuration stored in the database.
+// When a field is zero/empty, callers should fall back to the global config defaults.
+type GroupSettings struct {
+	ChatID               string   `json:"chat_id"`
+	Rules                string   `json:"rules"`
+	WelcomeMessages      []string `json:"welcome_messages"`
+	FarewellMessages     []string `json:"farewell_messages"`
+	DailySummaryEnabled  bool     `json:"daily_summary_enabled"`
+	WeeklyRankingEnabled bool     `json:"weekly_ranking_enabled"`
+}
+
 // AIService defines the interface for AI operations
 type AIService interface {
 	SummarizeMessages(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
@@ -63,6 +74,12 @@ type DatabaseService interface {
 	GetMessagesBetween(chatID string, from, to time.Time) ([]Message, error)
 	GetAllGroups() ([]GroupSummary, error)
 
+	// Group settings operations
+	GetGroupSettings(chatID string) (*GroupSettings, error)
+	UpsertGroupSettings(settings GroupSettings) error
+	GetGroupIDsWithDailySummaryEnabled() ([]string, error)
+	GetGroupIDsWithWeeklyRankingEnabled() ([]string, error)
+
 	// Connection management
 	Close() error
 	Ping() error
@@ -71,9 +88,10 @@ type DatabaseService interface {
 // WhatsAppService defines the interface for WhatsApp operations
 type WhatsAppService interface {
 	SendMessage(chatID types.JID, message string) error
-	SendMessageReply(chatID types.JID, replyTo types.MessageID, message string) error
+	SendMessageReply(chatID types.JID, senderJID types.JID, replyTo types.MessageID, message string) error
 	EditMessage(chatID types.JID, messageID types.MessageID, newContent string) error
 	SendRawMessage(ctx context.Context, chatID types.JID, msg *waE2E.Message) (whatsmeow.SendResponse, error)
+	ReactToMessage(ctx context.Context, chatID types.JID, senderJID types.JID, msgID types.MessageID, emoji string) error
 	GetGroupInfo(ctx context.Context, chatID types.JID) (*watypes.GroupInfo, error)
 	DownloadToFile(ctx context.Context, msg whatsmeow.DownloadableMessage, file *os.File) error
 	DownloadToMemory(ctx context.Context, msg whatsmeow.DownloadableMessage) ([]byte, error)
@@ -121,6 +139,7 @@ type GeminiConfig struct {
 	Model        string `json:"model"`
 	ModelBackup  string `json:"model_backup"`
 	ModelBackup2 string `json:"model_backup2"`
+	ApiLogs      bool   `json:"api_logs"`
 }
 
 // DatabaseConfig holds database configuration
@@ -134,8 +153,7 @@ type DatabaseConfig struct {
 // WhatsAppConfig holds WhatsApp configuration
 type WhatsAppConfig struct {
 	OwnerJID       string   `json:"owner_jid"`
-	GroupWhitelist []string `json:"group_whitelist"`
-	EveryoneAdmins []string `json:"everyone_admins"`
+	BotAdmins []string `json:"bot_admins"`
 }
 
 // MediaDownloadConfig holds per-type media download toggles
@@ -155,7 +173,7 @@ type BotConfig struct {
 	EnableMetrics      bool                `json:"enable_metrics"`
 	WelcomeMessages    []string            `json:"welcome_messages"`
 	FarewellMessages   []string            `json:"farewell_messages"`
-	DailySummaryGroups []string            `json:"daily_summary_groups"`
 	Rules              string              `json:"rules"`
+	OnboardingMessage  string              `json:"onboarding_message"`
 	MediaDownload      MediaDownloadConfig `json:"media_download"`
 }

@@ -19,11 +19,12 @@ type Service struct {
 	model        string
 	modelBackup  string
 	modelBackup2 string
+	apiLogs      bool
 	logger       types.Logger
 }
 
 // NewService creates a new AI service
-func NewService(apiKey string, model string, modelBackup string, modelBackup2 string, logger types.Logger) (*Service, error) {
+func NewService(apiKey string, model string, modelBackup string, modelBackup2 string, apiLogs bool, logger types.Logger) (*Service, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
@@ -53,6 +54,7 @@ func NewService(apiKey string, model string, modelBackup string, modelBackup2 st
 		model:        model,
 		modelBackup:  modelBackup,
 		modelBackup2: modelBackup2,
+		apiLogs:      apiLogs,
 		logger:       logger,
 	}, nil
 }
@@ -229,7 +231,9 @@ func (s *Service) generateContent(ctx context.Context, prompt string, model stri
 	}
 
 	// Save the entire API response to a file for debugging
-	s.saveAPIResponse(resp)
+	if s.apiLogs {
+		s.saveAPIResponse(resp)
+	}
 
 	// Extract response content
 	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {

@@ -30,6 +30,7 @@ func Load() (*types.Config, error) {
 			Model:        getEnv("GEMINI_MODEL", "gemini-3.1-pro-preview"),
 			ModelBackup:  getEnv("GEMINI_MODEL_BACKUP", "gemini-3-flash-preview"),
 			ModelBackup2: getEnv("GEMINI_MODEL_BACKUP2", "gemini-2.5-flash"),
+			ApiLogs:      getEnvBool("API_LOGS", false),
 		},
 		Database: types.DatabaseConfig{
 			Path:            getEnv("DB_PATH", "work.db"),
@@ -39,18 +40,17 @@ func Load() (*types.Config, error) {
 		},
 		WhatsApp: types.WhatsAppConfig{
 			OwnerJID:       getEnv("OWNER_JID", ""),
-			GroupWhitelist: getEnvSlice("GROUP_WHITELIST", []string{}),
-			EveryoneAdmins: getEnvSlice("EVERYONE_ADMINS", []string{}),
+			BotAdmins: getEnvSlice("BOT_ADMINS", []string{}),
 		},
 		Bot: types.BotConfig{
 			Timezone:           getEnv("TIMEZONE", "GMT-3"),
 			CacheTTL:           getEnv("CACHE_TTL", "10m"),
 			LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 			EnableMetrics:      getEnvBool("ENABLE_METRICS", false),
-			WelcomeMessages:    getEnvSlicePipeAllowEmpty("WELCOME_MESSAGES", []string{"Seja bem-vindo(a), @numero!"}),
-			FarewellMessages:   getEnvSlicePipeAllowEmpty("FAREWELL_MESSAGES", []string{"@numero saiu do grupo."}),
-			DailySummaryGroups: getEnvSlice("DAILY_SUMMARY_GROUPS", []string{}),
+			WelcomeMessages:    getEnvSlicePipeAllowEmpty("WELCOME_MESSAGES", []string{"Seja bem-vindo(a), {numero}!"}),
+			FarewellMessages:   getEnvSlicePipeAllowEmpty("FAREWELL_MESSAGES", []string{"{numero} saiu do grupo."}),
 			Rules:              strings.ReplaceAll(getEnvAllowEmpty("GROUP_RULES", ""), `\n`, "\n"),
+			OnboardingMessage:  strings.ReplaceAll(getEnvAllowEmpty("BOT_ONBOARDING_MESSAGE", ""), `\n`, "\n"),
 			MediaDownload: types.MediaDownloadConfig{
 				Image:    getEnvBool("DOWNLOAD_IMAGE", true),
 				Video:    getEnvBool("DOWNLOAD_VIDEO", true),

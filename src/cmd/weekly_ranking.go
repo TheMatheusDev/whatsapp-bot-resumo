@@ -43,8 +43,10 @@ func (h *Handler) RunAutoWeeklyRanking(chatJIDStr string) {
 
 	chatJID := types.JID{User: userPart, Server: "g.us"}
 	h.logger.Info("WeeklyRanking: queuing", "chat", chatJID.User)
+	h.wg.Add(1)
 	go func() {
 		defer h.weeklyRankingRunning.Store(false)
+		defer h.wg.Done()
 		h.performWeeklyRanking(chatJID)
 	}()
 }

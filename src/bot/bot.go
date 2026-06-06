@@ -57,7 +57,7 @@ func New() (*Bot, error) {
 		return nil, fmt.Errorf("failed to initialize database service: %w", err)
 	}
 
-	aiService, err := ai.NewService(cfg.Gemini.APIKey, cfg.Gemini.Model, cfg.Gemini.ModelBackup, cfg.Gemini.ModelBackup2, l)
+	aiService, err := ai.NewService(cfg.Gemini.APIKey, cfg.Gemini.Model, cfg.Gemini.ModelBackup, cfg.Gemini.ModelBackup2, cfg.Gemini.ApiLogs, l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize AI service: %w", err)
 	}
@@ -138,16 +138,8 @@ func (b *Bot) Start(ctx context.Context) error {
 }
 
 // startDailySummaryScheduler runs a goroutine that fires the automatic daily summary at 00:00 every day.
+// The list of target groups is resolved dynamically at each tick by querying groups with daily_summary_enabled = 1 in the DB.
 func (b *Bot) startDailySummaryScheduler() {
-	groups := b.config.Bot.DailySummaryGroups
-	if len(groups) == 0 {
-		groups = b.config.WhatsApp.GroupWhitelist
-	}
-	if len(groups) == 0 {
-		b.logger.Info("DailySummaryScheduler: no groups configured, scheduler idle")
-		return
-	}
-
 	// Parse timezone from config
 	loc, err := time.LoadLocation(b.config.Bot.Timezone)
 	if err != nil {
@@ -164,8 +156,13 @@ func (b *Bot) startDailySummaryScheduler() {
 
 		select {
 		case <-time.After(waitDuration):
-			b.logger.Info("DailySummaryScheduler: firing daily summaries", "groups", len(groups))
-			for _, jid := range groups {
+			// Resolve groups at firing time so toggles take effect without restart.
+			dbGroups, err := b.dbService.GetGroupIDsWithDailySummaryEnabled()
+			if err != nil {
+				b.logger.Error("DailySummaryScheduler: failed to query DB groups", "error", err)
+			}
+			b.logger.Info("DailySummaryScheduler: firing daily summaries", "groups", len(dbGroups))
+			for _, jid := range dbGroups {
 				b.handler.RunAutoDailySummary(jid)
 			}
 		case <-b.stopScheduler:
@@ -177,13 +174,8 @@ func (b *Bot) startDailySummaryScheduler() {
 
 // startWeeklyRankingScheduler fires the weekly message ranking every Monday at 12:00 local time.
 // It covers messages from the previous Monday 00:00:00 through Sunday 23:59:59.
+// The list of target groups is resolved dynamically at each tick by querying groups with weekly_ranking_enabled = 1 in the DB.
 func (b *Bot) startWeeklyRankingScheduler() {
-	groups := b.config.WhatsApp.GroupWhitelist
-	if len(groups) == 0 {
-		b.logger.Info("WeeklyRankingScheduler: no groups configured, scheduler idle")
-		return
-	}
-
 	loc, err := time.LoadLocation(b.config.Bot.Timezone)
 	if err != nil {
 		loc = time.FixedZone(b.config.Bot.Timezone, -3*60*60)
@@ -197,8 +189,6 @@ func (b *Bot) startWeeklyRankingScheduler() {
 		daysUntilMonday := (int(time.Monday) - int(now.Weekday()) + 7) % 7
 
 		// Use total minutes to cover the exact 12:00:00 edge case.
-		// The previous condition `now.Hour() > 12 || (now.Hour() == 12 && now.Minute() > 0)`
-		// missed Hour==12 && Minute==0, causing waitDuration≈0 and an infinite loop.
 		nowMinutes := now.Hour()*60 + now.Minute()
 		if daysUntilMonday == 0 && nowMinutes >= 12*60 {
 			// Already at or past noon on Monday — wait until next Monday
@@ -213,8 +203,13 @@ func (b *Bot) startWeeklyRankingScheduler() {
 
 		select {
 		case <-time.After(waitDuration):
-			b.logger.Info("WeeklyRankingScheduler: firing weekly rankings", "groups", len(groups))
-			for _, jid := range groups {
+			// Resolve groups at firing time so toggles take effect without restart.
+			dbGroups, err := b.dbService.GetGroupIDsWithWeeklyRankingEnabled()
+			if err != nil {
+				b.logger.Error("WeeklyRankingScheduler: failed to query DB groups", "error", err)
+			}
+			b.logger.Info("WeeklyRankingScheduler: firing weekly rankings", "groups", len(dbGroups))
+			for _, jid := range dbGroups {
 				b.handler.RunAutoWeeklyRanking(jid)
 			}
 			// Sleep before recalculating to ensure 'now' is past noon on the next
@@ -232,24 +227,67 @@ func (b *Bot) startWeeklyRankingScheduler() {
 	}
 }
 
-// Stop stops the bot
+
+
+// Stop performs a phased graceful shutdown:
+//  1. Drain handler — stop accepting new WhatsApp events and wait for inflight goroutines.
+//  2. Disconnect WhatsApp — send a clean presence-unavailable to the server.
+//  3. Stop schedulers — signal daily and weekly goroutines to exit.
+//  4. Close resources — DB, sqlstore container, AI service, cache.
+//  5. Flush logger — log the final "stopped" line, then close the log file.
+//
+// An overall 30-second timeout guards against a stuck goroutine hanging the process.
 func (b *Bot) Stop() error {
 	if !b.running {
 		return nil
 	}
 
-	b.logger.Info("Stopping bot...")
+	b.logger.Info("Stopping bot — initiating graceful shutdown...")
 
+	// Overall shutdown timeout.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Phase 1: stop accepting new events and drain inflight handler goroutines.
+	if b.handler != nil {
+		b.logger.Info("Waiting for inflight goroutines to finish...")
+		done := make(chan struct{})
+		go func() {
+			b.handler.Shutdown()
+			close(done)
+		}()
+		select {
+		case <-done:
+			b.logger.Info("Handler drained")
+		case <-shutdownCtx.Done():
+			b.logger.Warn("Timed out waiting for handler to drain — proceeding")
+		}
+	}
+
+	// Phase 2: disconnect from WhatsApp gracefully.
+	if b.whatsappSvc != nil {
+		b.whatsappSvc.Disconnect()
+	}
+
+	// Phase 3: stop scheduler goroutines.
 	if b.stopScheduler != nil {
 		close(b.stopScheduler)
 	}
-
 	if b.stopWeeklyRankingScheduler != nil {
 		close(b.stopWeeklyRankingScheduler)
 	}
 
-	if b.whatsappSvc != nil {
-		b.whatsappSvc.Disconnect()
+	// Phase 4: close database, sqlstore container, AI service, and cache.
+	if b.dbService != nil {
+		if err := b.dbService.Close(); err != nil {
+			b.logger.Error("Failed to close database service", "error", err)
+		}
+	}
+
+	if b.container != nil {
+		if err := b.container.Close(); err != nil {
+			b.logger.Error("Failed to close WhatsApp store container", "error", err)
+		}
 	}
 
 	if b.aiService != nil {
@@ -258,24 +296,19 @@ func (b *Bot) Stop() error {
 		}
 	}
 
-	if b.dbService != nil {
-		if err := b.dbService.Close(); err != nil {
-			b.logger.Error("Failed to close database service", "error", err)
-		}
-	}
-
 	if b.cache != nil {
 		b.cache.Clear()
 	}
 
+	// Phase 5: flush and close the logger — must be the very last step.
+	b.running = false
+	b.logger.Info("Bot stopped successfully")
 	if simpleLogger, ok := b.logger.(*logger.SimpleLogger); ok {
 		if err := simpleLogger.Close(); err != nil {
 			log.Printf("Failed to close logger: %v", err)
 		}
 	}
 
-	b.running = false
-	b.logger.Info("Bot stopped successfully")
 	return nil
 }
 

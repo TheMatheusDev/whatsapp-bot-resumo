@@ -21,5 +21,5 @@ func (h *Handler) handleVersionCommand(msgTrigger types.MessageInfo) {
 
 🔗 Código: https://github.com/TheMatheusDev/whatsapp-bot-resumo`
 
-	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.ID, versionText)
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, versionText)
 }

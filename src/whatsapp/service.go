@@ -143,7 +143,7 @@ func (s *Service) SendMessage(chatID types.JID, message string) error {
 	return nil
 }
 
-func (s *Service) SendMessageReply(chatID types.JID, replyTo types.MessageID, message string) error {
+func (s *Service) SendMessageReply(chatID types.JID, senderJID types.JID, replyTo types.MessageID, message string) error {
 	if s.client == nil {
 		return fmt.Errorf("client not initialized")
 	}
@@ -159,7 +159,7 @@ func (s *Service) SendMessageReply(chatID types.JID, replyTo types.MessageID, me
 			Text: proto.String(message),
 			ContextInfo: &waE2E.ContextInfo{
 				StanzaID:    proto.String(replyTo),
-				Participant: proto.String(chatID.User),
+				Participant: proto.String(senderJID.ToNonAD().String()),
 			},
 		},
 	}
@@ -268,6 +268,24 @@ func (s *Service) GetBotJID() types.JID {
 		return types.JID{}
 	}
 	return s.client.Store.LID.ToNonAD()
+}
+
+// ReactToMessage sends an emoji reaction to a specific message.
+func (s *Service) ReactToMessage(ctx context.Context, chatID types.JID, senderJID types.JID, msgID types.MessageID, emoji string) error {
+	if s.client == nil {
+		return fmt.Errorf("client not initialized")
+	}
+	if !s.connected {
+		return fmt.Errorf("not connected to WhatsApp")
+	}
+	reaction := s.client.BuildReaction(chatID, senderJID, msgID, emoji)
+	_, err := s.client.SendMessage(ctx, chatID, reaction)
+	if err != nil {
+		s.logger.Error("Failed to send reaction", "error", err, "chat_id", chatID.String(), "msg_id", msgID)
+		return fmt.Errorf("failed to send reaction: %w", err)
+	}
+	s.logger.Debug("Reaction sent", "chat_id", chatID.String(), "emoji", emoji)
+	return nil
 }
 
 // SendMentionMessage sends a message that mentions specific users
