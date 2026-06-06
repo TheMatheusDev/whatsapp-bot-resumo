@@ -65,7 +65,6 @@ type AIService interface {
 // DatabaseService defines the interface for database operations
 type DatabaseService interface {
 	// Message operations
-	SaveGroupMessage(msg Message, groupName string) error
 	SaveGroupMessageReturningID(msg Message, groupName string) (int64, error)
 	UpdateMessageContent(id int64, newContent string) error
 	GetGroupMessages(chatID string, count int) ([]Message, error)

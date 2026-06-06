@@ -130,26 +130,6 @@ func (s *Service) prepareStatements() error {
 	return nil
 }
 
-// SaveGroupMessage saves a group message to the database
-func (s *Service) SaveGroupMessage(msg types.Message, groupName string) error {
-	s.stmtMutex.RLock()
-	stmt := s.insertGroupStmt
-	s.stmtMutex.RUnlock()
-
-	if stmt == nil {
-		return fmt.Errorf("insertGroupStmt not initialized")
-	}
-
-	_, err := stmt.Exec(msg.ChatID, msg.Sender, msg.Content, msg.MessageType, msg.Timestamp)
-	if err != nil {
-		s.logger.Error("Failed to save group message", "error", err, "group", groupName)
-		return fmt.Errorf("failed to save group message: %w", err)
-	}
-
-	s.logger.Debug("Message saved", msg.Sender, "|", groupName)
-	return nil
-}
-
 // SaveGroupMessageReturningID saves a group message and returns the inserted row ID
 func (s *Service) SaveGroupMessageReturningID(msg types.Message, groupName string) (int64, error) {
 	s.stmtMutex.RLock()
