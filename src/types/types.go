@@ -57,11 +57,10 @@ type GroupSettings struct {
 // AIService defines the interface for AI operations
 type AIService interface {
 	SummarizeMessages(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
-	SummarizeMessagesWithBackup(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
-	SummarizeMessagesWithBackup2(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
 	TranscribeAudio(ctx context.Context, audioData []byte, mimeType string) (string, error)
 	Close() error
 }
+
 
 // DatabaseService defines the interface for database operations
 type DatabaseService interface {

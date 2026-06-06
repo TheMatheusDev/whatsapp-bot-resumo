@@ -59,19 +59,36 @@ func NewService(apiKey string, model string, modelBackup string, modelBackup2 st
 	}, nil
 }
 
-// SummarizeMessages summarizes a list of messages according to the given options
+// SummarizeMessages summarizes a list of messages, retrying with the backup
+// models if the primary one fails. Fallback order: primary → backup → backup2.
 func (s *Service) SummarizeMessages(ctx context.Context, messages []types.Message, opts types.SummarizeOptions) (string, error) {
 	if len(messages) == 0 {
 		return "", fmt.Errorf("no messages to summarize")
 	}
 
-	// Build the messages string
-	messagesStr := s.buildMessagesString(messages)
+	models := []string{s.model, s.modelBackup, s.modelBackup2}
+	var lastErr error
+	for i, model := range models {
+		if i > 0 {
+			s.logger.Warn("SummarizeMessages: retrying with fallback model",
+				"model", model, "attempt", i+1, "prev_error", lastErr)
+		}
+		result, err := s.summarize(ctx, messages, opts, model)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+	}
+	return "", fmt.Errorf("all models failed to summarize: %w", lastErr)
+}
 
-	// Build the system prompt
+// summarize builds the prompt from messages+opts and calls the Gemini API with
+// the given model name. It is the single shared implementation used by
+// SummarizeMessages for all retry attempts.
+func (s *Service) summarize(ctx context.Context, messages []types.Message, opts types.SummarizeOptions, model string) (string, error) {
+	messagesStr := s.buildMessagesString(messages)
 	systemPrompt := s.buildSystemPrompt(opts)
 
-	// Build the user prompt
 	var userPrompt string
 	if opts.Question != "" {
 		userPrompt = fmt.Sprintf("Responda a pergunta a seguir baseado nas msgs: \"%s\"\n\nMensagens:\n%s", opts.Question, messagesStr)
@@ -79,74 +96,10 @@ func (s *Service) SummarizeMessages(ctx context.Context, messages []types.Messag
 		userPrompt = fmt.Sprintf("Resuma as seguintes mensagens:\n%s", messagesStr)
 	}
 
-	// Combine prompts
 	fullPrompt := fmt.Sprintf("%s\n\n%s", systemPrompt, userPrompt)
-
-	// Log the full prompt for debugging (optional)
 	s.logger.Debug("Generated full prompt", "prompt", fullPrompt)
 
-	// Generate content using Gemini with primary model
-	return s.generateContent(ctx, fullPrompt, s.model)
-}
-
-// SummarizeMessagesWithBackup summarizes messages using the backup model
-func (s *Service) SummarizeMessagesWithBackup(ctx context.Context, messages []types.Message, opts types.SummarizeOptions) (string, error) {
-	if len(messages) == 0 {
-		return "", fmt.Errorf("no messages to summarize")
-	}
-
-	// Build the messages string
-	messagesStr := s.buildMessagesString(messages)
-
-	// Build the system prompt
-	systemPrompt := s.buildSystemPrompt(opts)
-
-	// Build the user prompt
-	var userPrompt string
-	if opts.Question != "" {
-		userPrompt = fmt.Sprintf("Responda a pergunta a seguir baseado nas msgs: \"%s\"\n\nMensagens:\n%s", opts.Question, messagesStr)
-	} else {
-		userPrompt = fmt.Sprintf("Resuma as seguintes mensagens:\n%s", messagesStr)
-	}
-
-	// Combine prompts
-	fullPrompt := fmt.Sprintf("%s\n\n%s", systemPrompt, userPrompt)
-
-	// Log that we're using backup model
-	s.logger.Info("Using backup model for summarization", "model", s.modelBackup)
-
-	// Generate content using Gemini with backup model
-	return s.generateContent(ctx, fullPrompt, s.modelBackup)
-}
-
-// SummarizeMessagesWithBackup2 summarizes messages using the second backup model
-func (s *Service) SummarizeMessagesWithBackup2(ctx context.Context, messages []types.Message, opts types.SummarizeOptions) (string, error) {
-	if len(messages) == 0 {
-		return "", fmt.Errorf("no messages to summarize")
-	}
-
-	// Build the messages string
-	messagesStr := s.buildMessagesString(messages)
-
-	// Build the system prompt
-	systemPrompt := s.buildSystemPrompt(opts)
-
-	// Build the user prompt
-	var userPrompt string
-	if opts.Question != "" {
-		userPrompt = fmt.Sprintf("Responda a pergunta a seguir baseado nas msgs: \"%s\"\n\nMensagens:\n%s", opts.Question, messagesStr)
-	} else {
-		userPrompt = fmt.Sprintf("Resuma as seguintes mensagens:\n%s", messagesStr)
-	}
-
-	// Combine prompts
-	fullPrompt := fmt.Sprintf("%s\n\n%s", systemPrompt, userPrompt)
-
-	// Log that we're using second backup model
-	s.logger.Info("Using second backup model for summarization", "model", s.modelBackup2)
-
-	// Generate content using Gemini with second backup model
-	return s.generateContent(ctx, fullPrompt, s.modelBackup2)
+	return s.generateContent(ctx, fullPrompt, model)
 }
 
 // buildMessagesString converts messages to a formatted string

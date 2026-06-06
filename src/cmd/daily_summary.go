@@ -79,24 +79,12 @@ func (h *Handler) performAutoDailySummarization(chatJID types.JID) {
 		return
 	}
 
-	// Try primary model, then fallbacks
+	// Generate summary (retries backup models internally)
 	summary, err := h.aiService.SummarizeMessages(ctx, messages, opts)
 	if err != nil {
-		h.logger.Warn("AutoDailySummary: primary model failed, trying backup", "error", err)
-		h.whatsappService.EditMessage(chatJID, msgResp.ID, fmt.Sprintf("🔄 Lendo %d mensagens...", len(messages)))
-
-		summary, err = h.aiService.SummarizeMessagesWithBackup(ctx, messages, opts)
-		if err != nil {
-			h.logger.Warn("AutoDailySummary: backup model failed, trying second backup", "error", err)
-			h.whatsappService.EditMessage(chatJID, msgResp.ID, fmt.Sprintf("🔁 Lendo %d mensagens...", len(messages)))
-
-			summary, err = h.aiService.SummarizeMessagesWithBackup2(ctx, messages, opts)
-			if err != nil {
-				h.logger.Error("AutoDailySummary: all models failed", "error", err)
-				h.whatsappService.EditMessage(chatJID, msgResp.ID, "❌ Erro ao gerar resumo automático")
-				return
-			}
-		}
+		h.logger.Error("AutoDailySummary: all models failed", "error", err)
+		h.whatsappService.EditMessage(chatJID, msgResp.ID, "❌ Erro ao gerar resumo automático")
+		return
 	}
 
 	// Build final message
@@ -195,40 +183,16 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 		return
 	}
 
-	// Generate summary using AI - try primary model first
+	// Generate summary (retries backup models internally)
 	summary, err := h.aiService.SummarizeMessages(ctx, messages, opts)
 	if err != nil {
 		h.logger.Error("Failed to generate summary", "error", err)
-
-		// Try with backup model
-		h.logger.Info("Retrying with backup model")
-
-		// Edit the loading message to show we're trying backup
-		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fmt.Sprintf("🔄 Lendo %d mensagens...", len(messages)))
-
-		// Try again with backup model
-		summary, err = h.aiService.SummarizeMessagesWithBackup(ctx, messages, opts)
-		if err != nil {
-			h.logger.Error("Failed to generate summary with backup model", "error", err)
-
-			// Try with second backup model
-			h.logger.Info("Retrying with second backup model")
-			h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fmt.Sprintf("� Lendo %d mensagens...", len(messages)))
-
-			summary, err = h.aiService.SummarizeMessagesWithBackup2(ctx, messages, opts)
-			if err != nil {
-				h.logger.Error("Failed to generate summary with second backup model", "error", err)
-				// Edit the loading message to show error
-				errorMsg := ""
-				if ctx.Err() == context.DeadlineExceeded {
-					errorMsg = "⏱️ Timeout ao gerar resumo - tente com menos mensagens"
-				} else {
-					errorMsg = fmt.Sprintf("❌ Erro ao gerar resumo\n\n%s", err.Error())
-				}
-				h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, errorMsg)
-				return
-			}
+		errorMsg := "❌ Erro ao gerar resumo"
+		if ctx.Err() == context.DeadlineExceeded {
+			errorMsg = "⏱️ Timeout ao gerar resumo - tente com menos mensagens"
 		}
+		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, errorMsg)
+		return
 	}
 
 	// Add header
