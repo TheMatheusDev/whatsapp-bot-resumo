@@ -328,9 +328,4 @@ func (s *Service) DownloadToMemory(ctx context.Context, msg whatsmeow.Downloadab
 	return data, nil
 }
 
-// AddEventHandler adds an event handler to the client
-func (s *Service) AddEventHandler(handler func(interface{})) {
-	if s.client != nil {
-		s.client.AddEventHandler(handler)
-	}
-}
+
