@@ -183,6 +183,15 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 
 	command := strings.ToLower(parts[0])
 
+	// rawArgs is the text after the command with newlines preserved.
+	// Finds the first whitespace character (space, \t, \n or \r) and takes everything after it.
+	// Commands with no arguments result in an empty string — handlers should use
+	// strings.TrimSpace(rawArgs) == "" to detect missing args.
+	rawArgs := ""
+	if idx := strings.IndexAny(content, " \t\n\r"); idx >= 0 {
+		rawArgs = content[idx+1:]
+	}
+
 	switch command {
 	case "!resuma", "!r":
 		h.handleSummarizeCommand(parts[1:], msgTrigger)
@@ -205,14 +214,15 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 	case "!regras", "!rg":
 		h.handleRulesCommand(msgTrigger)
 		// --- per-group admin commands ---
+	// These three receive rawArgs to preserve newlines in free-form text:
 	case "!setregras":
-		h.handleSetRulesCommand(parts[1:], msgTrigger)
+		h.handleSetRulesCommand(rawArgs, msgTrigger)
 	case "!addwelcome":
-		h.handleAddWelcomeCommand(parts[1:], msgTrigger)
+		h.handleAddWelcomeCommand(rawArgs, msgTrigger)
 	case "!delwelcome":
 		h.handleDelWelcomeCommand(parts[1:], msgTrigger)
 	case "!addfarewell":
-		h.handleAddFarewellCommand(parts[1:], msgTrigger)
+		h.handleAddFarewellCommand(rawArgs, msgTrigger)
 	case "!delfarewell":
 		h.handleDelFarewellCommand(parts[1:], msgTrigger)
 	case "!resumo":

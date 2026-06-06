@@ -70,13 +70,13 @@ func (h *Handler) saveAndInvalidate(settings wstypes.GroupSettings) error {
 //
 //	!setregras <texto>   → stores the rules and confirms
 //	!setregras           → displays the current rules (or "none defined")
-func (h *Handler) handleSetRulesCommand(args []string, msgTrigger types.MessageInfo) {
+func (h *Handler) handleSetRulesCommand(rawArgs string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
 	}
 
 	// Display current rules when called with no arguments.
-	if len(args) == 0 {
+	if strings.TrimSpace(rawArgs) == "" {
 		h.handleRulesCommand(msgTrigger)
 		return
 	}
@@ -85,7 +85,8 @@ func (h *Handler) handleSetRulesCommand(args []string, msgTrigger types.MessageI
 		return
 	}
 
-	rules := strings.Join(args, " ")
+	// TrimSpace only removes whitespace from the edges; internal \n characters are preserved.
+	rules := strings.TrimSpace(rawArgs)
 	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
 	settings.Rules = rules
 
@@ -120,7 +121,7 @@ func (h *Handler) handleSetRulesCommand(args []string, msgTrigger types.MessageI
 //
 //	!addwelcome Olá {numero}! Seja bem-vindo(a)! Leia as regras: {regras}
 //	!addwelcome Oi {numero}!|Bem-vindo(a), {numero}! 🎉
-func (h *Handler) handleAddWelcomeCommand(args []string, msgTrigger types.MessageInfo) {
+func (h *Handler) handleAddWelcomeCommand(rawArgs string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
 	}
@@ -128,7 +129,7 @@ func (h *Handler) handleAddWelcomeCommand(args []string, msgTrigger types.Messag
 		return
 	}
 
-	if len(args) == 0 {
+	if strings.TrimSpace(rawArgs) == "" {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Informe o texto da mensagem de boas-vindas.\n"+
 				"Exemplo: !addwelcome Olá {numero}! Leia: {regras}\n"+
@@ -136,7 +137,8 @@ func (h *Handler) handleAddWelcomeCommand(args []string, msgTrigger types.Messag
 		return
 	}
 
-	newMessages := splitPipe(strings.Join(args, " "))
+	// splitPipe trims whitespace per segment — internal \n characters within each segment are preserved.
+	newMessages := splitPipe(rawArgs)
 	if len(newMessages) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Nenhuma mensagem válida encontrada.")
@@ -214,7 +216,7 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 //
 //	!addfarewell Até mais, {numero}! 👋 Leia as regras: {regras}
 //	!addfarewell Tchau {numero}!|Até mais, {numero}! 👋
-func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.MessageInfo) {
+func (h *Handler) handleAddFarewellCommand(rawArgs string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
 	}
@@ -222,7 +224,7 @@ func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.Messa
 		return
 	}
 
-	if len(args) == 0 {
+	if strings.TrimSpace(rawArgs) == "" {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Informe o texto da mensagem de despedida.\n"+
 				"Exemplo: !addfarewell Até mais, {numero}! 👋 Leia: {regras}\n"+
@@ -230,7 +232,8 @@ func (h *Handler) handleAddFarewellCommand(args []string, msgTrigger types.Messa
 		return
 	}
 
-	newMessages := splitPipe(strings.Join(args, " "))
+	// splitPipe trims whitespace per segment — internal \n characters within each segment are preserved.
+	newMessages := splitPipe(rawArgs)
 	if len(newMessages) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Nenhuma mensagem válida encontrada.")
