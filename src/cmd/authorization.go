@@ -33,7 +33,7 @@ func (h *Handler) isAuthorized(info watypes.MessageInfo) bool {
 // take effect within minutes without requiring a bot restart.
 // On any fetch error the function returns false (fail-safe: deny on doubt).
 func (h *Handler) isGroupAdmin(ctx context.Context, chat watypes.JID, senderJIDUser string) bool {
-	for _, jid := range h.config.WhatsApp.EveryoneAdmins {
+	for _, jid := range h.config.WhatsApp.BotAdmins {
 		if strings.TrimSpace(jid) == senderJIDUser {
 			return true
 		}

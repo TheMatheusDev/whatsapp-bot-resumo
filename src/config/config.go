@@ -40,7 +40,7 @@ func Load() (*types.Config, error) {
 		},
 		WhatsApp: types.WhatsAppConfig{
 			OwnerJID:       getEnv("OWNER_JID", ""),
-			EveryoneAdmins: getEnvSlice("EVERYONE_ADMINS", []string{}),
+			BotAdmins: getEnvSlice("BOT_ADMINS", []string{}),
 		},
 		Bot: types.BotConfig{
 			Timezone:           getEnv("TIMEZONE", "GMT-3"),

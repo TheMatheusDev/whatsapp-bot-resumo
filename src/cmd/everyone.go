@@ -37,13 +37,13 @@ func (e *EveryoneHandler) ContainsEveryoneMention(content string) bool {
 
 // IsEveryoneAdmin checks if the sender is authorized to use @everyone.
 // Authorization is granted if:
-//  1. The sender's JID is in the EveryoneAdmins allowlist from config, OR
+//  1. The sender's JID is in the BotAdmins allowlist from config, OR
 //  2. The sender is a native group admin or superadmin according to WhatsApp.
 //
 // If the group info cannot be retrieved, falls back to the config allowlist only.
 func (e *EveryoneHandler) IsEveryoneAdmin(ctx context.Context, chat types.JID, senderJIDUser string) bool {
 	// Check against the configured JID allowlist (optional)
-	for _, jid := range e.config.WhatsApp.EveryoneAdmins {
+	for _, jid := range e.config.WhatsApp.BotAdmins {
 		if strings.TrimSpace(jid) == senderJIDUser {
 			return true
 		}

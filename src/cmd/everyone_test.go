@@ -52,7 +52,7 @@ func (m *mockWhatsAppService) IsConnected() bool               { return true }
 func makeHandler(admins []string, svc wstypes.WhatsAppService) *EveryoneHandler {
 	cfg := &wstypes.Config{
 		WhatsApp: wstypes.WhatsAppConfig{
-			EveryoneAdmins: admins,
+			BotAdmins: admins,
 		},
 	}
 	return NewEveryoneHandler(cfg, &noopLogger{}, time.UTC, svc)
@@ -137,7 +137,7 @@ func TestIsEveryoneAdmin_NotAdmin(t *testing.T) {
 }
 
 func TestIsEveryoneAdmin_EmptyAllowlist_NonAdmin(t *testing.T) {
-	// Empty EVERYONE_ADMINS + non-admin should be denied (no longer allows everyone)
+	// Empty BOT_ADMINS + non-admin should be denied (no longer allows everyone)
 	svc := &mockWhatsAppService{
 		groupInfo: makeGroupInfo([]types.GroupParticipant{
 			participant("5511999990001", false, false),

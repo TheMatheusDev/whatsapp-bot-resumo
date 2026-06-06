@@ -153,7 +153,7 @@ type DatabaseConfig struct {
 // WhatsAppConfig holds WhatsApp configuration
 type WhatsAppConfig struct {
 	OwnerJID       string   `json:"owner_jid"`
-	EveryoneAdmins []string `json:"everyone_admins"`
+	BotAdmins []string `json:"bot_admins"`
 }
 
 // MediaDownloadConfig holds per-type media download toggles
