@@ -33,23 +33,56 @@ func (h *Handler) isAuthorized(info watypes.MessageInfo) bool {
 // take effect within minutes without requiring a bot restart.
 // On any fetch error the function returns false (fail-safe: deny on doubt).
 func (h *Handler) isGroupAdmin(ctx context.Context, chat watypes.JID, senderJIDUser string) bool {
+	h.logger.Debug("isGroupAdmin: checking sender",
+		"sender_jid_user", senderJIDUser,
+		"bot_admins", h.config.WhatsApp.BotAdmins,
+	)
+
+	info := h.cachedGetGroupInfo(ctx, chat)
+
+	// Resolve the sender's phone number from the participant list.
+	// Needed because WhatsApp now sends LIDs (e.g. "160159498285172") as the
+	// Sender.User instead of the actual phone number.
+	senderPhone := senderJIDUser
+	if info != nil {
+		for _, p := range info.Participants {
+			if p.JID.User == senderJIDUser || p.LID.User == senderJIDUser {
+				if p.PhoneNumber.User != "" {
+					senderPhone = p.PhoneNumber.User
+					h.logger.Debug("isGroupAdmin: resolved sender phone",
+						"lid", senderJIDUser,
+						"phone", senderPhone,
+					)
+				}
+				break
+			}
+		}
+	}
+
+	// Check the BotAdmins allowlist against both the raw JID and resolved phone.
 	for _, jid := range h.config.WhatsApp.BotAdmins {
-		if strings.TrimSpace(jid) == senderJIDUser {
+		trimmed := strings.TrimSpace(jid)
+		if trimmed == senderJIDUser || trimmed == senderPhone {
+			h.logger.Debug("isGroupAdmin: BotAdmins match", "entry", trimmed)
 			return true
 		}
 	}
 
-	info := h.cachedGetGroupInfo(ctx, chat)
+	// Check native group admin status.
 	if info == nil {
 		return false
 	}
 	for _, p := range info.Participants {
-		if p.JID.User == senderJIDUser && (p.IsAdmin || p.IsSuperAdmin) {
+		isMatch := p.JID.User == senderJIDUser ||
+			p.LID.User == senderJIDUser ||
+			p.PhoneNumber.User == senderJIDUser
+		if isMatch && (p.IsAdmin || p.IsSuperAdmin) {
 			return true
 		}
 	}
 	return false
 }
+
 
 // cachedGetGroupInfo returns GroupInfo from the in-memory cache when the entry
 // is still within its TTL, fetching from the WhatsApp API otherwise.
