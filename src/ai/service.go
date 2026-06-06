@@ -61,7 +61,10 @@ func NewService(apiKey string, model string, modelBackup string, modelBackup2 st
 
 // SummarizeMessages summarizes a list of messages, retrying with the backup
 // models if the primary one fails. Fallback order: primary → backup → backup2.
-func (s *Service) SummarizeMessages(ctx context.Context, messages []types.Message, opts types.SummarizeOptions) (string, error) {
+//
+// onRetry is called before each fallback attempt (attempt is 1-based, so the
+// first retry fires with attempt=2). Pass nil when no progress feedback is needed.
+func (s *Service) SummarizeMessages(ctx context.Context, messages []types.Message, opts types.SummarizeOptions, onRetry types.OnRetryFunc) (string, error) {
 	if len(messages) == 0 {
 		return "", fmt.Errorf("no messages to summarize")
 	}
@@ -72,6 +75,9 @@ func (s *Service) SummarizeMessages(ctx context.Context, messages []types.Messag
 		if i > 0 {
 			s.logger.Warn("SummarizeMessages: retrying with fallback model",
 				"model", model, "attempt", i+1, "prev_error", lastErr)
+			if onRetry != nil {
+				onRetry(i+1, model)
+			}
 		}
 		result, err := s.summarize(ctx, messages, opts, model)
 		if err == nil {

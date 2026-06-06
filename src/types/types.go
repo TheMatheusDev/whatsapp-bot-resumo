@@ -53,9 +53,14 @@ type GroupSettings struct {
 	WeeklyRankingEnabled bool     `json:"weekly_ranking_enabled"`
 }
 
+// OnRetryFunc is called by SummarizeMessages before each fallback attempt
+// (attempt is 1-based, so the first retry is attempt=2). Callers can use
+// this to update a loading message in WhatsApp. Passing nil is safe.
+type OnRetryFunc func(attempt int, model string)
+
 // AIService defines the interface for AI operations
 type AIService interface {
-	SummarizeMessages(ctx context.Context, messages []Message, opts SummarizeOptions) (string, error)
+	SummarizeMessages(ctx context.Context, messages []Message, opts SummarizeOptions, onRetry OnRetryFunc) (string, error)
 	TranscribeAudio(ctx context.Context, audioData []byte, mimeType string) (string, error)
 	Close() error
 }

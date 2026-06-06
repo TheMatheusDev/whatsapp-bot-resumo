@@ -128,8 +128,16 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 		return
 	}
 
+	// onRetry edits the loading message so the user sees each fallback attempt.
+	retrySpinners := []string{"🔄", "🔁"}
+	onRetry := func(attempt int, _ string) {
+		spinner := retrySpinners[min(attempt-2, len(retrySpinners)-1)]
+		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID,
+			fmt.Sprintf("%s Lendo %d mensagens...", spinner, opts.Count))
+	}
+
 	// Generate summary (retries backup models internally)
-	summary, err := h.aiService.SummarizeMessages(ctx, messages, opts)
+	summary, err := h.aiService.SummarizeMessages(ctx, messages, opts, onRetry)
 	if err != nil {
 		h.logger.Error("Failed to generate summary", "error", err)
 		errorMsg := "❌ Erro ao gerar resumo"
