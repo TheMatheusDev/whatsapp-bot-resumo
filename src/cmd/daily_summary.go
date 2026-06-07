@@ -79,9 +79,16 @@ func (h *Handler) performAutoDailySummarization(chatJID types.JID) {
 		return
 	}
 
-	// Generate summary. Auto runs have no user-visible loading message to update
-	// between retries, so onRetry is nil — the log warning from the AI service is sufficient.
-	summary, err := h.aiService.SummarizeMessages(ctx, messages, opts, nil)
+	// onRetry edits the loading message so the group sees each fallback attempt.
+	// The same spinner pattern used by the manual summarize commands.
+	retrySpinners := []string{"🔄", "🔁"}
+	onRetry := func(attempt int, _ string) {
+		spinner := retrySpinners[min(attempt-2, len(retrySpinners)-1)]
+		h.whatsappService.EditMessage(chatJID, msgResp.ID,
+			fmt.Sprintf("%s Resumindo o dia (%d mensagens)...", spinner, len(messages)))
+	}
+
+	summary, err := h.aiService.SummarizeMessages(ctx, messages, opts, onRetry)
 	if err != nil {
 		h.logger.Error("AutoDailySummary: all models failed", "error", err)
 		h.whatsappService.EditMessage(chatJID, msgResp.ID, "❌ Erro ao gerar resumo automático")
