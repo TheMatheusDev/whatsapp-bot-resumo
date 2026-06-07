@@ -92,6 +92,7 @@ func (h *Handler) handleSetRulesCommand(rawArgs string, msgTrigger types.Message
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleSetRulesCommand: failed to save settings", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar regras. Tente novamente.")
 		return

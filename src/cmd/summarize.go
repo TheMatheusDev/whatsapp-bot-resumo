@@ -77,6 +77,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 	})
 	if err != nil {
 		h.logger.Error("Failed to send loading message", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Erro ao enviar mensagem")
 		return
 	}
@@ -109,6 +110,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 
 	if !msgTrigger.IsGroup {
 		h.logger.Error("Direct messages are not supported for summarization")
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, "❌ Resumos não são suportados em mensagens diretas")
 		return
 	}
@@ -117,13 +119,13 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 
 	if err != nil {
 		h.logger.Error("Failed to get messages", "error", err)
-		// Edit the loading message to show error
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, "❌ Erro ao buscar mensagens")
 		return
 	}
 
 	if len(messages) == 0 {
-		// Edit the loading message to show no messages found
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, "ℹ❌ Nenhuma mensagem encontrada")
 		return
 	}
@@ -144,6 +146,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 		if ctx.Err() == context.DeadlineExceeded {
 			errorMsg = "⏱️ Timeout ao gerar resumo - tente com menos mensagens"
 		}
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, errorMsg)
 		return
 	}
@@ -156,6 +159,8 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 		// Fallback: send summary as new message
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, finalSummary)
 	}
+	// React ✅ to the user's original command message to signal completion.
+	h.reactToCommand(msgTrigger, "✅")
 
 	// Save summary as a message
 	summaryMsg := wstypes.Message{

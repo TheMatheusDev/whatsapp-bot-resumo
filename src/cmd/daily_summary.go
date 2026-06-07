@@ -164,6 +164,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 	messages, err := h.dbService.GetMessagesSinceTime(msgTrigger.Chat.User, fourAMToday)
 	if err != nil {
 		h.logger.Error("Failed to get messages since time", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Erro ao buscar mensagens do banco de dados")
 		return
 	}
@@ -181,6 +182,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 	})
 	if err != nil {
 		h.logger.Error("Failed to send loading message", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Erro ao enviar mensagem")
 		return
 	}
@@ -207,6 +209,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 		if ctx.Err() == context.DeadlineExceeded {
 			errorMsg = "⏱️ Timeout ao gerar resumo - tente com menos mensagens"
 		}
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, errorMsg)
 		return
 	}
@@ -239,6 +242,8 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 
 	// Edit the loading message with the final summary
 	h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fullSummary)
+	// React ✅ to the user's original command message to signal completion.
+	h.reactToCommand(msgTrigger, "✅")
 
 	h.logger.Info("Daily summary completed",
 		"chat_id", msgTrigger.Chat.User,
