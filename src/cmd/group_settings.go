@@ -37,6 +37,8 @@ func (h *Handler) requireGroupAdmin(msgTrigger types.MessageInfo) bool {
 
 // loadOrDefaultSettings fetches the GroupSettings for a group, creating a
 // default struct (not yet persisted) if no record exists in the DB.
+// WelcomeMessages and FarewellMessages are NOT populated here — they are
+// managed separately via Add/Delete/GetActive DB methods.
 func (h *Handler) loadOrDefaultSettings(chatID string) wstypes.GroupSettings {
 	if gs := h.getGroupSettings(chatID); gs != nil {
 		return *gs
@@ -45,8 +47,6 @@ func (h *Handler) loadOrDefaultSettings(chatID string) wstypes.GroupSettings {
 		ChatID:               chatID,
 		DailySummaryEnabled:  true,
 		WeeklyRankingEnabled: true,
-		WelcomeMessages:      []string{},
-		FarewellMessages:     []string{},
 	}
 }
 
@@ -114,7 +114,8 @@ func (h *Handler) handleSetRulesCommand(rawArgs string, msgTrigger types.Message
 // ---------------------------------------------------------------------------
 
 // handleAddWelcomeCommand appends one or more welcome message templates to the
-// group's pool. Separate multiple messages with | to add them all at once.
+// group's pool in the welcome_messages table.
+// Separate multiple messages with | to add them all at once.
 // Use {numero} in templates to mention the joining participant(s).
 // Use {regras} in templates to insert the group rules.
 //
@@ -138,7 +139,6 @@ func (h *Handler) handleAddWelcomeCommand(rawArgs string, msgTrigger types.Messa
 		return
 	}
 
-	// splitPipe trims whitespace per segment — internal \n characters within each segment are preserved.
 	newMessages := splitPipe(rawArgs)
 	if len(newMessages) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
@@ -146,22 +146,34 @@ func (h *Handler) handleAddWelcomeCommand(rawArgs string, msgTrigger types.Messa
 		return
 	}
 
-	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
-	settings.WelcomeMessages = append(settings.WelcomeMessages, newMessages...)
+	chatID := msgTrigger.Chat.User
 
+	// Ensure group_configs row exists before inserting into welcome_messages (FK).
+	settings := h.loadOrDefaultSettings(chatID)
 	if err := h.saveAndInvalidate(settings); err != nil {
-		h.logger.Error("handleAddWelcomeCommand: failed to save settings", "error", err)
+		h.logger.Error("handleAddWelcomeCommand: failed to ensure group_configs row", "error", err)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar mensagem. Tente novamente.")
 		return
 	}
 
+	for _, msg := range newMessages {
+		if err := h.dbService.AddWelcomeMessage(chatID, msg); err != nil {
+			h.logger.Error("handleAddWelcomeCommand: failed to add welcome message", "error", err)
+			h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+				"❌ Erro ao salvar mensagem. Tente novamente.")
+			return
+		}
+	}
+
+	allMsgs, _ := h.dbService.GetActiveWelcomeMessages(chatID)
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-		formatAddedMessages("boas-vindas", newMessages, len(settings.WelcomeMessages)))
+		formatAddedMessages("boas-vindas", newMessages, len(allMsgs)))
 }
 
-// handleDelWelcomeCommand removes a welcome message by its 1-based index.
-// To list the current messages, use !welcome.
+// handleDelWelcomeCommand removes a welcome message by its displayed index.
+// The index shown by !welcome corresponds to the position in the active list,
+// but deletion is performed by the row's database ID.
 //
 // Usage:  !delwelcome <n>  — removes message at index n
 func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.MessageInfo) {
@@ -178,30 +190,33 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 		return
 	}
 
-	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
+	msgs, err := h.dbService.GetActiveWelcomeMessages(msgTrigger.Chat.User)
+	if err != nil {
+		h.logger.Error("handleDelWelcomeCommand: failed to fetch messages", "error", err)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ Erro ao buscar mensagens. Tente novamente.")
+		return
+	}
+
 	idx, err := strconv.Atoi(args[0])
-	if err != nil || idx < 1 || idx > len(settings.WelcomeMessages) {
+	if err != nil || idx < 1 || idx > len(msgs) {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-			fmt.Sprintf("❌ Índice inválido. Use !welcome para ver a lista (total: %d).", len(settings.WelcomeMessages)))
+			fmt.Sprintf("❌ Índice inválido. Use !welcome para ver a lista (total: %d).", len(msgs)))
 		return
 	}
 
-	removed := settings.WelcomeMessages[idx-1]
-	settings.WelcomeMessages = append(
-		settings.WelcomeMessages[:idx-1],
-		settings.WelcomeMessages[idx:]...,
-	)
-
-	if err := h.saveAndInvalidate(settings); err != nil {
-		h.logger.Error("handleDelWelcomeCommand: failed to save settings", "error", err)
+	target := msgs[idx-1]
+	if err := h.dbService.DeleteWelcomeMessage(target.ID); err != nil {
+		h.logger.Error("handleDelWelcomeCommand: failed to delete", "error", err, "id", target.ID)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-			"❌ Erro ao salvar. Tente novamente.")
+			"❌ Erro ao remover. Tente novamente.")
 		return
 	}
 
+	h.invalidateGroupSettings(msgTrigger.Chat.User)
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("✅ Mensagem de boas-vindas #%d removida:\n\n_%s_\n\nTotal restante: %d",
-			idx, removed, len(settings.WelcomeMessages)))
+			idx, target.Message, len(msgs)-1))
 }
 
 // ---------------------------------------------------------------------------
@@ -209,7 +224,8 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 // ---------------------------------------------------------------------------
 
 // handleAddFarewellCommand appends one or more farewell message templates to the
-// group's pool. Separate multiple messages with | to add them all at once.
+// group's pool in the farewell_messages table.
+// Separate multiple messages with | to add them all at once.
 // Use {numero} in templates to mention the leaving participant(s).
 // Use {regras} in templates to insert the group rules.
 //
@@ -233,7 +249,6 @@ func (h *Handler) handleAddFarewellCommand(rawArgs string, msgTrigger types.Mess
 		return
 	}
 
-	// splitPipe trims whitespace per segment — internal \n characters within each segment are preserved.
 	newMessages := splitPipe(rawArgs)
 	if len(newMessages) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
@@ -241,22 +256,34 @@ func (h *Handler) handleAddFarewellCommand(rawArgs string, msgTrigger types.Mess
 		return
 	}
 
-	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
-	settings.FarewellMessages = append(settings.FarewellMessages, newMessages...)
+	chatID := msgTrigger.Chat.User
 
+	// Ensure group_configs row exists before inserting into farewell_messages (FK).
+	settings := h.loadOrDefaultSettings(chatID)
 	if err := h.saveAndInvalidate(settings); err != nil {
-		h.logger.Error("handleAddFarewellCommand: failed to save settings", "error", err)
+		h.logger.Error("handleAddFarewellCommand: failed to ensure group_configs row", "error", err)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar mensagem. Tente novamente.")
 		return
 	}
 
+	for _, msg := range newMessages {
+		if err := h.dbService.AddFarewellMessage(chatID, msg); err != nil {
+			h.logger.Error("handleAddFarewellCommand: failed to add farewell message", "error", err)
+			h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+				"❌ Erro ao salvar mensagem. Tente novamente.")
+			return
+		}
+	}
+
+	allMsgs, _ := h.dbService.GetActiveFarewellMessages(chatID)
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-		formatAddedMessages("despedida", newMessages, len(settings.FarewellMessages)))
+		formatAddedMessages("despedida", newMessages, len(allMsgs)))
 }
 
-// handleDelFarewellCommand removes a farewell message by its 1-based index.
-// To list the current messages, use !farewell.
+// handleDelFarewellCommand removes a farewell message by its displayed index.
+// The index shown by !farewell corresponds to the position in the active list,
+// but deletion is performed by the row's database ID.
 //
 // Usage:  !delfarewell <n>  — removes message at index n
 func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.MessageInfo) {
@@ -273,30 +300,33 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 		return
 	}
 
-	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
+	msgs, err := h.dbService.GetActiveFarewellMessages(msgTrigger.Chat.User)
+	if err != nil {
+		h.logger.Error("handleDelFarewellCommand: failed to fetch messages", "error", err)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ Erro ao buscar mensagens. Tente novamente.")
+		return
+	}
+
 	idx, err := strconv.Atoi(args[0])
-	if err != nil || idx < 1 || idx > len(settings.FarewellMessages) {
+	if err != nil || idx < 1 || idx > len(msgs) {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-			fmt.Sprintf("❌ Índice inválido. Use !farewell para ver a lista (total: %d).", len(settings.FarewellMessages)))
+			fmt.Sprintf("❌ Índice inválido. Use !farewell para ver a lista (total: %d).", len(msgs)))
 		return
 	}
 
-	removed := settings.FarewellMessages[idx-1]
-	settings.FarewellMessages = append(
-		settings.FarewellMessages[:idx-1],
-		settings.FarewellMessages[idx:]...,
-	)
-
-	if err := h.saveAndInvalidate(settings); err != nil {
-		h.logger.Error("handleDelFarewellCommand: failed to save settings", "error", err)
+	target := msgs[idx-1]
+	if err := h.dbService.DeleteFarewellMessage(target.ID); err != nil {
+		h.logger.Error("handleDelFarewellCommand: failed to delete", "error", err, "id", target.ID)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-			"❌ Erro ao salvar. Tente novamente.")
+			"❌ Erro ao remover. Tente novamente.")
 		return
 	}
 
+	h.invalidateGroupSettings(msgTrigger.Chat.User)
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("✅ Mensagem de despedida #%d removida:\n\n_%s_\n\nTotal restante: %d",
-			idx, removed, len(settings.FarewellMessages)))
+			idx, target.Message, len(msgs)-1))
 }
 
 // ---------------------------------------------------------------------------
@@ -418,7 +448,17 @@ func (h *Handler) handleListWelcomeCommand(msgTrigger types.MessageInfo) {
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
-	pool := h.resolveWelcomePool(msgTrigger.Chat.User)
+	dbMsgs, err := h.dbService.GetActiveWelcomeMessages(msgTrigger.Chat.User)
+	if err != nil {
+		h.logger.Error("handleListWelcomeCommand: DB error", "error", err)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ Erro ao buscar mensagens.")
+		return
+	}
+	pool := make([]string, 0, len(dbMsgs))
+	for _, m := range dbMsgs {
+		pool = append(pool, m.Message)
+	}
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		formatMessageList("Mensagens de boas-vindas", pool, ""))
 }
@@ -438,7 +478,17 @@ func (h *Handler) handleListFarewellCommand(msgTrigger types.MessageInfo) {
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
-	pool := h.resolveFarewellPool(msgTrigger.Chat.User)
+	dbMsgs, err := h.dbService.GetActiveFarewellMessages(msgTrigger.Chat.User)
+	if err != nil {
+		h.logger.Error("handleListFarewellCommand: DB error", "error", err)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ Erro ao buscar mensagens.")
+		return
+	}
+	pool := make([]string, 0, len(dbMsgs))
+	for _, m := range dbMsgs {
+		pool = append(pool, m.Message)
+	}
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		formatMessageList("Mensagens de despedida", pool, ""))
 }
