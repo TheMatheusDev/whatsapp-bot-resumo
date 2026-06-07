@@ -2,7 +2,6 @@ package database
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -16,14 +15,15 @@ import (
 type Service struct {
 	db              *sql.DB
 	logger          types.Logger
-	insertGroupStmt *sql.Stmt
-	getGroupStmt    *sql.Stmt
+	insertMsgStmt   *sql.Stmt
+	getMsgStmt      *sql.Stmt
 	stmtMutex       sync.RWMutex
 }
 
-// NewService creates a new database service
+// NewService creates a new database service connected to bot.db.
+// The whatsmeow database (whatsmeow.db) is managed separately by the library.
 func NewService(cfg *types.DatabaseConfig, logger types.Logger) (*Service, error) {
-	db, err := sql.Open("sqlite3", fmt.Sprintf("%s?cache=shared&mode=rwc&_foreign_keys=on", cfg.Path))
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=on&_journal_mode=WAL", cfg.Path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -32,7 +32,6 @@ func NewService(cfg *types.DatabaseConfig, logger types.Logger) (*Service, error
 	db.SetMaxOpenConns(cfg.MaxOpenConns)
 	db.SetMaxIdleConns(cfg.MaxIdleConns)
 
-	// Parse lifetime duration
 	if cfg.ConnMaxLifetime != "" {
 		if lifetime, err := time.ParseDuration(cfg.ConnMaxLifetime); err == nil {
 			db.SetConnMaxLifetime(lifetime)
@@ -49,13 +48,11 @@ func NewService(cfg *types.DatabaseConfig, logger types.Logger) (*Service, error
 		logger: logger,
 	}
 
-	// Initialize database schema
 	if err := service.initSchema(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
-	// Prepare statements
 	if err := service.prepareStatements(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to prepare statements: %w", err)
@@ -65,117 +62,246 @@ func NewService(cfg *types.DatabaseConfig, logger types.Logger) (*Service, error
 	return service, nil
 }
 
-// initSchema creates the necessary tables and indexes
+// initSchema creates all tables and indexes as specified in database_spec.md.
+// Statements are executed in dependency order (no FKs before referenced tables).
 func (s *Service) initSchema() error {
-	// Enable WAL mode for better concurrent read/write performance.
-	if _, err := s.db.Exec(`PRAGMA journal_mode=WAL`); err != nil {
-		return fmt.Errorf("failed to enable WAL mode: %w", err)
-	}
-	if _, err := s.db.Exec(`PRAGMA synchronous=NORMAL`); err != nil {
-		return fmt.Errorf("failed to set synchronous mode: %w", err)
-	}
-
 	queries := []string{
-		`CREATE TABLE IF NOT EXISTS group_messages (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			chat_id TEXT NOT NULL,
-			sender TEXT NOT NULL,
-			message TEXT,
-			message_type TEXT,
-			timestamp DATETIME
+		// ── 4.1 Enable foreign keys ──────────────────────────────────────────
+		`PRAGMA foreign_keys = ON`,
+
+		// ── 4.2 contacts ─────────────────────────────────────────────────────
+		`CREATE TABLE IF NOT EXISTS contacts (
+			lid        TEXT PRIMARY KEY,
+			name       TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+			           DEFAULT (strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_group_messages_chat_timestamp ON group_messages(chat_id, timestamp ASC)`,
-		`CREATE TABLE IF NOT EXISTS group_settings (
+
+		// ── 4.3 chats ────────────────────────────────────────────────────────
+		`CREATE TABLE IF NOT EXISTS chats (
+			chat_id    TEXT PRIMARY KEY,
+			chat_type  TEXT NOT NULL DEFAULT 'group'
+			           CHECK (chat_type IN ('group', 'direct')),
+			created_at TEXT NOT NULL
+			           DEFAULT (strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))
+		)`,
+
+		// ── 4.4 message_types (lookup / seed) ────────────────────────────────
+		`CREATE TABLE IF NOT EXISTS message_types (
+			type TEXT PRIMARY KEY
+		)`,
+		`INSERT OR IGNORE INTO message_types (type) VALUES ('Conversation')`,
+		`INSERT OR IGNORE INTO message_types (type) VALUES ('ExtendedText')`,
+		`INSERT OR IGNORE INTO message_types (type) VALUES ('Audio')`,
+		`INSERT OR IGNORE INTO message_types (type) VALUES ('Summary')`,
+
+		// ── 4.5 messages ─────────────────────────────────────────────────────
+		`CREATE TABLE IF NOT EXISTS messages (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			chat_id      TEXT    NOT NULL,
+			sender_lid   TEXT    NOT NULL,
+			message      TEXT,
+			message_type TEXT    NOT NULL,
+			timestamp    TEXT    NOT NULL,
+			FOREIGN KEY (chat_id)      REFERENCES chats(chat_id)        ON DELETE CASCADE,
+			FOREIGN KEY (sender_lid)   REFERENCES contacts(lid),
+			FOREIGN KEY (message_type) REFERENCES message_types(type)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_chat_ts
+		    ON messages (chat_id, timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_sender
+		    ON messages (sender_lid)`,
+
+		// ── 4.6 group_configs ────────────────────────────────────────────────
+		// weekly_ranking_enabled is an extension beyond the spec (existing feature).
+		`CREATE TABLE IF NOT EXISTS group_configs (
 			chat_id                TEXT    PRIMARY KEY,
-			rules                  TEXT    NOT NULL DEFAULT '',
-			welcome_messages       TEXT    NOT NULL DEFAULT '[]',
-			farewell_messages      TEXT    NOT NULL DEFAULT '[]',
-			daily_summary_enabled  INTEGER NOT NULL DEFAULT 1,
-			weekly_ranking_enabled INTEGER NOT NULL DEFAULT 1,
-			updated_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			rules                  TEXT,
+			daily_summary_enabled  INTEGER NOT NULL DEFAULT 0
+			                       CHECK (daily_summary_enabled  IN (0, 1)),
+			weekly_ranking_enabled INTEGER NOT NULL DEFAULT 0
+			                       CHECK (weekly_ranking_enabled IN (0, 1)),
+			updated_at             TEXT    NOT NULL
+			                       DEFAULT (strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now')),
+			updated_by             TEXT    NOT NULL DEFAULT '',
+			FOREIGN KEY (chat_id) REFERENCES chats(chat_id) ON DELETE CASCADE
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_gs_daily_enabled  ON group_settings(daily_summary_enabled)  WHERE daily_summary_enabled  = 1`,
-		`CREATE INDEX IF NOT EXISTS idx_gs_weekly_enabled ON group_settings(weekly_ranking_enabled) WHERE weekly_ranking_enabled = 1`,
+		`CREATE INDEX IF NOT EXISTS idx_gc_daily_enabled
+		    ON group_configs (daily_summary_enabled)  WHERE daily_summary_enabled  = 1`,
+		`CREATE INDEX IF NOT EXISTS idx_gc_weekly_enabled
+		    ON group_configs (weekly_ranking_enabled) WHERE weekly_ranking_enabled = 1`,
+
+		// ── 4.7 welcome_messages ─────────────────────────────────────────────
+		`CREATE TABLE IF NOT EXISTS welcome_messages (
+			id        INTEGER PRIMARY KEY AUTOINCREMENT,
+			chat_id   TEXT    NOT NULL,
+			message   TEXT    NOT NULL,
+			is_active INTEGER NOT NULL DEFAULT 1
+			          CHECK (is_active IN (0, 1)),
+			FOREIGN KEY (chat_id) REFERENCES group_configs(chat_id) ON DELETE CASCADE
+		)`,
+
+		// ── 4.8 farewell_messages ─────────────────────────────────────────────
+		`CREATE TABLE IF NOT EXISTS farewell_messages (
+			id        INTEGER PRIMARY KEY AUTOINCREMENT,
+			chat_id   TEXT    NOT NULL,
+			message   TEXT    NOT NULL,
+			is_active INTEGER NOT NULL DEFAULT 1
+			          CHECK (is_active IN (0, 1)),
+			FOREIGN KEY (chat_id) REFERENCES group_configs(chat_id) ON DELETE CASCADE
+		)`,
 	}
 
-	for _, query := range queries {
-		if _, err := s.db.Exec(query); err != nil {
-			return fmt.Errorf("failed to execute query: %s, error: %w", query, err)
+	for _, q := range queries {
+		if _, err := s.db.Exec(q); err != nil {
+			return fmt.Errorf("schema init failed — query: %s | error: %w", q, err)
 		}
 	}
 
 	return nil
 }
 
-// prepareStatements prepares all SQL statements
+// prepareStatements prepares hot-path SQL statements.
 func (s *Service) prepareStatements() error {
 	s.stmtMutex.Lock()
 	defer s.stmtMutex.Unlock()
 
 	var err error
 
-	s.insertGroupStmt, err = s.db.Prepare(`INSERT INTO group_messages (chat_id, sender, message, message_type, timestamp) VALUES (?, ?, ?, ?, ?)`)
+	s.insertMsgStmt, err = s.db.Prepare(
+		`INSERT INTO messages (chat_id, sender_lid, message, message_type, timestamp)
+		 VALUES (?, ?, ?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare insertGroupStmt: %w", err)
+		return fmt.Errorf("failed to prepare insertMsgStmt: %w", err)
 	}
 
-	// Filter out bot messages when retrieving messages for summarization
-	// This excludes all messages sent by the bot itself (ResumoBOT [VOCÊ])
-	// Order by DESC to get the most recent messages first
-	s.getGroupStmt, err = s.db.Prepare(`SELECT id, chat_id, sender, message, message_type, timestamp FROM group_messages WHERE chat_id = ? AND sender NOT LIKE 'ResumoBOT [VOCÊ]%' ORDER BY timestamp DESC LIMIT ?`)
+	// JOIN contacts to surface the display name.
+	// Bot messages are filtered by checking that sender_lid is not the bot's own LID.
+	// Since the bot uses "ResumoBOT" sentinel in contacts.name, we filter by name prefix.
+	s.getMsgStmt, err = s.db.Prepare(
+		`SELECT m.id, m.chat_id, m.sender_lid, c.name, m.message, m.message_type, m.timestamp
+		 FROM messages m
+		 JOIN contacts c ON c.lid = m.sender_lid
+		 WHERE m.chat_id = ?
+		   AND c.name NOT LIKE 'ResumoBOT%'
+		 ORDER BY m.timestamp DESC
+		 LIMIT ?`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare getGroupStmt: %w", err)
+		return fmt.Errorf("failed to prepare getMsgStmt: %w", err)
 	}
 
 	return nil
 }
 
-// SaveGroupMessageReturningID saves a group message and returns the inserted row ID
+// ── Contact / Chat upserts ───────────────────────────────────────────────────
+
+// UpsertContact inserts or updates a contact record.
+// The name and updated_at are refreshed on every call.
+func (s *Service) UpsertContact(contact types.Contact) error {
+	updatedAt := contact.UpdatedAt.Format("2006-01-02T15:04:05+00:00")
+	_, err := s.db.Exec(
+		`INSERT INTO contacts (lid, name, updated_at) VALUES (?, ?, ?)
+		 ON CONFLICT(lid) DO UPDATE SET
+		     name       = excluded.name,
+		     updated_at = excluded.updated_at`,
+		contact.LID, contact.Name, updatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("UpsertContact: %w", err)
+	}
+	return nil
+}
+
+// UpsertChat records a chat the first time it is seen; subsequent calls are no-ops.
+func (s *Service) UpsertChat(chat types.Chat) error {
+	_, err := s.db.Exec(
+		`INSERT OR IGNORE INTO chats (chat_id, chat_type) VALUES (?, ?)`,
+		chat.ChatID, chat.ChatType,
+	)
+	if err != nil {
+		return fmt.Errorf("UpsertChat: %w", err)
+	}
+	return nil
+}
+
+// ── Message operations ───────────────────────────────────────────────────────
+
+// SaveGroupMessageReturningID saves a message and returns the inserted row ID.
+// msg.SenderLID must already exist in the contacts table (call UpsertContact first).
+// msg.ChatID must already exist in the chats table (call UpsertChat first).
+// Returns 0 without error when the message_type is not in the controlled vocabulary
+// (unsupported types are silently discarded per spec §4.4).
 func (s *Service) SaveGroupMessageReturningID(msg types.Message, groupName string) (int64, error) {
 	s.stmtMutex.RLock()
-	stmt := s.insertGroupStmt
+	stmt := s.insertMsgStmt
 	s.stmtMutex.RUnlock()
 
 	if stmt == nil {
-		return 0, fmt.Errorf("insertGroupStmt not initialized")
+		return 0, fmt.Errorf("insertMsgStmt not initialized")
 	}
 
-	result, err := stmt.Exec(msg.ChatID, msg.Sender, msg.Content, msg.MessageType, msg.Timestamp)
+	timestamp := msg.Timestamp.Format("2006-01-02 15:04:05-07:00")
+
+	result, err := stmt.Exec(msg.ChatID, msg.SenderLID, msg.Content, msg.MessageType, timestamp)
 	if err != nil {
-		s.logger.Error("Failed to save group message", "error", err, "group", groupName)
-		return 0, fmt.Errorf("failed to save group message: %w", err)
+		// SQLite FK violation on message_type means unsupported type — discard silently.
+		if isFKViolation(err) {
+			s.logger.Debug("Discarding message with unsupported type",
+				"message_type", msg.MessageType, "group", groupName)
+			return 0, nil
+		}
+		s.logger.Error("Failed to save message", "error", err, "group", groupName)
+		return 0, fmt.Errorf("failed to save message: %w", err)
 	}
 
 	id, err := result.LastInsertId()
 	if err != nil {
-		s.logger.Error("Failed to get last insert ID", "error", err)
 		return 0, fmt.Errorf("failed to get last insert ID: %w", err)
 	}
 
-	s.logger.Debug(fmt.Sprintf("Message saved: [ID: %d | Sender: %s | Group: %s]", id, msg.Sender, groupName))
+	s.logger.Debug(fmt.Sprintf("Message saved: [ID: %d | Sender: %s | Group: %s]",
+		id, msg.SenderLID, groupName))
 	return id, nil
 }
 
-// UpdateMessageContent updates the message content for a given message ID
+// isFKViolation returns true when the SQLite error is a FOREIGN KEY constraint failure.
+func isFKViolation(err error) bool {
+	return err != nil && (fmt.Sprintf("%v", err) == "FOREIGN KEY constraint failed" ||
+		contains(err.Error(), "FOREIGN KEY constraint failed"))
+}
+
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub ||
+		len(s) > 0 && len(sub) > 0 && func() bool {
+			for i := 0; i <= len(s)-len(sub); i++ {
+				if s[i:i+len(sub)] == sub {
+					return true
+				}
+			}
+			return false
+		}())
+}
+
+// UpdateMessageContent updates the text content for a given message ID.
 func (s *Service) UpdateMessageContent(id int64, newContent string) error {
-	_, err := s.db.Exec("UPDATE group_messages SET message = ? WHERE id = ?", newContent, id)
+	_, err := s.db.Exec("UPDATE messages SET message = ? WHERE id = ?", newContent, id)
 	if err != nil {
 		s.logger.Error("Failed to update message content", "error", err, "id", id)
 		return fmt.Errorf("failed to update message content: %w", err)
 	}
-
 	s.logger.Debug("Message content updated", "id", id)
 	return nil
 }
 
-// GetGroupMessages retrieves group messages from the database
+// GetGroupMessages retrieves the last `count` messages for a chat (bot excluded),
+// returned in chronological order (oldest first).
 func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, error) {
 	s.stmtMutex.RLock()
-	stmt := s.getGroupStmt
+	stmt := s.getMsgStmt
 	s.stmtMutex.RUnlock()
 
 	if stmt == nil {
-		return nil, fmt.Errorf("getGroupStmt not initialized")
+		return nil, fmt.Errorf("getMsgStmt not initialized")
 	}
 
 	rows, err := stmt.Query(chatID, count)
@@ -188,116 +314,109 @@ func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, e
 	messages := make([]types.Message, 0, count)
 	for rows.Next() {
 		var msg types.Message
-		err := rows.Scan(&msg.ID, &msg.ChatID, &msg.Sender, &msg.Content, &msg.MessageType, &msg.Timestamp)
-		if err != nil {
-			s.logger.Error("Failed to scan message row", "error", err)
+		var tsStr string
+		if err := rows.Scan(&msg.ID, &msg.ChatID, &msg.SenderLID, &msg.Sender,
+			&msg.Content, &msg.MessageType, &tsStr); err != nil {
 			return nil, fmt.Errorf("failed to scan message row: %w", err)
+		}
+		if t, err := time.Parse("2006-01-02 15:04:05-07:00", tsStr); err == nil {
+			msg.Timestamp = t
 		}
 		messages = append(messages, msg)
 	}
-
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
-	// Reverse messages to be in chronological order (oldest to newest)
-	// Query returns DESC (newest first), but we want ASC (oldest first) for AI context
+	// Query returns DESC (newest first); reverse to ASC (oldest first) for AI context.
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
 
-	s.logger.Debug("Retrieved group messages (bot messages filtered out)", "chat_id", chatID, "count", len(messages))
+	s.logger.Debug("Retrieved group messages", "chat_id", chatID, "count", len(messages))
 	return messages, nil
 }
 
-// GetMessagesSinceTime retrieves messages from a specific chat since a given time
+// GetMessagesSinceTime retrieves all non-bot messages from chatID at or after sinceTime.
 func (s *Service) GetMessagesSinceTime(chatID string, sinceTime time.Time) ([]types.Message, error) {
-	// Format time to match the database format: 2025-11-23 20:34:35-03:00
-	sinceTimeStr := sinceTime.Format("2006-01-02 15:04:05-07:00")
+	sinceStr := sinceTime.Format("2006-01-02 15:04:05-07:00")
 
-	query := `SELECT id, chat_id, sender, message, message_type, timestamp 
-			  FROM group_messages 
-			  WHERE chat_id = ? 
-			  AND sender NOT LIKE 'ResumoBOT [VOCÊ]%' 
-			  AND timestamp >= ? 
-			  ORDER BY timestamp ASC`
+	query := `SELECT m.id, m.chat_id, m.sender_lid, c.name, m.message, m.message_type, m.timestamp
+	          FROM messages m
+	          JOIN contacts c ON c.lid = m.sender_lid
+	          WHERE m.chat_id = ?
+	            AND c.name NOT LIKE 'ResumoBOT%'
+	            AND m.timestamp >= ?
+	          ORDER BY m.timestamp ASC`
 
-	rows, err := s.db.Query(query, chatID, sinceTimeStr)
+	rows, err := s.db.Query(query, chatID, sinceStr)
 	if err != nil {
-		s.logger.Error("Failed to query messages since time", "error", err, "chat_id", chatID, "since_time", sinceTimeStr)
+		s.logger.Error("Failed to query messages since time", "error", err,
+			"chat_id", chatID, "since_time", sinceStr)
 		return nil, fmt.Errorf("failed to query messages since time: %w", err)
 	}
 	defer rows.Close()
 
-	var messages []types.Message
-	for rows.Next() {
-		var msg types.Message
-		err := rows.Scan(&msg.ID, &msg.ChatID, &msg.Sender, &msg.Content, &msg.MessageType, &msg.Timestamp)
-		if err != nil {
-			s.logger.Error("Failed to scan message row", "error", err)
-			return nil, fmt.Errorf("failed to scan message row: %w", err)
-		}
-		messages = append(messages, msg)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows error: %w", err)
-	}
-
-	s.logger.Debug("Retrieved messages since time", "chat_id", chatID, "since_time", sinceTimeStr, "count", len(messages))
-	return messages, nil
+	return s.scanMessages(rows)
 }
 
-// GetMessagesBetween retrieves messages from a chat within an inclusive [from, to] time window.
-// Bot messages (ResumoBOT) are excluded and results are ordered chronologically.
+// GetMessagesBetween retrieves non-bot messages within [from, to] for the given chat.
 func (s *Service) GetMessagesBetween(chatID string, from, to time.Time) ([]types.Message, error) {
 	fromStr := from.Format("2006-01-02 15:04:05-07:00")
 	toStr := to.Format("2006-01-02 15:04:05-07:00")
 
-	query := `SELECT id, chat_id, sender, message, message_type, timestamp
-			  FROM group_messages
-			  WHERE chat_id = ?
-			  AND sender NOT LIKE 'ResumoBOT [VOCÊ]%'
-			  AND timestamp >= ?
-			  AND timestamp <= ?
-			  ORDER BY timestamp ASC`
+	query := `SELECT m.id, m.chat_id, m.sender_lid, c.name, m.message, m.message_type, m.timestamp
+	          FROM messages m
+	          JOIN contacts c ON c.lid = m.sender_lid
+	          WHERE m.chat_id = ?
+	            AND c.name NOT LIKE 'ResumoBOT%'
+	            AND m.timestamp >= ?
+	            AND m.timestamp <= ?
+	          ORDER BY m.timestamp ASC`
 
 	rows, err := s.db.Query(query, chatID, fromStr, toStr)
 	if err != nil {
-		s.logger.Error("Failed to query messages between times", "error", err, "chat_id", chatID, "from", fromStr, "to", toStr)
+		s.logger.Error("Failed to query messages between times", "error", err,
+			"chat_id", chatID, "from", fromStr, "to", toStr)
 		return nil, fmt.Errorf("failed to query messages between times: %w", err)
 	}
 	defer rows.Close()
 
+	return s.scanMessages(rows)
+}
+
+// scanMessages is a helper that scans a result set into a slice of Message.
+func (s *Service) scanMessages(rows *sql.Rows) ([]types.Message, error) {
 	var messages []types.Message
 	for rows.Next() {
 		var msg types.Message
-		err := rows.Scan(&msg.ID, &msg.ChatID, &msg.Sender, &msg.Content, &msg.MessageType, &msg.Timestamp)
-		if err != nil {
+		var tsStr string
+		if err := rows.Scan(&msg.ID, &msg.ChatID, &msg.SenderLID, &msg.Sender,
+			&msg.Content, &msg.MessageType, &tsStr); err != nil {
 			s.logger.Error("Failed to scan message row", "error", err)
 			return nil, fmt.Errorf("failed to scan message row: %w", err)
 		}
+		if t, err := time.Parse("2006-01-02 15:04:05-07:00", tsStr); err == nil {
+			msg.Timestamp = t
+		}
 		messages = append(messages, msg)
 	}
-
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
-
-	s.logger.Debug("Retrieved messages between times", "chat_id", chatID, "from", fromStr, "to", toStr, "count", len(messages))
 	return messages, nil
 }
 
-// GetAllGroups retrieves a list of all groups with their message counts
+// GetAllGroups returns all chats with a message count, ordered by message count descending.
 func (s *Service) GetAllGroups() ([]types.GroupSummary, error) {
 	query := `
-		SELECT chat_id, COUNT(*) as message_count
-		FROM group_messages
-		WHERE sender NOT LIKE 'ResumoBOT [VOCÊ]%'
-		GROUP BY chat_id
+		SELECT ch.chat_id, COUNT(m.id) as message_count
+		FROM chats ch
+		LEFT JOIN messages m ON m.chat_id = ch.chat_id
+		LEFT JOIN contacts c ON c.lid = m.sender_lid AND c.name NOT LIKE 'ResumoBOT%'
+		GROUP BY ch.chat_id
 		ORDER BY message_count DESC
 	`
-
 	rows, err := s.db.Query(query)
 	if err != nil {
 		s.logger.Error("Failed to query groups", "error", err)
@@ -307,15 +426,12 @@ func (s *Service) GetAllGroups() ([]types.GroupSummary, error) {
 
 	var groups []types.GroupSummary
 	for rows.Next() {
-		var group types.GroupSummary
-		err := rows.Scan(&group.ChatID, &group.MessageCount)
-		if err != nil {
-			s.logger.Error("Failed to scan group row", "error", err)
+		var g types.GroupSummary
+		if err := rows.Scan(&g.ChatID, &g.MessageCount); err != nil {
 			return nil, fmt.Errorf("failed to scan group row: %w", err)
 		}
-		groups = append(groups, group)
+		groups = append(groups, g)
 	}
-
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
@@ -324,52 +440,61 @@ func (s *Service) GetAllGroups() ([]types.GroupSummary, error) {
 	return groups, nil
 }
 
-// GetGroupSettings retrieves the per-group dynamic configuration from the database.
-// Returns (nil, nil) when no record exists for the given chatID — callers should
-// fall back to the global config defaults in that case.
+// ── Group settings ───────────────────────────────────────────────────────────
+
+// GetGroupSettings fetches the per-group configuration from group_configs.
+// Returns (nil, nil) when no record exists — callers should fall back to global defaults.
+// WelcomeMessages and FarewellMessages in the returned struct are populated from
+// their respective tables.
 func (s *Service) GetGroupSettings(chatID string) (*types.GroupSettings, error) {
 	row := s.db.QueryRow(
-		`SELECT chat_id, rules, welcome_messages, farewell_messages,
-		        daily_summary_enabled, weekly_ranking_enabled
-		 FROM group_settings WHERE chat_id = ?`, chatID)
+		`SELECT chat_id, rules, daily_summary_enabled, weekly_ranking_enabled,
+		        updated_at, updated_by
+		 FROM group_configs WHERE chat_id = ?`, chatID)
 
 	var gs types.GroupSettings
-	var welcomeJSON, farewellJSON string
 	var dailyEnabled, weeklyEnabled int
 
-	err := row.Scan(&gs.ChatID, &gs.Rules, &welcomeJSON, &farewellJSON,
-		&dailyEnabled, &weeklyEnabled)
+	err := row.Scan(&gs.ChatID, &gs.Rules, &dailyEnabled, &weeklyEnabled,
+		&gs.UpdatedAt, &gs.UpdatedBy)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to scan group_settings row: %w", err)
+		return nil, fmt.Errorf("failed to scan group_configs row: %w", err)
 	}
 
-	if err := json.Unmarshal([]byte(welcomeJSON), &gs.WelcomeMessages); err != nil {
-		gs.WelcomeMessages = []string{}
-	}
-	if err := json.Unmarshal([]byte(farewellJSON), &gs.FarewellMessages); err != nil {
-		gs.FarewellMessages = []string{}
-	}
 	gs.DailySummaryEnabled = dailyEnabled != 0
 	gs.WeeklyRankingEnabled = weeklyEnabled != 0
+
+	// Populate welcome messages
+	wmsgs, err := s.GetActiveWelcomeMessages(chatID)
+	if err != nil {
+		return nil, err
+	}
+	gs.WelcomeMessages = make([]string, 0, len(wmsgs))
+	for _, wm := range wmsgs {
+		gs.WelcomeMessages = append(gs.WelcomeMessages, wm.Message)
+	}
+
+	// Populate farewell messages
+	fmsgs, err := s.GetActiveFarewellMessages(chatID)
+	if err != nil {
+		return nil, err
+	}
+	gs.FarewellMessages = make([]string, 0, len(fmsgs))
+	for _, fm := range fmsgs {
+		gs.FarewellMessages = append(gs.FarewellMessages, fm.Message)
+	}
 
 	return &gs, nil
 }
 
-// UpsertGroupSettings inserts or replaces the per-group configuration.
-// The updated_at timestamp is refreshed on every upsert.
+// UpsertGroupSettings inserts or updates the per-group configuration row.
+// It does NOT touch welcome_messages or farewell_messages — use the dedicated methods.
+// A group_configs row requires the chat_id to already exist in chats (FK).
+// updated_at is always refreshed to the current UTC time.
 func (s *Service) UpsertGroupSettings(settings types.GroupSettings) error {
-	welcomeJSON, err := json.Marshal(settings.WelcomeMessages)
-	if err != nil {
-		return fmt.Errorf("failed to marshal welcome_messages: %w", err)
-	}
-	farewellJSON, err := json.Marshal(settings.FarewellMessages)
-	if err != nil {
-		return fmt.Errorf("failed to marshal farewell_messages: %w", err)
-	}
-
 	dailyEnabled := 0
 	if settings.DailySummaryEnabled {
 		dailyEnabled = 1
@@ -379,51 +504,50 @@ func (s *Service) UpsertGroupSettings(settings types.GroupSettings) error {
 		weeklyEnabled = 1
 	}
 
-	_, err = s.db.Exec(
-		`INSERT INTO group_settings
-			(chat_id, rules, welcome_messages, farewell_messages,
-			 daily_summary_enabled, weekly_ranking_enabled, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+	updatedAt := time.Now().UTC().Format("2006-01-02T15:04:05+00:00")
+	updatedBy := settings.UpdatedBy
+
+	_, err := s.db.Exec(
+		`INSERT INTO group_configs
+		    (chat_id, rules, daily_summary_enabled, weekly_ranking_enabled,
+		     updated_at, updated_by)
+		 VALUES (?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(chat_id) DO UPDATE SET
-			rules                  = excluded.rules,
-			welcome_messages       = excluded.welcome_messages,
-			farewell_messages      = excluded.farewell_messages,
-			daily_summary_enabled  = excluded.daily_summary_enabled,
-			weekly_ranking_enabled = excluded.weekly_ranking_enabled,
-			updated_at             = excluded.updated_at`,
-		settings.ChatID, settings.Rules, string(welcomeJSON), string(farewellJSON),
-		dailyEnabled, weeklyEnabled,
+		     rules                  = excluded.rules,
+		     daily_summary_enabled  = excluded.daily_summary_enabled,
+		     weekly_ranking_enabled = excluded.weekly_ranking_enabled,
+		     updated_at             = excluded.updated_at,
+		     updated_by             = excluded.updated_by`,
+		settings.ChatID, settings.Rules, dailyEnabled, weeklyEnabled,
+		updatedAt, updatedBy,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to upsert group_settings: %w", err)
+		return fmt.Errorf("failed to upsert group_configs: %w", err)
 	}
 	return nil
 }
 
-// GetGroupIDsWithDailySummaryEnabled returns chat_ids of all groups that
-// have the daily summary feature enabled in the database.
+// GetGroupIDsWithDailySummaryEnabled returns chat_ids where daily_summary_enabled = 1.
 func (s *Service) GetGroupIDsWithDailySummaryEnabled() ([]string, error) {
 	return s.queryGroupIDsByFlag("daily_summary_enabled")
 }
 
-// GetGroupIDsWithWeeklyRankingEnabled returns chat_ids of all groups that
-// have the weekly ranking feature enabled in the database.
+// GetGroupIDsWithWeeklyRankingEnabled returns chat_ids where weekly_ranking_enabled = 1.
 func (s *Service) GetGroupIDsWithWeeklyRankingEnabled() ([]string, error) {
 	return s.queryGroupIDsByFlag("weekly_ranking_enabled")
 }
 
-// queryGroupIDsByFlag is a helper that fetches chat_ids where the given
-// boolean column equals 1.
 func (s *Service) queryGroupIDsByFlag(column string) ([]string, error) {
 	var query string
 	switch column {
 	case "daily_summary_enabled":
-		query = `SELECT chat_id FROM group_settings WHERE daily_summary_enabled = 1`
+		query = `SELECT chat_id FROM group_configs WHERE daily_summary_enabled = 1`
 	case "weekly_ranking_enabled":
-		query = `SELECT chat_id FROM group_settings WHERE weekly_ranking_enabled = 1`
+		query = `SELECT chat_id FROM group_configs WHERE weekly_ranking_enabled = 1`
 	default:
 		return nil, fmt.Errorf("queryGroupIDsByFlag: unknown column %q", column)
 	}
+
 	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query group IDs by flag %q: %w", column, err)
@@ -444,28 +568,134 @@ func (s *Service) queryGroupIDsByFlag(column string) ([]string, error) {
 	return ids, nil
 }
 
-// Ping checks if the database connection is alive
+// ── Welcome messages ─────────────────────────────────────────────────────────
+
+// AddWelcomeMessage appends a new welcome message template for a group.
+// The group_configs row must exist before calling this (UpsertGroupSettings first).
+func (s *Service) AddWelcomeMessage(chatID, message string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO welcome_messages (chat_id, message) VALUES (?, ?)`,
+		chatID, message,
+	)
+	if err != nil {
+		return fmt.Errorf("AddWelcomeMessage: %w", err)
+	}
+	return nil
+}
+
+// DeleteWelcomeMessage hard-deletes the welcome message with the given row ID.
+func (s *Service) DeleteWelcomeMessage(id int64) error {
+	_, err := s.db.Exec(`DELETE FROM welcome_messages WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("DeleteWelcomeMessage: %w", err)
+	}
+	return nil
+}
+
+// GetActiveWelcomeMessages returns all active (is_active=1) welcome messages for a group.
+func (s *Service) GetActiveWelcomeMessages(chatID string) ([]types.WelcomeMessage, error) {
+	rows, err := s.db.Query(
+		`SELECT id, chat_id, message, is_active
+		 FROM welcome_messages
+		 WHERE chat_id = ? AND is_active = 1
+		 ORDER BY id ASC`,
+		chatID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetActiveWelcomeMessages: %w", err)
+	}
+	defer rows.Close()
+
+	var msgs []types.WelcomeMessage
+	for rows.Next() {
+		var m types.WelcomeMessage
+		var isActive int
+		if err := rows.Scan(&m.ID, &m.ChatID, &m.Message, &isActive); err != nil {
+			return nil, fmt.Errorf("GetActiveWelcomeMessages scan: %w", err)
+		}
+		m.IsActive = isActive != 0
+		msgs = append(msgs, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	return msgs, nil
+}
+
+// ── Farewell messages ─────────────────────────────────────────────────────────
+
+// AddFarewellMessage appends a new farewell message template for a group.
+func (s *Service) AddFarewellMessage(chatID, message string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO farewell_messages (chat_id, message) VALUES (?, ?)`,
+		chatID, message,
+	)
+	if err != nil {
+		return fmt.Errorf("AddFarewellMessage: %w", err)
+	}
+	return nil
+}
+
+// DeleteFarewellMessage hard-deletes the farewell message with the given row ID.
+func (s *Service) DeleteFarewellMessage(id int64) error {
+	_, err := s.db.Exec(`DELETE FROM farewell_messages WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("DeleteFarewellMessage: %w", err)
+	}
+	return nil
+}
+
+// GetActiveFarewellMessages returns all active farewell messages for a group.
+func (s *Service) GetActiveFarewellMessages(chatID string) ([]types.FarewellMessage, error) {
+	rows, err := s.db.Query(
+		`SELECT id, chat_id, message, is_active
+		 FROM farewell_messages
+		 WHERE chat_id = ? AND is_active = 1
+		 ORDER BY id ASC`,
+		chatID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetActiveFarewellMessages: %w", err)
+	}
+	defer rows.Close()
+
+	var msgs []types.FarewellMessage
+	for rows.Next() {
+		var m types.FarewellMessage
+		var isActive int
+		if err := rows.Scan(&m.ID, &m.ChatID, &m.Message, &isActive); err != nil {
+			return nil, fmt.Errorf("GetActiveFarewellMessages scan: %w", err)
+		}
+		m.IsActive = isActive != 0
+		msgs = append(msgs, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	return msgs, nil
+}
+
+// ── Connection management ────────────────────────────────────────────────────
+
+// Ping checks if the database connection is alive.
 func (s *Service) Ping() error {
 	return s.db.Ping()
 }
 
-// Close closes the database connection and prepared statements
+// Close closes prepared statements and the database connection.
 func (s *Service) Close() error {
 	s.stmtMutex.Lock()
 	defer s.stmtMutex.Unlock()
 
-	// Close prepared statements
-	if s.insertGroupStmt != nil {
-		s.insertGroupStmt.Close()
+	if s.insertMsgStmt != nil {
+		s.insertMsgStmt.Close()
 	}
-	if s.getGroupStmt != nil {
-		s.getGroupStmt.Close()
+	if s.getMsgStmt != nil {
+		s.getMsgStmt.Close()
 	}
 
-	// Close database connection
 	if s.db != nil {
-		err := s.db.Close()
-		if err != nil {
+		if err := s.db.Close(); err != nil {
 			s.logger.Error("Failed to close database", "error", err)
 			return fmt.Errorf("failed to close database: %w", err)
 		}
