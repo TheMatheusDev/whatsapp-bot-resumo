@@ -10,11 +10,42 @@ import (
 	watypes "go.mau.fi/whatsmeow/types"
 )
 
+// Contact represents a known WhatsApp contact stored in the contacts table.
+type Contact struct {
+	LID       string    `json:"lid" db:"lid"`
+	Name      string    `json:"name" db:"name"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// Chat represents a WhatsApp conversation (group or DM) stored in the chats table.
+type Chat struct {
+	ChatID    string    `json:"chat_id" db:"chat_id"`
+	ChatType  string    `json:"chat_type" db:"chat_type"` // "group" or "direct"
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+// WelcomeMessage represents a single welcome message template for a group.
+type WelcomeMessage struct {
+	ID       int64  `json:"id" db:"id"`
+	ChatID   string `json:"chat_id" db:"chat_id"`
+	Message  string `json:"message" db:"message"`
+	IsActive bool   `json:"is_active" db:"is_active"`
+}
+
+// FarewellMessage represents a single farewell message template for a group.
+type FarewellMessage struct {
+	ID       int64  `json:"id" db:"id"`
+	ChatID   string `json:"chat_id" db:"chat_id"`
+	Message  string `json:"message" db:"message"`
+	IsActive bool   `json:"is_active" db:"is_active"`
+}
+
 // Message represents a WhatsApp message (type used for database operations)
 type Message struct {
 	ID          int       `json:"id" db:"id"`
 	ChatID      string    `json:"chat_id" db:"chat_id"`
-	Sender      string    `json:"sender" db:"sender"`
+	SenderLID   string    `json:"sender_lid" db:"sender_lid"`
+	Sender      string    `json:"sender" db:"sender"` // display name, populated via JOIN
 	Content     string    `json:"content" db:"message"`
 	MessageType string    `json:"message_type" db:"message_type"`
 	Timestamp   time.Time `json:"timestamp" db:"timestamp"`
@@ -44,13 +75,17 @@ type GroupSummary struct {
 
 // GroupSettings holds per-group dynamic configuration stored in the database.
 // When a field is zero/empty, callers should fall back to the global config defaults.
+// WelcomeMessages and FarewellMessages are populated from their dedicated tables
+// and are read-only within GroupSettings — use Add/Delete methods to modify them.
 type GroupSettings struct {
 	ChatID               string   `json:"chat_id"`
 	Rules                string   `json:"rules"`
-	WelcomeMessages      []string `json:"welcome_messages"`
-	FarewellMessages     []string `json:"farewell_messages"`
+	WelcomeMessages      []string `json:"welcome_messages"`  // from welcome_messages table
+	FarewellMessages     []string `json:"farewell_messages"` // from farewell_messages table
 	DailySummaryEnabled  bool     `json:"daily_summary_enabled"`
 	WeeklyRankingEnabled bool     `json:"weekly_ranking_enabled"`
+	UpdatedAt            string   `json:"updated_at"`
+	UpdatedBy            string   `json:"updated_by"`
 }
 
 // OnRetryFunc is called by SummarizeMessages before each fallback attempt
@@ -68,6 +103,10 @@ type AIService interface {
 
 // DatabaseService defines the interface for database operations
 type DatabaseService interface {
+	// Contact / chat upserts (called on every incoming message)
+	UpsertContact(contact Contact) error
+	UpsertChat(chat Chat) error
+
 	// Message operations
 	SaveGroupMessageReturningID(msg Message, groupName string) (int64, error)
 	UpdateMessageContent(id int64, newContent string) error
@@ -81,6 +120,16 @@ type DatabaseService interface {
 	UpsertGroupSettings(settings GroupSettings) error
 	GetGroupIDsWithDailySummaryEnabled() ([]string, error)
 	GetGroupIDsWithWeeklyRankingEnabled() ([]string, error)
+
+	// Welcome message operations
+	AddWelcomeMessage(chatID, message string) error
+	DeleteWelcomeMessage(id int64) error
+	GetActiveWelcomeMessages(chatID string) ([]WelcomeMessage, error)
+
+	// Farewell message operations
+	AddFarewellMessage(chatID, message string) error
+	DeleteFarewellMessage(id int64) error
+	GetActiveFarewellMessages(chatID string) ([]FarewellMessage, error)
 
 	// Connection management
 	Close() error
@@ -146,7 +195,8 @@ type GeminiConfig struct {
 
 // DatabaseConfig holds database configuration
 type DatabaseConfig struct {
-	Path            string `json:"path"`
+	Path            string `json:"path"`           // bot.db — application data
+	WhatsAppPath    string `json:"whatsapp_path"`  // whatsmeow.db — managed by the library
 	MaxOpenConns    int    `json:"max_open_conns"`
 	MaxIdleConns    int    `json:"max_idle_conns"`
 	ConnMaxLifetime string `json:"conn_max_lifetime"`
