@@ -144,10 +144,34 @@ func (h *Handler) handleMessage(evt *events.Message) {
 		return
 	}
 
+	// Upsert the sender into contacts so sender_lid FK is always satisfied.
+	contact := wstypes.Contact{
+		LID:       evt.Info.Sender.String(),
+		Name:      h.getSenderName(evt.Info),
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := h.dbService.UpsertContact(contact); err != nil {
+		h.logger.Error("Failed to upsert contact", "error", err, "lid", contact.LID)
+	}
+
+	// Upsert the chat so chat_id FK is always satisfied.
+	chatType := "group"
+	if !evt.Info.IsGroup {
+		chatType = "direct"
+	}
+	chat := wstypes.Chat{
+		ChatID:   evt.Info.Chat.User,
+		ChatType: chatType,
+	}
+	if err := h.dbService.UpsertChat(chat); err != nil {
+		h.logger.Error("Failed to upsert chat", "error", err, "chat_id", chat.ChatID)
+	}
+
 	// Create message object
 	message := wstypes.Message{
 		ChatID:      evt.Info.Chat.User,
-		Sender:      h.getSenderName(evt.Info),
+		SenderLID:   evt.Info.Sender.String(),
+		Sender:      contact.Name,
 		Content:     content,
 		MessageType: h.getMessageType(msg),
 		Timestamp:   evt.Info.Timestamp.In(h.timezone),
