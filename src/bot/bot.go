@@ -72,8 +72,10 @@ func New() (*Bot, error) {
 	cache := utils.NewCache(cacheTTL, l)
 
 	dbLog := waLog.Stdout("Database", "WARN", true)
+	// whatsmeow.db is managed exclusively by the whatsmeow library.
+	// bot.db is managed by the application (database.Service). Never mix them.
 	container, err := sqlstore.New(context.Background(), "sqlite3",
-		fmt.Sprintf("file:%s?_foreign_keys=on", cfg.Database.Path), dbLog)
+		fmt.Sprintf("file:%s?_foreign_keys=on", cfg.Database.WhatsAppPath), dbLog)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create WhatsApp store: %w", err)
 	}

@@ -33,7 +33,8 @@ func Load() (*types.Config, error) {
 			ApiLogs:      getEnvBool("API_LOGS", false),
 		},
 		Database: types.DatabaseConfig{
-			Path:            getEnv("DB_PATH", "work.db"),
+			Path:            getEnv("DB_PATH", "bot.db"),
+			WhatsAppPath:    getEnv("DB_WHATSAPP_PATH", "whatsmeow.db"),
 			MaxOpenConns:    getEnvInt("DB_MAX_OPEN_CONNS", 10),
 			MaxIdleConns:    getEnvInt("DB_MAX_IDLE_CONNS", 5),
 			ConnMaxLifetime: getEnv("DB_CONN_MAX_LIFETIME", "1h"),
