@@ -60,8 +60,15 @@ func (h *Handler) handleGroupInfoEvent(evt *events.GroupInfo) {
 // resolveWelcomePool returns the welcome message pool for a group.
 // Per-group messages from the DB take priority; falls back to the global config.
 func (h *Handler) resolveWelcomePool(chatID string) []string {
-	if s := h.getGroupSettings(chatID); s != nil && len(s.WelcomeMessages) > 0 {
-		return s.WelcomeMessages
+	dbMsgs, err := h.dbService.GetActiveWelcomeMessages(chatID)
+	if err != nil {
+		h.logger.Error("resolveWelcomePool: DB error", "chat_id", chatID, "error", err)
+	} else if len(dbMsgs) > 0 {
+		pool := make([]string, 0, len(dbMsgs))
+		for _, m := range dbMsgs {
+			pool = append(pool, m.Message)
+		}
+		return pool
 	}
 	return h.config.Bot.WelcomeMessages
 }
@@ -69,8 +76,15 @@ func (h *Handler) resolveWelcomePool(chatID string) []string {
 // resolveFarewellPool returns the farewell message pool for a group.
 // Per-group messages from the DB take priority; falls back to the global config.
 func (h *Handler) resolveFarewellPool(chatID string) []string {
-	if s := h.getGroupSettings(chatID); s != nil && len(s.FarewellMessages) > 0 {
-		return s.FarewellMessages
+	dbMsgs, err := h.dbService.GetActiveFarewellMessages(chatID)
+	if err != nil {
+		h.logger.Error("resolveFarewellPool: DB error", "chat_id", chatID, "error", err)
+	} else if len(dbMsgs) > 0 {
+		pool := make([]string, 0, len(dbMsgs))
+		for _, m := range dbMsgs {
+			pool = append(pool, m.Message)
+		}
+		return pool
 	}
 	return h.config.Bot.FarewellMessages
 }
