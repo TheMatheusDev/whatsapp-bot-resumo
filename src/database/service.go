@@ -332,28 +332,6 @@ func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, e
 	return messages, nil
 }
 
-// GetMessagesSinceTime retrieves all non-bot messages from chatID at or after sinceTime.
-func (s *Service) GetMessagesSinceTime(chatID string, sinceTime time.Time) ([]types.Message, error) {
-	sinceStr := sinceTime.Format("2006-01-02 15:04:05-07:00")
-
-	query := `SELECT m.id, m.chat_id, m.sender_lid, c.name, m.message, m.message_type, m.timestamp
-	          FROM messages m
-	          JOIN contacts c ON c.lid = m.sender_lid
-	          WHERE m.chat_id = ?
-	            AND c.name NOT LIKE 'ResumoBOT%'
-	            AND m.timestamp >= ?
-	          ORDER BY m.timestamp ASC`
-
-	rows, err := s.db.Query(query, chatID, sinceStr)
-	if err != nil {
-		s.logger.Error("Failed to query messages since time", "error", err,
-			"chat_id", chatID, "since_time", sinceStr)
-		return nil, fmt.Errorf("failed to query messages since time: %w", err)
-	}
-	defer rows.Close()
-
-	return s.scanMessages(rows)
-}
 
 // GetMessagesBetween retrieves non-bot messages within [from, to] for the given chat.
 func (s *Service) GetMessagesBetween(chatID string, from, to time.Time) ([]types.Message, error) {

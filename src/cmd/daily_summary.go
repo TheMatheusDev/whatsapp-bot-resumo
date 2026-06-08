@@ -59,7 +59,7 @@ func (h *Handler) performAutoDailySummarization(chatJID types.JID) {
 	now := time.Now().In(h.timezone)
 	fourAMYesterday := time.Date(now.Year(), now.Month(), now.Day()-1, 4, 0, 0, 0, h.timezone)
 
-	messages, err := h.dbService.GetMessagesSinceTime(chatJID.User, fourAMYesterday)
+	messages, err := h.dbService.GetMessagesBetween(chatJID.User, fourAMYesterday, time.Now().In(h.timezone))
 	if err != nil {
 		h.logger.Error("AutoDailySummary: failed to get messages", "error", err)
 		return
@@ -161,7 +161,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 	}
 
 	// Get messages since 4 AM
-	messages, err := h.dbService.GetMessagesSinceTime(msgTrigger.Chat.User, fourAMToday)
+	messages, err := h.dbService.GetMessagesBetween(msgTrigger.Chat.User, fourAMToday, time.Now().In(h.timezone))
 	if err != nil {
 		h.logger.Error("Failed to get messages since time", "error", err)
 		h.reactToCommand(msgTrigger, "❌")
