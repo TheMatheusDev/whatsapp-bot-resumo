@@ -75,8 +75,8 @@ func (s *Service) initSchema() error {
 		`CREATE TABLE IF NOT EXISTS contacts (
 			lid        TEXT PRIMARY KEY,
 			name       TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-			           DEFAULT (strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))
+			updated_at INTEGER NOT NULL
+			           DEFAULT (CAST(strftime('%s', 'now') AS INTEGER))
 		)`,
 
 		// ── 4.3 chats ────────────────────────────────────────────────────────
@@ -84,8 +84,8 @@ func (s *Service) initSchema() error {
 			chat_id    TEXT PRIMARY KEY,
 			chat_type  TEXT NOT NULL DEFAULT 'group'
 			           CHECK (chat_type IN ('group', 'direct')),
-			created_at TEXT NOT NULL
-			           DEFAULT (strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))
+			created_at INTEGER NOT NULL
+			           DEFAULT (CAST(strftime('%s', 'now') AS INTEGER))
 		)`,
 
 		// ── 4.4 messages ─────────────────────────────────────────────────────
@@ -114,8 +114,8 @@ func (s *Service) initSchema() error {
 			                       CHECK (daily_summary_enabled  IN (0, 1)),
 			weekly_ranking_enabled INTEGER NOT NULL DEFAULT 0
 			                       CHECK (weekly_ranking_enabled IN (0, 1)),
-			updated_at             TEXT    NOT NULL
-			                       DEFAULT (strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now')),
+			updated_at             INTEGER NOT NULL
+			                       DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
 			updated_by             TEXT    NOT NULL DEFAULT '',
 			FOREIGN KEY (chat_id) REFERENCES chats(chat_id) ON DELETE CASCADE
 		)`,
@@ -202,7 +202,7 @@ func (s *Service) SetBotLID(lid string) {
 // UpsertContact inserts or updates a contact record.
 // The name and updated_at are refreshed on every call.
 func (s *Service) UpsertContact(contact types.Contact) error {
-	updatedAt := contact.UpdatedAt.Format("2006-01-02T15:04:05+00:00")
+	updatedAt := contact.UpdatedAt.Unix()
 	_, err := s.db.Exec(
 		`INSERT INTO contacts (lid, name, updated_at) VALUES (?, ?, ?)
 		 ON CONFLICT(lid) DO UPDATE SET
@@ -232,7 +232,7 @@ func (s *Service) UpsertChat(chat types.Chat) error {
 	// For group chats: ensure a group_configs row exists with both toggles ON.
 	// INSERT OR IGNORE means existing rows (and their current toggle values) are never overwritten.
 	if chat.ChatType == "group" {
-		updatedAt := time.Now().UTC().Format("2006-01-02T15:04:05+00:00")
+		updatedAt := time.Now().Unix()
 		_, err = s.db.Exec(
 			`INSERT OR IGNORE INTO group_configs
 			    (chat_id, daily_summary_enabled, weekly_ranking_enabled, updated_at, updated_by)
@@ -497,7 +497,7 @@ func (s *Service) UpsertGroupSettings(settings types.GroupSettings) error {
 		weeklyEnabled = 1
 	}
 
-	updatedAt := time.Now().UTC().Format("2006-01-02T15:04:05+00:00")
+	updatedAt := time.Now().Unix()
 	updatedBy := settings.UpdatedBy
 
 	_, err := s.db.Exec(

@@ -82,7 +82,7 @@ type GroupSettings struct {
 	FarewellMessages     []string `json:"farewell_messages"` // from farewell_messages table
 	DailySummaryEnabled  bool     `json:"daily_summary_enabled"`
 	WeeklyRankingEnabled bool     `json:"weekly_ranking_enabled"`
-	UpdatedAt            string   `json:"updated_at"`
+	UpdatedAt            int64    `json:"updated_at"`
 	UpdatedBy            string   `json:"updated_by"`
 }
 
