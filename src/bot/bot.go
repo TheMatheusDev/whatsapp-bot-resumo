@@ -128,7 +128,8 @@ func (b *Bot) Start(ctx context.Context) error {
 	}
 
 	// Register the bot's own LID with the DB service so queries can exclude bot messages
-	// via sender_lid != botLID instead of a LIKE scan on contacts.name.
+	// via sender_lid != botLID. Use .User (bare numeric part) — the @server suffix is
+	// stripped everywhere; contacts.lid and messages.sender_lid store only the user part.
 	botJID := b.whatsappSvc.GetBotJID()
 	b.dbService.SetBotLID(botJID.User)
 	b.logger.Info("Bot LID registered", "lid", botJID.User)

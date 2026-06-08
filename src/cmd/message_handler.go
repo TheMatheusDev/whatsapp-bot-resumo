@@ -23,6 +23,10 @@ type Handler struct {
 	logger          wstypes.Logger
 	botStartTime    time.Time
 	timezone        *time.Location
+	// botLID is the bare numeric User part of the bot's own JID (e.g. "5521999999999").
+	// It is stored here so saveMessage and summarize can use it as the SenderLID
+	// for bot-originated messages, matching the format stored for human senders.
+	botLID          string
 
 	// settingsCache caches per-group settings to avoid DB round-trips on every
 	// message. Keys are chatID strings; values are *wstypes.GroupSettings.
@@ -84,6 +88,7 @@ func NewHandler(
 		logger:          logger,
 		botStartTime:    botStartTime,
 		timezone:        loc,
+		botLID:          whatsappService.GetBotJID().User,
 		shutdownCh:      make(chan struct{}),
 	}, nil
 }
@@ -145,8 +150,10 @@ func (h *Handler) handleMessage(evt *events.Message) {
 	}
 
 	// Upsert the sender into contacts so sender_lid FK is always satisfied.
+	// Use Sender.User (bare numeric part, e.g. "5521999999999") — the @server
+	// suffix is constant and omitting it keeps the stored value minimal.
 	contact := wstypes.Contact{
-		LID:       evt.Info.Sender.String(),
+		LID:       evt.Info.Sender.User,
 		Name:      h.getSenderName(evt.Info),
 		UpdatedAt: time.Now().UTC(),
 	}
@@ -170,7 +177,7 @@ func (h *Handler) handleMessage(evt *events.Message) {
 	// Create message object
 	message := wstypes.Message{
 		ChatID:      evt.Info.Chat.User,
-		SenderLID:   evt.Info.Sender.String(),
+		SenderLID:   evt.Info.Sender.User, // bare numeric User, matches contacts.lid format
 		Sender:      contact.Name,
 		Content:     content,
 		MessageType: h.getMessageType(msg),

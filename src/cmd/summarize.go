@@ -165,6 +165,7 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 	// Save summary as a message
 	summaryMsg := wstypes.Message{
 		ChatID:      msgTrigger.Chat.User,
+		SenderLID:   h.botLID, // bare numeric LID, same format as human senders
 		Sender:      "ResumoBOT [VOCÊ]",
 		Content:     finalSummary,
 		MessageType: "Summary",
