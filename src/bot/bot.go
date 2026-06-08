@@ -127,6 +127,12 @@ func (b *Bot) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to WhatsApp: %w", err)
 	}
 
+	// Register the bot's own LID with the DB service so queries can exclude bot messages
+	// via sender_lid != botLID instead of a LIKE scan on contacts.name.
+	botJID := b.whatsappSvc.GetBotJID()
+	b.dbService.SetBotLID(botJID.User)
+	b.logger.Info("Bot LID registered", "lid", botJID.User)
+
 	b.running = true
 	b.botStartTime = time.Now()
 	b.logger.Info("Bot started successfully", "start_time", b.botStartTime)

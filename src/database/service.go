@@ -19,6 +19,7 @@ type Service struct {
 	insertMsgStmt *sql.Stmt
 	getMsgStmt    *sql.Stmt
 	stmtMutex     sync.RWMutex
+	botLID        string // sender_lid of the bot itself; used to exclude its own messages from queries
 }
 
 // NewService creates a new database service connected to bot.db.
@@ -153,7 +154,12 @@ func (s *Service) initSchema() error {
 func (s *Service) prepareStatements() error {
 	s.stmtMutex.Lock()
 	defer s.stmtMutex.Unlock()
+	return s.prepareGetMsgStmtLocked()
+}
 
+// prepareGetMsgStmtLocked (re)prepares getMsgStmt using the current botLID.
+// Must be called with stmtMutex held for writing.
+func (s *Service) prepareGetMsgStmtLocked() error {
 	var err error
 
 	s.insertMsgStmt, err = s.db.Prepare(
@@ -164,14 +170,14 @@ func (s *Service) prepareStatements() error {
 	}
 
 	// JOIN contacts to surface the display name.
-	// Bot messages are filtered by checking that sender_lid is not the bot's own LID.
-	// Since the bot uses "ResumoBOT" sentinel in contacts.name, we filter by name prefix.
+	// Bot messages are excluded by comparing sender_lid to the bot's own LID (integer equality,
+	// not LIKE), so the B-Tree index on sender_lid can be used without a full-table LIKE scan.
 	s.getMsgStmt, err = s.db.Prepare(
 		`SELECT m.id, m.chat_id, m.sender_lid, c.name, m.message, m.message_type, m.timestamp
 		 FROM messages m
 		 JOIN contacts c ON c.lid = m.sender_lid
 		 WHERE m.chat_id = ?
-		   AND c.name NOT LIKE 'ResumoBOT%'
+		   AND m.sender_lid != ?
 		 ORDER BY m.timestamp DESC
 		 LIMIT ?`)
 	if err != nil {
@@ -179,6 +185,16 @@ func (s *Service) prepareStatements() error {
 	}
 
 	return nil
+}
+
+// SetBotLID stores the bot's own sender LID so queries can exclude its own messages
+// via sender_lid != botLID instead of a LIKE scan on contacts.name.
+// Must be called once, after the WhatsApp client is connected and the LID is known.
+func (s *Service) SetBotLID(lid string) {
+	s.stmtMutex.Lock()
+	defer s.stmtMutex.Unlock()
+	s.botLID = lid
+	s.logger.Info("Database: bot LID registered for query filtering", "lid", lid)
 }
 
 // ── Contact / Chat upserts ───────────────────────────────────────────────────
@@ -293,13 +309,14 @@ func (s *Service) UpdateMessageContent(id int64, newContent string) error {
 func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, error) {
 	s.stmtMutex.RLock()
 	stmt := s.getMsgStmt
+	botLID := s.botLID
 	s.stmtMutex.RUnlock()
 
 	if stmt == nil {
 		return nil, fmt.Errorf("getMsgStmt not initialized")
 	}
 
-	rows, err := stmt.Query(chatID, count)
+	rows, err := stmt.Query(chatID, botLID, count)
 	if err != nil {
 		s.logger.Error("Failed to query group messages", "error", err, "chat_id", chatID)
 		return nil, fmt.Errorf("failed to query group messages: %w", err)
@@ -335,16 +352,20 @@ func (s *Service) GetMessagesBetween(chatID string, from, to time.Time) ([]types
 	fromEpoch := from.Unix()
 	toEpoch := to.Unix()
 
+	s.stmtMutex.RLock()
+	botLID := s.botLID
+	s.stmtMutex.RUnlock()
+
 	query := `SELECT m.id, m.chat_id, m.sender_lid, c.name, m.message, m.message_type, m.timestamp
 	          FROM messages m
 	          JOIN contacts c ON c.lid = m.sender_lid
 	          WHERE m.chat_id = ?
-	            AND c.name NOT LIKE 'ResumoBOT%'
+	            AND m.sender_lid != ?
 	            AND m.timestamp >= ?
 	            AND m.timestamp <= ?
 	          ORDER BY m.timestamp ASC`
 
-	rows, err := s.db.Query(query, chatID, fromEpoch, toEpoch)
+	rows, err := s.db.Query(query, chatID, botLID, fromEpoch, toEpoch)
 	if err != nil {
 		s.logger.Error("Failed to query messages between times", "error", err,
 			"chat_id", chatID, "from", fromEpoch, "to", toEpoch)
@@ -375,17 +396,21 @@ func (s *Service) scanMessages(rows *sql.Rows) ([]types.Message, error) {
 	return messages, nil
 }
 
-// GetAllGroups returns all chats with a message count, ordered by message count descending.
+// GetAllGroups returns all chats with a message count (bot messages excluded),
+// ordered by message count descending.
 func (s *Service) GetAllGroups() ([]types.GroupSummary, error) {
+	s.stmtMutex.RLock()
+	botLID := s.botLID
+	s.stmtMutex.RUnlock()
+
 	query := `
 		SELECT ch.chat_id, COUNT(m.id) as message_count
 		FROM chats ch
-		LEFT JOIN messages m ON m.chat_id = ch.chat_id
-		LEFT JOIN contacts c ON c.lid = m.sender_lid AND c.name NOT LIKE 'ResumoBOT%'
+		LEFT JOIN messages m ON m.chat_id = ch.chat_id AND m.sender_lid != ?
 		GROUP BY ch.chat_id
 		ORDER BY message_count DESC
 	`
-	rows, err := s.db.Query(query)
+	rows, err := s.db.Query(query, botLID)
 	if err != nil {
 		s.logger.Error("Failed to query groups", "error", err)
 		return nil, fmt.Errorf("failed to query groups: %w", err)

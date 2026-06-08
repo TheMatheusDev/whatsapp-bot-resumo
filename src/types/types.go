@@ -111,6 +111,9 @@ type DatabaseService interface {
 	GetGroupMessages(chatID string, count int) ([]Message, error)
 	GetMessagesBetween(chatID string, from, to time.Time) ([]Message, error)
 	GetAllGroups() ([]GroupSummary, error)
+	// SetBotLID registers the bot's own sender LID so query filters can use
+	// sender_lid != botLID instead of a LIKE scan on contacts.name.
+	SetBotLID(lid string)
 
 	// Group settings operations
 	GetGroupSettings(chatID string) (*GroupSettings, error)
