@@ -247,7 +247,7 @@ func (s *Service) SaveGroupMessageReturningID(msg types.Message, groupName strin
 		return 0, fmt.Errorf("insertMsgStmt not initialized")
 	}
 
-	timestamp := msg.Timestamp.Format("2006-01-02 15:04:05-07:00")
+	timestamp := msg.Timestamp.Unix() // int64 Unix epoch, always UTC — no string alloc
 
 	result, err := stmt.Exec(msg.ChatID, msg.SenderLID, msg.Content, msg.MessageType, timestamp)
 	if err != nil {
@@ -309,14 +309,12 @@ func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, e
 	messages := make([]types.Message, 0, count)
 	for rows.Next() {
 		var msg types.Message
-		var tsStr string
+		var tsEpoch int64
 		if err := rows.Scan(&msg.ID, &msg.ChatID, &msg.SenderLID, &msg.Sender,
-			&msg.Content, &msg.MessageType, &tsStr); err != nil {
+			&msg.Content, &msg.MessageType, &tsEpoch); err != nil {
 			return nil, fmt.Errorf("failed to scan message row: %w", err)
 		}
-		if t, err := time.Parse("2006-01-02 15:04:05-07:00", tsStr); err == nil {
-			msg.Timestamp = t
-		}
+		msg.Timestamp = time.Unix(tsEpoch, 0).UTC()
 		messages = append(messages, msg)
 	}
 	if err := rows.Err(); err != nil {
@@ -332,11 +330,10 @@ func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, e
 	return messages, nil
 }
 
-
 // GetMessagesBetween retrieves non-bot messages within [from, to] for the given chat.
 func (s *Service) GetMessagesBetween(chatID string, from, to time.Time) ([]types.Message, error) {
-	fromStr := from.Format("2006-01-02 15:04:05-07:00")
-	toStr := to.Format("2006-01-02 15:04:05-07:00")
+	fromEpoch := from.Unix()
+	toEpoch := to.Unix()
 
 	query := `SELECT m.id, m.chat_id, m.sender_lid, c.name, m.message, m.message_type, m.timestamp
 	          FROM messages m
@@ -347,10 +344,10 @@ func (s *Service) GetMessagesBetween(chatID string, from, to time.Time) ([]types
 	            AND m.timestamp <= ?
 	          ORDER BY m.timestamp ASC`
 
-	rows, err := s.db.Query(query, chatID, fromStr, toStr)
+	rows, err := s.db.Query(query, chatID, fromEpoch, toEpoch)
 	if err != nil {
 		s.logger.Error("Failed to query messages between times", "error", err,
-			"chat_id", chatID, "from", fromStr, "to", toStr)
+			"chat_id", chatID, "from", fromEpoch, "to", toEpoch)
 		return nil, fmt.Errorf("failed to query messages between times: %w", err)
 	}
 	defer rows.Close()
@@ -363,15 +360,13 @@ func (s *Service) scanMessages(rows *sql.Rows) ([]types.Message, error) {
 	var messages []types.Message
 	for rows.Next() {
 		var msg types.Message
-		var tsStr string
+		var tsEpoch int64
 		if err := rows.Scan(&msg.ID, &msg.ChatID, &msg.SenderLID, &msg.Sender,
-			&msg.Content, &msg.MessageType, &tsStr); err != nil {
+			&msg.Content, &msg.MessageType, &tsEpoch); err != nil {
 			s.logger.Error("Failed to scan message row", "error", err)
 			return nil, fmt.Errorf("failed to scan message row: %w", err)
 		}
-		if t, err := time.Parse("2006-01-02 15:04:05-07:00", tsStr); err == nil {
-			msg.Timestamp = t
-		}
+		msg.Timestamp = time.Unix(tsEpoch, 0).UTC()
 		messages = append(messages, msg)
 	}
 	if err := rows.Err(); err != nil {
