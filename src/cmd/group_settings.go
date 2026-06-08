@@ -38,7 +38,7 @@ func (h *Handler) requireGroupAdmin(msgTrigger types.MessageInfo) bool {
 // loadOrDefaultSettings fetches the GroupSettings for a group, creating a
 // default struct (not yet persisted) if no record exists in the DB.
 // WelcomeMessages and FarewellMessages are NOT populated here — they are
-// managed separately via Add/Delete/GetActive DB methods.
+// managed separately via Add/Delete/Get DB methods.
 func (h *Handler) loadOrDefaultSettings(chatID string) wstypes.GroupSettings {
 	if gs := h.getGroupSettings(chatID); gs != nil {
 		return *gs
@@ -166,16 +166,15 @@ func (h *Handler) handleAddWelcomeCommand(rawArgs string, msgTrigger types.Messa
 		}
 	}
 
-	allMsgs, _ := h.dbService.GetActiveWelcomeMessages(chatID)
+	allMsgs, _ := h.dbService.GetWelcomeMessages(chatID)
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		formatAddedMessages("boas-vindas", newMessages, len(allMsgs)))
 }
 
-// handleDelWelcomeCommand removes a welcome message by its displayed index.
-// The index shown by !welcome corresponds to the position in the active list,
-// but deletion is performed by the row's database ID.
+// handleDelWelcomeCommand removes a welcome message by its database ID.
+// The ID is shown by !welcome (e.g. "[3] Olá!") and remains stable across deletions.
 //
-// Usage:  !delwelcome <n>  — removes message at index n
+// Usage:  !delwelcome <id>  — removes the message whose DB id equals <id>
 func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
@@ -186,11 +185,19 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 
 	if len(args) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-			"❌ Informe o índice da mensagem a remover. Use !welcome para ver a lista.")
+			"❌ Informe o ID da mensagem a remover. Use !welcome para ver a lista.")
 		return
 	}
 
-	msgs, err := h.dbService.GetActiveWelcomeMessages(msgTrigger.Chat.User)
+	targetID, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil || targetID < 1 {
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ ID inválido. Use !welcome para ver os IDs disponíveis.")
+		return
+	}
+
+	// Fetch the group's messages to validate that targetID belongs to this group.
+	msgs, err := h.dbService.GetWelcomeMessages(msgTrigger.Chat.User)
 	if err != nil {
 		h.logger.Error("handleDelWelcomeCommand: failed to fetch messages", "error", err)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
@@ -198,14 +205,19 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 		return
 	}
 
-	idx, err := strconv.Atoi(args[0])
-	if err != nil || idx < 1 || idx > len(msgs) {
+	var target *wstypes.WelcomeMessage
+	for i := range msgs {
+		if msgs[i].ID == targetID {
+			target = &msgs[i]
+			break
+		}
+	}
+	if target == nil {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-			fmt.Sprintf("❌ Índice inválido. Use !welcome para ver a lista (total: %d).", len(msgs)))
+			fmt.Sprintf("❌ Nenhuma mensagem de boas-vindas com ID %d. Use !welcome para ver a lista.", targetID))
 		return
 	}
 
-	target := msgs[idx-1]
 	if err := h.dbService.DeleteWelcomeMessage(target.ID); err != nil {
 		h.logger.Error("handleDelWelcomeCommand: failed to delete", "error", err, "id", target.ID)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
@@ -215,8 +227,8 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 
 	h.invalidateGroupSettings(msgTrigger.Chat.User)
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-		fmt.Sprintf("✅ Mensagem de boas-vindas #%d removida:\n\n_%s_\n\nTotal restante: %d",
-			idx, target.Message, len(msgs)-1))
+		fmt.Sprintf("✅ Mensagem de boas-vindas [%d] removida:\n\n_%s_\n\nTotal restante: %d",
+			target.ID, target.Message, len(msgs)-1))
 }
 
 // ---------------------------------------------------------------------------
@@ -276,16 +288,15 @@ func (h *Handler) handleAddFarewellCommand(rawArgs string, msgTrigger types.Mess
 		}
 	}
 
-	allMsgs, _ := h.dbService.GetActiveFarewellMessages(chatID)
+	allMsgs, _ := h.dbService.GetFarewellMessages(chatID)
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		formatAddedMessages("despedida", newMessages, len(allMsgs)))
 }
 
-// handleDelFarewellCommand removes a farewell message by its displayed index.
-// The index shown by !farewell corresponds to the position in the active list,
-// but deletion is performed by the row's database ID.
+// handleDelFarewellCommand removes a farewell message by its database ID.
+// The ID is shown by !farewell (e.g. "[3] Até mais!") and remains stable across deletions.
 //
-// Usage:  !delfarewell <n>  — removes message at index n
+// Usage:  !delfarewell <id>  — removes the message whose DB id equals <id>
 func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.MessageInfo) {
 	if !msgTrigger.IsGroup {
 		return
@@ -296,11 +307,19 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 
 	if len(args) == 0 {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-			"❌ Informe o índice da mensagem a remover. Use !farewell para ver a lista.")
+			"❌ Informe o ID da mensagem a remover. Use !farewell para ver a lista.")
 		return
 	}
 
-	msgs, err := h.dbService.GetActiveFarewellMessages(msgTrigger.Chat.User)
+	targetID, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil || targetID < 1 {
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ ID inválido. Use !farewell para ver os IDs disponíveis.")
+		return
+	}
+
+	// Fetch the group's messages to validate that targetID belongs to this group.
+	msgs, err := h.dbService.GetFarewellMessages(msgTrigger.Chat.User)
 	if err != nil {
 		h.logger.Error("handleDelFarewellCommand: failed to fetch messages", "error", err)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
@@ -308,14 +327,19 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 		return
 	}
 
-	idx, err := strconv.Atoi(args[0])
-	if err != nil || idx < 1 || idx > len(msgs) {
+	var target *wstypes.FarewellMessage
+	for i := range msgs {
+		if msgs[i].ID == targetID {
+			target = &msgs[i]
+			break
+		}
+	}
+	if target == nil {
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-			fmt.Sprintf("❌ Índice inválido. Use !farewell para ver a lista (total: %d).", len(msgs)))
+			fmt.Sprintf("❌ Nenhuma mensagem de despedida com ID %d. Use !farewell para ver a lista.", targetID))
 		return
 	}
 
-	target := msgs[idx-1]
 	if err := h.dbService.DeleteFarewellMessage(target.ID); err != nil {
 		h.logger.Error("handleDelFarewellCommand: failed to delete", "error", err, "id", target.ID)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
@@ -325,8 +349,8 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 
 	h.invalidateGroupSettings(msgTrigger.Chat.User)
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-		fmt.Sprintf("✅ Mensagem de despedida #%d removida:\n\n_%s_\n\nTotal restante: %d",
-			idx, target.Message, len(msgs)-1))
+		fmt.Sprintf("✅ Mensagem de despedida [%d] removida:\n\n_%s_\n\nTotal restante: %d",
+			target.ID, target.Message, len(msgs)-1))
 }
 
 // ---------------------------------------------------------------------------
@@ -448,19 +472,15 @@ func (h *Handler) handleListWelcomeCommand(msgTrigger types.MessageInfo) {
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
-	dbMsgs, err := h.dbService.GetActiveWelcomeMessages(msgTrigger.Chat.User)
+	dbMsgs, err := h.dbService.GetWelcomeMessages(msgTrigger.Chat.User)
 	if err != nil {
 		h.logger.Error("handleListWelcomeCommand: DB error", "error", err)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao buscar mensagens.")
 		return
 	}
-	pool := make([]string, 0, len(dbMsgs))
-	for _, m := range dbMsgs {
-		pool = append(pool, m.Message)
-	}
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-		formatMessageList("Mensagens de boas-vindas", pool, ""))
+		formatWelcomeMessageList(dbMsgs))
 }
 
 // ---------------------------------------------------------------------------
@@ -478,19 +498,15 @@ func (h *Handler) handleListFarewellCommand(msgTrigger types.MessageInfo) {
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
-	dbMsgs, err := h.dbService.GetActiveFarewellMessages(msgTrigger.Chat.User)
+	dbMsgs, err := h.dbService.GetFarewellMessages(msgTrigger.Chat.User)
 	if err != nil {
 		h.logger.Error("handleListFarewellCommand: DB error", "error", err)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao buscar mensagens.")
 		return
 	}
-	pool := make([]string, 0, len(dbMsgs))
-	for _, m := range dbMsgs {
-		pool = append(pool, m.Message)
-	}
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-		formatMessageList("Mensagens de despedida", pool, ""))
+		formatFarewellMessageList(dbMsgs))
 }
 
 
@@ -523,6 +539,48 @@ func formatAddedMessages(kind string, added []string, total int) string {
 	for i, m := range added {
 		sb.WriteString(fmt.Sprintf("%d. _%s_\n", i+1, m))
 	}
+	return sb.String()
+}
+
+// formatWelcomeMessageList builds the reply for !welcome showing each message
+// with its stable database ID in square brackets, e.g.:
+//
+//	📋 *Mensagens de boas-vindas* (2):
+//	[1] _Bem-vindo ao grupo!_
+//	[3] _Olá, seja bem-vindo!_
+//
+// Use !delwelcome <id> to remove a message.
+func formatWelcomeMessageList(msgs []wstypes.WelcomeMessage) string {
+	if len(msgs) == 0 {
+		return "ℹ️ Mensagens de boas-vindas: nenhuma mensagem configurada."
+	}
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("📋 *Mensagens de boas-vindas* (%d):\n\n", len(msgs)))
+	for _, m := range msgs {
+		sb.WriteString(fmt.Sprintf("[%d] _%s_\n", m.ID, m.Message))
+	}
+	sb.WriteString("\nPara remover: !delwelcome <id>")
+	return sb.String()
+}
+
+// formatFarewellMessageList builds the reply for !farewell showing each message
+// with its stable database ID in square brackets, e.g.:
+//
+//	📋 *Mensagens de despedida* (2):
+//	[2] _Até mais!_
+//	[4] _Tchau, {numero}!_
+//
+// Use !delfarewell <id> to remove a message.
+func formatFarewellMessageList(msgs []wstypes.FarewellMessage) string {
+	if len(msgs) == 0 {
+		return "ℹ️ Mensagens de despedida: nenhuma mensagem configurada."
+	}
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("📋 *Mensagens de despedida* (%d):\n\n", len(msgs)))
+	for _, m := range msgs {
+		sb.WriteString(fmt.Sprintf("[%d] _%s_\n", m.ID, m.Message))
+	}
+	sb.WriteString("\nPara remover: !delfarewell <id>")
 	return sb.String()
 }
 
