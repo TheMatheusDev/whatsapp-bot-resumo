@@ -136,8 +136,6 @@ func (s *Service) initSchema() error {
 			id        INTEGER PRIMARY KEY AUTOINCREMENT,
 			chat_id   TEXT    NOT NULL,
 			message   TEXT    NOT NULL,
-			is_active INTEGER NOT NULL DEFAULT 1
-			          CHECK (is_active IN (0, 1)),
 			FOREIGN KEY (chat_id) REFERENCES group_configs(chat_id) ON DELETE CASCADE
 		)`,
 
@@ -146,8 +144,6 @@ func (s *Service) initSchema() error {
 			id        INTEGER PRIMARY KEY AUTOINCREMENT,
 			chat_id   TEXT    NOT NULL,
 			message   TEXT    NOT NULL,
-			is_active INTEGER NOT NULL DEFAULT 1
-			          CHECK (is_active IN (0, 1)),
 			FOREIGN KEY (chat_id) REFERENCES group_configs(chat_id) ON DELETE CASCADE
 		)`,
 	}
@@ -213,16 +209,36 @@ func (s *Service) UpsertContact(contact types.Contact) error {
 }
 
 // UpsertChat records a chat the first time it is seen; subsequent calls are no-ops.
+// For group chats, a group_configs row is also created on first sight with both
+// daily_summary_enabled and weekly_ranking_enabled set to 1 (opt-out model).
+// Admins can toggle these off at any time via !resumo / !ranking commands.
 func (s *Service) UpsertChat(chat types.Chat) error {
 	_, err := s.db.Exec(
 		`INSERT OR IGNORE INTO chats (chat_id, chat_type) VALUES (?, ?)`,
 		chat.ChatID, chat.ChatType,
 	)
 	if err != nil {
-		return fmt.Errorf("UpsertChat: %w", err)
+		return fmt.Errorf("UpsertChat (chats): %w", err)
 	}
+
+	// For group chats: ensure a group_configs row exists with both toggles ON.
+	// INSERT OR IGNORE means existing rows (and their current toggle values) are never overwritten.
+	if chat.ChatType == "group" {
+		updatedAt := time.Now().UTC().Format("2006-01-02T15:04:05+00:00")
+		_, err = s.db.Exec(
+			`INSERT OR IGNORE INTO group_configs
+			    (chat_id, daily_summary_enabled, weekly_ranking_enabled, updated_at, updated_by)
+			 VALUES (?, 1, 1, ?, '')`,
+			chat.ChatID, updatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("UpsertChat (group_configs): %w", err)
+		}
+	}
+
 	return nil
 }
+
 
 // ── Message operations ───────────────────────────────────────────────────────
 
@@ -468,7 +484,7 @@ func (s *Service) GetGroupSettings(chatID string) (*types.GroupSettings, error) 
 	gs.WeeklyRankingEnabled = weeklyEnabled != 0
 
 	// Populate welcome messages
-	wmsgs, err := s.GetActiveWelcomeMessages(chatID)
+	wmsgs, err := s.GetWelcomeMessages(chatID)
 	if err != nil {
 		return nil, err
 	}
@@ -478,7 +494,7 @@ func (s *Service) GetGroupSettings(chatID string) (*types.GroupSettings, error) 
 	}
 
 	// Populate farewell messages
-	fmsgs, err := s.GetActiveFarewellMessages(chatID)
+	fmsgs, err := s.GetFarewellMessages(chatID)
 	if err != nil {
 		return nil, err
 	}
@@ -592,28 +608,26 @@ func (s *Service) DeleteWelcomeMessage(id int64) error {
 	return nil
 }
 
-// GetActiveWelcomeMessages returns all active (is_active=1) welcome messages for a group.
-func (s *Service) GetActiveWelcomeMessages(chatID string) ([]types.WelcomeMessage, error) {
+// GetWelcomeMessages returns all welcome messages for a group.
+func (s *Service) GetWelcomeMessages(chatID string) ([]types.WelcomeMessage, error) {
 	rows, err := s.db.Query(
-		`SELECT id, chat_id, message, is_active
+		`SELECT id, chat_id, message
 		 FROM welcome_messages
-		 WHERE chat_id = ? AND is_active = 1
+		 WHERE chat_id = ?
 		 ORDER BY id ASC`,
 		chatID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("GetActiveWelcomeMessages: %w", err)
+		return nil, fmt.Errorf("GetWelcomeMessages: %w", err)
 	}
 	defer rows.Close()
 
 	var msgs []types.WelcomeMessage
 	for rows.Next() {
 		var m types.WelcomeMessage
-		var isActive int
-		if err := rows.Scan(&m.ID, &m.ChatID, &m.Message, &isActive); err != nil {
-			return nil, fmt.Errorf("GetActiveWelcomeMessages scan: %w", err)
+		if err := rows.Scan(&m.ID, &m.ChatID, &m.Message); err != nil {
+			return nil, fmt.Errorf("GetWelcomeMessages scan: %w", err)
 		}
-		m.IsActive = isActive != 0
 		msgs = append(msgs, m)
 	}
 	if err := rows.Err(); err != nil {
@@ -645,28 +659,26 @@ func (s *Service) DeleteFarewellMessage(id int64) error {
 	return nil
 }
 
-// GetActiveFarewellMessages returns all active farewell messages for a group.
-func (s *Service) GetActiveFarewellMessages(chatID string) ([]types.FarewellMessage, error) {
+// GetFarewellMessages returns all farewell messages for a group.
+func (s *Service) GetFarewellMessages(chatID string) ([]types.FarewellMessage, error) {
 	rows, err := s.db.Query(
-		`SELECT id, chat_id, message, is_active
+		`SELECT id, chat_id, message
 		 FROM farewell_messages
-		 WHERE chat_id = ? AND is_active = 1
+		 WHERE chat_id = ?
 		 ORDER BY id ASC`,
 		chatID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("GetActiveFarewellMessages: %w", err)
+		return nil, fmt.Errorf("GetFarewellMessages: %w", err)
 	}
 	defer rows.Close()
 
 	var msgs []types.FarewellMessage
 	for rows.Next() {
 		var m types.FarewellMessage
-		var isActive int
-		if err := rows.Scan(&m.ID, &m.ChatID, &m.Message, &isActive); err != nil {
-			return nil, fmt.Errorf("GetActiveFarewellMessages scan: %w", err)
+		if err := rows.Scan(&m.ID, &m.ChatID, &m.Message); err != nil {
+			return nil, fmt.Errorf("GetFarewellMessages scan: %w", err)
 		}
-		m.IsActive = isActive != 0
 		msgs = append(msgs, m)
 	}
 	if err := rows.Err(); err != nil {
