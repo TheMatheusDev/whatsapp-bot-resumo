@@ -194,7 +194,7 @@ type GeminiConfig struct {
 // DatabaseConfig holds database configuration
 type DatabaseConfig struct {
 	Path            string `json:"path"`           // bot.db — application data
-	WhatsAppPath    string `json:"whatsapp_path"`  // whatsmeow.db — managed by the library
+	WhatsmeowPath   string `json:"whatsmeow_path"`  // whatsmeow.db — managed by the library
 	MaxOpenConns    int    `json:"max_open_conns"`
 	MaxIdleConns    int    `json:"max_idle_conns"`
 	ConnMaxLifetime string `json:"conn_max_lifetime"`

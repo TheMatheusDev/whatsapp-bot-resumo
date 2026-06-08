@@ -75,7 +75,7 @@ func New() (*Bot, error) {
 	// whatsmeow.db is managed exclusively by the whatsmeow library.
 	// bot.db is managed by the application (database.Service). Never mix them.
 	container, err := sqlstore.New(context.Background(), "sqlite3",
-		fmt.Sprintf("file:%s?_foreign_keys=on", cfg.Database.WhatsAppPath), dbLog)
+		fmt.Sprintf("file:%s?_foreign_keys=on", cfg.Database.WhatsmeowPath), dbLog)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create WhatsApp store: %w", err)
 	}
