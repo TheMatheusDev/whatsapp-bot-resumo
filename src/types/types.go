@@ -26,18 +26,16 @@ type Chat struct {
 
 // WelcomeMessage represents a single welcome message template for a group.
 type WelcomeMessage struct {
-	ID       int64  `json:"id" db:"id"`
-	ChatID   string `json:"chat_id" db:"chat_id"`
-	Message  string `json:"message" db:"message"`
-	IsActive bool   `json:"is_active" db:"is_active"`
+	ID      int64  `json:"id" db:"id"`
+	ChatID  string `json:"chat_id" db:"chat_id"`
+	Message string `json:"message" db:"message"`
 }
 
 // FarewellMessage represents a single farewell message template for a group.
 type FarewellMessage struct {
-	ID       int64  `json:"id" db:"id"`
-	ChatID   string `json:"chat_id" db:"chat_id"`
-	Message  string `json:"message" db:"message"`
-	IsActive bool   `json:"is_active" db:"is_active"`
+	ID      int64  `json:"id" db:"id"`
+	ChatID  string `json:"chat_id" db:"chat_id"`
+	Message string `json:"message" db:"message"`
 }
 
 // Message represents a WhatsApp message (type used for database operations)
@@ -124,12 +122,12 @@ type DatabaseService interface {
 	// Welcome message operations
 	AddWelcomeMessage(chatID, message string) error
 	DeleteWelcomeMessage(id int64) error
-	GetActiveWelcomeMessages(chatID string) ([]WelcomeMessage, error)
+	GetWelcomeMessages(chatID string) ([]WelcomeMessage, error)
 
 	// Farewell message operations
 	AddFarewellMessage(chatID, message string) error
 	DeleteFarewellMessage(id int64) error
-	GetActiveFarewellMessages(chatID string) ([]FarewellMessage, error)
+	GetFarewellMessages(chatID string) ([]FarewellMessage, error)
 
 	// Connection management
 	Close() error

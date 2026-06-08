@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,11 +14,11 @@ import (
 
 // Service implements the DatabaseService interface
 type Service struct {
-	db              *sql.DB
-	logger          types.Logger
-	insertMsgStmt   *sql.Stmt
-	getMsgStmt      *sql.Stmt
-	stmtMutex       sync.RWMutex
+	db            *sql.DB
+	logger        types.Logger
+	insertMsgStmt *sql.Stmt
+	getMsgStmt    *sql.Stmt
+	stmtMutex     sync.RWMutex
 }
 
 // NewService creates a new database service connected to bot.db.
@@ -86,33 +87,24 @@ func (s *Service) initSchema() error {
 			           DEFAULT (strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))
 		)`,
 
-		// ── 4.4 message_types (lookup / seed) ────────────────────────────────
-		`CREATE TABLE IF NOT EXISTS message_types (
-			type TEXT PRIMARY KEY
-		)`,
-		`INSERT OR IGNORE INTO message_types (type) VALUES ('Conversation')`,
-		`INSERT OR IGNORE INTO message_types (type) VALUES ('ExtendedText')`,
-		`INSERT OR IGNORE INTO message_types (type) VALUES ('Audio')`,
-		`INSERT OR IGNORE INTO message_types (type) VALUES ('Summary')`,
-
-		// ── 4.5 messages ─────────────────────────────────────────────────────
+		// ── 4.4 messages ─────────────────────────────────────────────────────
 		`CREATE TABLE IF NOT EXISTS messages (
 			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			chat_id      TEXT    NOT NULL,
 			sender_lid   TEXT    NOT NULL,
 			message      TEXT,
-			message_type TEXT    NOT NULL,
-			timestamp    TEXT    NOT NULL,
-			FOREIGN KEY (chat_id)      REFERENCES chats(chat_id)        ON DELETE CASCADE,
-			FOREIGN KEY (sender_lid)   REFERENCES contacts(lid),
-			FOREIGN KEY (message_type) REFERENCES message_types(type)
+			message_type TEXT    NOT NULL
+			             CHECK (message_type IN ('Conversation','ExtendedText','Audio','Summary')),
+			timestamp    INTEGER NOT NULL,
+			FOREIGN KEY (chat_id)    REFERENCES chats(chat_id) ON DELETE CASCADE,
+			FOREIGN KEY (sender_lid) REFERENCES contacts(lid)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_chat_ts
 		    ON messages (chat_id, timestamp)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_sender
 		    ON messages (sender_lid)`,
 
-		// ── 4.6 group_configs ────────────────────────────────────────────────
+		// ── 4.5 group_configs ────────────────────────────────────────────────────
 		// weekly_ranking_enabled is an extension beyond the spec (existing feature).
 		`CREATE TABLE IF NOT EXISTS group_configs (
 			chat_id                TEXT    PRIMARY KEY,
@@ -131,7 +123,7 @@ func (s *Service) initSchema() error {
 		`CREATE INDEX IF NOT EXISTS idx_gc_weekly_enabled
 		    ON group_configs (weekly_ranking_enabled) WHERE weekly_ranking_enabled = 1`,
 
-		// ── 4.7 welcome_messages ─────────────────────────────────────────────
+		// ── 4.6 welcome_messages ───────────────────────────────────────────────
 		`CREATE TABLE IF NOT EXISTS welcome_messages (
 			id        INTEGER PRIMARY KEY AUTOINCREMENT,
 			chat_id   TEXT    NOT NULL,
@@ -139,7 +131,7 @@ func (s *Service) initSchema() error {
 			FOREIGN KEY (chat_id) REFERENCES group_configs(chat_id) ON DELETE CASCADE
 		)`,
 
-		// ── 4.8 farewell_messages ─────────────────────────────────────────────
+		// ── 4.7 farewell_messages ───────────────────────────────────────────────
 		`CREATE TABLE IF NOT EXISTS farewell_messages (
 			id        INTEGER PRIMARY KEY AUTOINCREMENT,
 			chat_id   TEXT    NOT NULL,
@@ -239,7 +231,6 @@ func (s *Service) UpsertChat(chat types.Chat) error {
 	return nil
 }
 
-
 // ── Message operations ───────────────────────────────────────────────────────
 
 // SaveGroupMessageReturningID saves a message and returns the inserted row ID.
@@ -260,8 +251,8 @@ func (s *Service) SaveGroupMessageReturningID(msg types.Message, groupName strin
 
 	result, err := stmt.Exec(msg.ChatID, msg.SenderLID, msg.Content, msg.MessageType, timestamp)
 	if err != nil {
-		// SQLite FK violation on message_type means unsupported type — discard silently.
-		if isFKViolation(err) {
+		// CHECK constraint failure on message_type means unsupported type — discard silently.
+		if isCheckViolation(err) {
 			s.logger.Debug("Discarding message with unsupported type",
 				"message_type", msg.MessageType, "group", groupName)
 			return 0, nil
@@ -280,22 +271,10 @@ func (s *Service) SaveGroupMessageReturningID(msg types.Message, groupName strin
 	return id, nil
 }
 
-// isFKViolation returns true when the SQLite error is a FOREIGN KEY constraint failure.
-func isFKViolation(err error) bool {
-	return err != nil && (fmt.Sprintf("%v", err) == "FOREIGN KEY constraint failed" ||
-		contains(err.Error(), "FOREIGN KEY constraint failed"))
-}
-
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub ||
-		len(s) > 0 && len(sub) > 0 && func() bool {
-			for i := 0; i <= len(s)-len(sub); i++ {
-				if s[i:i+len(sub)] == sub {
-					return true
-				}
-			}
-			return false
-		}())
+// isCheckViolation returns true when the SQLite error is a CHECK constraint failure.
+// Used to silently discard messages whose message_type is not in the allowed set.
+func isCheckViolation(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "CHECK constraint failed")
 }
 
 // UpdateMessageContent updates the text content for a given message ID.
