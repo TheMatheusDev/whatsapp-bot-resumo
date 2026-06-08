@@ -134,6 +134,16 @@ func (b *Bot) Start(ctx context.Context) error {
 	b.dbService.SetBotLID(botJID.User)
 	b.logger.Info("Bot LID registered", "lid", botJID.User)
 
+	// Ensure the bot itself is in the contacts table to satisfy foreign keys
+	// when saving bot-originated messages (like summaries).
+	if err := b.dbService.UpsertContact(types.Contact{
+		LID:       botJID.User,
+		Name:      "ResumoBOT",
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		b.logger.Error("Failed to upsert bot contact", "error", err)
+	}
+
 	b.running = true
 	b.botStartTime = time.Now()
 	b.logger.Info("Bot started successfully", "start_time", b.botStartTime)
