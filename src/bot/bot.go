@@ -148,6 +148,15 @@ func (b *Bot) Start(ctx context.Context) error {
 	b.botStartTime = time.Now()
 	b.logger.Info("Bot started successfully", "start_time", b.botStartTime)
 
+	// Check sticker command dependencies at startup.
+	// A warning is logged if any binary is missing — the bot continues running;
+	// the !figurinha command will return a user-facing error if invoked without dependencies.
+	if err := cmd.CheckStickerDependencies(); err != nil {
+		b.logger.Warn("Sticker dependencies not available — !figurinha command will be disabled", "error", err)
+	} else {
+		b.logger.Info("Sticker dependencies OK (ffmpeg, cwebp, convert)")
+	}
+
 	b.stopScheduler = make(chan struct{})
 	go b.startDailySummaryScheduler()
 

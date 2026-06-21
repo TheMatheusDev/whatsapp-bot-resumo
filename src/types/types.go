@@ -146,6 +146,7 @@ type WhatsAppService interface {
 	GetGroupInfo(ctx context.Context, chatID watypes.JID) (*watypes.GroupInfo, error)
 	DownloadToFile(ctx context.Context, msg whatsmeow.DownloadableMessage, file *os.File) error
 	DownloadToMemory(ctx context.Context, msg whatsmeow.DownloadableMessage) ([]byte, error)
+	UploadMedia(ctx context.Context, data []byte, mediaType whatsmeow.MediaType) (whatsmeow.UploadResponse, error)
 	GetBotJID() watypes.JID
 	SendMentionMessage(ctx context.Context, chatID watypes.JID, text string, mentionedJIDs []string) error
 	Connect(ctx context.Context) error

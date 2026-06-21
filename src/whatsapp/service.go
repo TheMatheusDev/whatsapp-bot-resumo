@@ -328,4 +328,23 @@ func (s *Service) DownloadToMemory(ctx context.Context, msg whatsmeow.Downloadab
 	return data, nil
 }
 
+// UploadMedia uploads raw bytes to WhatsApp media servers and returns the upload response
+// (which contains the URL, media key, SHA256 hash, and encrypted SHA256 hash needed to
+// build a StickerMessage / ImageMessage / etc.).
+func (s *Service) UploadMedia(ctx context.Context, data []byte, mediaType whatsmeow.MediaType) (whatsmeow.UploadResponse, error) {
+	if s.client == nil {
+		return whatsmeow.UploadResponse{}, fmt.Errorf("client not initialized")
+	}
+	if !s.connected {
+		return whatsmeow.UploadResponse{}, fmt.Errorf("not connected to WhatsApp")
+	}
 
+	resp, err := s.client.Upload(ctx, data, mediaType)
+	if err != nil {
+		s.logger.Error("Failed to upload media", "error", err, "type", mediaType)
+		return whatsmeow.UploadResponse{}, fmt.Errorf("failed to upload media: %w", err)
+	}
+
+	s.logger.Debug("Media uploaded successfully", "url", resp.URL, "type", mediaType)
+	return resp, nil
+}

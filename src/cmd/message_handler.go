@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 
@@ -213,12 +214,14 @@ func (h *Handler) handleMessage(evt *events.Message) {
 
 	// Process commands if from authorized users (only for new messages)
 	if h.isAuthorized(evt.Info) && h.isCommand(content) {
-		h.handleCommand(content, evt.Info)
+		h.handleCommand(content, evt.Info, evt.Message)
 	}
 }
 
-// handleCommand processes bot commands
-func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
+// handleCommand processes bot commands.
+// msg is the full raw protobuf message — required by commands that need to inspect
+// ContextInfo (e.g. quoted media for !figurinha).
+func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, msg *waE2E.Message) {
 	parts := strings.Fields(content)
 	if len(parts) == 0 {
 		return
@@ -235,7 +238,13 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo) {
 		rawArgs = content[idx+1:]
 	}
 
+	// Build a synthetic events.Message for commands that need the full event context
+	// (e.g. !figurinha which reads ContextInfo from the quoted message).
+	syntheticEvt := &events.Message{Info: msgTrigger, Message: msg}
+
 	switch command {
+	case "!figurinha", "!sticker":
+		h.handleStickerCommand(syntheticEvt)
 	case "!resuma", "!r":
 		h.handleSummarizeCommand(parts[1:], msgTrigger)
 	case "!clt":
