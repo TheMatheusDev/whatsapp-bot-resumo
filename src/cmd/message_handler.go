@@ -220,8 +220,8 @@ func (h *Handler) handleMessage(evt *events.Message) {
 		return
 	}
 
-	// Process commands if from authorized users (only for new messages)
-	if h.isAuthorized(evt.Info) && h.isCommand(cmdContent) {
+	// Process commands (only for new messages)
+	if h.isCommand(cmdContent) {
 		h.handleCommand(cmdContent, evt.Info, evt.Message)
 	}
 }

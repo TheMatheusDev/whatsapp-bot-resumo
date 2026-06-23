@@ -19,10 +19,6 @@ type cachedGroupInfo struct {
 	expiresAt time.Time
 }
 
-// isAuthorized checks if the user is authorized to use bot commands
-func (h *Handler) isAuthorized(info watypes.MessageInfo) bool {
-	return info.IsGroup
-}
 
 // isGroupAdmin checks if senderJIDUser is a native WhatsApp admin or superadmin
 // of the given group.
