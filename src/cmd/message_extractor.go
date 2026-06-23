@@ -38,6 +38,31 @@ func (h *Handler) extractMessageContent(msg *waE2E.Message) string {
 		return "[Áudio Não Transcrito]"
 	}
 
+	if imgMsg := msg.GetImageMessage(); imgMsg != nil {
+		if caption := imgMsg.GetCaption(); caption != "" {
+			return "[Image] " + caption
+		}
+		return "[Image]"
+	}
+
+	if videoMsg := msg.GetVideoMessage(); videoMsg != nil {
+		if caption := videoMsg.GetCaption(); caption != "" {
+			return "[Video] " + caption
+		}
+		return "[Video]"
+	}
+
+	if docMsg := msg.GetDocumentMessage(); docMsg != nil {
+		if title := docMsg.GetTitle(); title != "" {
+			return "[Document] " + title
+		}
+		return "[Document]"
+	}
+
+	if stickerMsg := msg.GetStickerMessage(); stickerMsg != nil {
+		return "[Sticker]"
+	}
+
 	// Handle other message types as needed
 	return ""
 }

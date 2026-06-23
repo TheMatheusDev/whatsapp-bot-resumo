@@ -210,6 +210,8 @@ func (h *Handler) handleMessage(evt *events.Message) {
 		cmdContent = strings.TrimPrefix(cmdContent, "[Image] ")
 	} else if strings.HasPrefix(cmdContent, "[Video] ") {
 		cmdContent = strings.TrimPrefix(cmdContent, "[Video] ")
+	} else if strings.HasPrefix(cmdContent, "[Document] ") {
+		cmdContent = strings.TrimPrefix(cmdContent, "[Document] ")
 	}
 
 	// Skip command processing for messages sent before bot started
