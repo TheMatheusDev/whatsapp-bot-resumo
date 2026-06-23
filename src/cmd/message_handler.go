@@ -204,6 +204,14 @@ func (h *Handler) handleMessage(evt *events.Message) {
 		}
 	}
 
+	// Extract the actual command content by stripping media prefixes if present
+	cmdContent := content
+	if strings.HasPrefix(cmdContent, "[Image] ") {
+		cmdContent = strings.TrimPrefix(cmdContent, "[Image] ")
+	} else if strings.HasPrefix(cmdContent, "[Video] ") {
+		cmdContent = strings.TrimPrefix(cmdContent, "[Video] ")
+	}
+
 	// Skip command processing for messages sent before bot started
 	if evt.Info.Timestamp.Before(h.botStartTime) {
 		h.logger.Debug("Message saved but skipping command processing (sent before bot started)",
@@ -213,8 +221,8 @@ func (h *Handler) handleMessage(evt *events.Message) {
 	}
 
 	// Process commands if from authorized users (only for new messages)
-	if h.isAuthorized(evt.Info) && h.isCommand(content) {
-		h.handleCommand(content, evt.Info, evt.Message)
+	if h.isAuthorized(evt.Info) && h.isCommand(cmdContent) {
+		h.handleCommand(cmdContent, evt.Info, evt.Message)
 	}
 }
 

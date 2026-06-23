@@ -58,9 +58,9 @@ func CheckStickerDependencies() error {
 func (h *Handler) handleStickerCommand(evt *events.Message) {
 	msgTrigger := evt.Info
 
-	// Extract the quoted message (the one the user replied to)
-	quotedMsg := extractQuotedMedia(evt.Message)
-	if quotedMsg == nil {
+	// Extract the target message (either the media in the current message or the replied one)
+	targetMsg := extractTargetMedia(evt.Message)
+	if targetMsg == nil {
 		h.whatsappService.ReactToMessage(
 			context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌",
 		)
@@ -72,7 +72,7 @@ func (h *Handler) handleStickerCommand(evt *events.Message) {
 	}
 
 	// Dispatch based on media type
-	switch m := quotedMsg.(type) {
+	switch m := targetMsg.(type) {
 	case *waE2E.ImageMessage:
 		if fileLen := m.GetFileLength(); fileLen > stickerMaxImageBytes {
 			h.whatsappService.ReactToMessage(
@@ -302,12 +302,19 @@ func (h *Handler) uploadAndSendSticker(msgTrigger watypes.MessageInfo, webpPath 
 	return nil
 }
 
-// extractQuotedMedia returns the downloadable media message from the ContextInfo
-// of the current message, or nil if the message is not a reply to a media message.
-// Supports: ImageMessage, VideoMessage (including animated GIFs).
-func extractQuotedMedia(msg *waE2E.Message) whatsmeow.DownloadableMessage {
-	// The command can arrive as a plain text reply (ExtendedTextMessage) or
-	// as an image/video reply that itself contains a caption with the command.
+// extractTargetMedia returns the downloadable media message.
+// It first checks if the current message contains the media (e.g. command in the caption).
+// If not, it checks if it's a reply to a media message.
+func extractTargetMedia(msg *waE2E.Message) whatsmeow.DownloadableMessage {
+	// 1. Check if the message itself is a media message
+	if img := msg.GetImageMessage(); img != nil {
+		return img
+	}
+	if vid := msg.GetVideoMessage(); vid != nil {
+		return vid
+	}
+
+	// 2. Fallback to check if it's a reply (quoted message)
 	var contextInfo *waE2E.ContextInfo
 
 	if ext := msg.GetExtendedTextMessage(); ext != nil {
