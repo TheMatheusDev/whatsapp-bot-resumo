@@ -250,6 +250,25 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 	// (e.g. !figurinha which reads ContextInfo from the quoted message).
 	syntheticEvt := &events.Message{Info: msgTrigger, Message: msg}
 
+	// Commands allowed in Direct Messages (DMs).
+	// Every other command requires a group context.
+	dmAllowed := map[string]bool{
+		"!figurinha": true,
+		"!sticker":   true,
+		"!help":      true,
+		"!h":         true,
+		"!version":   true,
+		"!v":         true,
+		"!ping":      true,
+	}
+
+	if !msgTrigger.IsGroup && !dmAllowed[command] {
+		h.reactToCommand(msgTrigger, "❌")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ Esse comando só é permitido em grupos.\nUse-o em um grupo onde o bot esteja presente ou adicione o bot ao grupo.")
+		return
+	}
+
 	switch command {
 	case "!figurinha", "!sticker":
 		h.handleStickerCommand(syntheticEvt)

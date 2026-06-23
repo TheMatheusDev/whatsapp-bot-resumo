@@ -108,13 +108,6 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 	// Get messages from database (only groups are supported)
 	var messages []wstypes.Message
 
-	if !msgTrigger.IsGroup {
-		h.logger.Error("Direct messages are not supported for summarization")
-		h.reactToCommand(msgTrigger, "❌")
-		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, "❌ Resumos não são suportados em mensagens diretas")
-		return
-	}
-
 	messages, err = h.dbService.GetGroupMessages(msgTrigger.Chat.User, opts.Count)
 
 	if err != nil {

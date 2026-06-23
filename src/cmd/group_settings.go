@@ -71,10 +71,6 @@ func (h *Handler) saveAndInvalidate(settings wstypes.GroupSettings) error {
 //	!setregras <texto>   → stores the rules and confirms
 //	!setregras           → displays the current rules (or "none defined")
 func (h *Handler) handleSetRulesCommand(rawArgs string, msgTrigger types.MessageInfo) {
-	if !msgTrigger.IsGroup {
-		return
-	}
-
 	// Display current rules when called with no arguments.
 	if strings.TrimSpace(rawArgs) == "" {
 		h.handleRulesCommand(msgTrigger)
@@ -124,9 +120,6 @@ func (h *Handler) handleSetRulesCommand(rawArgs string, msgTrigger types.Message
 //	!addwelcome Olá {numero}! Seja bem-vindo(a)! Leia as regras: {regras}
 //	!addwelcome Oi {numero}!|Bem-vindo(a), {numero}! 🎉
 func (h *Handler) handleAddWelcomeCommand(rawArgs string, msgTrigger types.MessageInfo) {
-	if !msgTrigger.IsGroup {
-		return
-	}
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
@@ -176,9 +169,6 @@ func (h *Handler) handleAddWelcomeCommand(rawArgs string, msgTrigger types.Messa
 //
 // Usage:  !delwelcome <id>  — removes the message whose DB id equals <id>
 func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.MessageInfo) {
-	if !msgTrigger.IsGroup {
-		return
-	}
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
@@ -246,9 +236,6 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 //	!addfarewell Até mais, {numero}! 👋 Leia as regras: {regras}
 //	!addfarewell Tchau {numero}!|Até mais, {numero}! 👋
 func (h *Handler) handleAddFarewellCommand(rawArgs string, msgTrigger types.MessageInfo) {
-	if !msgTrigger.IsGroup {
-		return
-	}
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
@@ -298,9 +285,6 @@ func (h *Handler) handleAddFarewellCommand(rawArgs string, msgTrigger types.Mess
 //
 // Usage:  !delfarewell <id>  — removes the message whose DB id equals <id>
 func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.MessageInfo) {
-	if !msgTrigger.IsGroup {
-		return
-	}
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
@@ -362,9 +346,6 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 //
 // Usage: !resumo
 func (h *Handler) handleDailySummaryToggle(args []string, msgTrigger types.MessageInfo) {
-	if !msgTrigger.IsGroup {
-		return
-	}
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
@@ -402,9 +383,6 @@ func (h *Handler) handleDailySummaryToggle(args []string, msgTrigger types.Messa
 //
 // Usage: !ranking
 func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.MessageInfo) {
-	if !msgTrigger.IsGroup {
-		return
-	}
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
@@ -444,9 +422,6 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 //
 // Usage: !cache
 func (h *Handler) handleAdminCacheCommand(msgTrigger types.MessageInfo) {
-	if !msgTrigger.IsGroup {
-		return
-	}
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
@@ -466,9 +441,6 @@ func (h *Handler) handleAdminCacheCommand(msgTrigger types.MessageInfo) {
 //
 // Usage: !welcome
 func (h *Handler) handleListWelcomeCommand(msgTrigger types.MessageInfo) {
-	if !msgTrigger.IsGroup {
-		return
-	}
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
@@ -492,9 +464,6 @@ func (h *Handler) handleListWelcomeCommand(msgTrigger types.MessageInfo) {
 //
 // Usage: !farewell
 func (h *Handler) handleListFarewellCommand(msgTrigger types.MessageInfo) {
-	if !msgTrigger.IsGroup {
-		return
-	}
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}

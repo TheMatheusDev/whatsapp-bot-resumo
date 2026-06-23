@@ -13,9 +13,6 @@ import (
 //
 // Usage: !config
 func (h *Handler) handleConfigCommand(msgTrigger types.MessageInfo) {
-	if !msgTrigger.IsGroup {
-		return
-	}
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
 	}
