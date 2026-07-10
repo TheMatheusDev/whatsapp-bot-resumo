@@ -47,7 +47,7 @@ func (h *Handler) RunAutoDailySummary(chatJIDStr string) {
 
 // performAutoDailySummarization performs the automatic daily summarization without a message trigger.
 func (h *Handler) performAutoDailySummarization(chatJID types.JID) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancel()
 
 	opts := wstypes.SummarizeOptions{
@@ -79,8 +79,7 @@ func (h *Handler) performAutoDailySummarization(chatJID types.JID) {
 		return
 	}
 
-	// onRetry edits the loading message so the group sees each fallback attempt.
-	// The same spinner pattern used by the manual summarize commands.
+	// onRetry edits the loading message so the group sees each internal model fallback.
 	retrySpinners := []string{"🔄", "🔁"}
 	onRetry := func(attempt int, _ string) {
 		spinner := retrySpinners[min(attempt-2, len(retrySpinners)-1)]
@@ -88,10 +87,47 @@ func (h *Handler) performAutoDailySummarization(chatJID types.JID) {
 			fmt.Sprintf("%s Resumindo o dia (%d mensagens)...", spinner, len(messages)))
 	}
 
-	summary, err := h.aiService.SummarizeMessages(ctx, messages, opts, onRetry)
-	if err != nil {
-		h.logger.Error("AutoDailySummary: all models failed", "error", err)
-		h.whatsappService.EditMessage(chatJID, msgResp.ID, "❌ Erro ao gerar resumo automático")
+	// Outer retry loop: up to 7 attempts, each exhausting all 3 AI models internally.
+	// Between attempts, display a live per-second countdown.
+	retryDelays := []int{10, 15, 30, 45, 60, 80} // seconds to wait before attempt 2–7
+	var summary string
+	var lastErr error
+	for attempt := 1; attempt <= 7; attempt++ {
+		summary, lastErr = h.aiService.SummarizeMessages(ctx, messages, opts, onRetry)
+		if lastErr == nil {
+			break
+		}
+
+		h.logger.Warn("AutoDailySummary: all models failed on attempt",
+			"attempt", attempt, "error", lastErr)
+
+		if attempt == 7 {
+			break
+		}
+
+		delay := retryDelays[attempt-1]
+
+		for remaining := delay; remaining > 0; remaining-- {
+			unit := "segundos"
+			if remaining == 1 {
+				unit = "segundo"
+			}
+			h.whatsappService.EditMessage(chatJID, msgResp.ID,
+				fmt.Sprintf("⏳ Gemini indisponível no momento.\nTentando novamente em %d %s...", remaining, unit))
+
+			select {
+			case <-ctx.Done():
+				h.logger.Warn("AutoDailySummary: context cancelled during retry countdown")
+				h.whatsappService.EditMessage(chatJID, msgResp.ID, "❌ Erro ao gerar resumo.\nGemini indisponível no momento, tente mais tarde.")
+				return
+			case <-time.After(1 * time.Second):
+			}
+		}
+	}
+
+	if lastErr != nil {
+		h.logger.Error("AutoDailySummary: all models failed after all attempts", "error", lastErr)
+		h.whatsappService.EditMessage(chatJID, msgResp.ID, "❌ Erro ao gerar resumo.\nGemini indisponível no momento, tente mais tarde.")
 		return
 	}
 
@@ -148,7 +184,7 @@ func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.Mess
 
 // performDailySummarization performs the daily summarization (since 4 AM)
 func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTrigger types.MessageInfo) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancel()
 
 	// Calculate 4 AM today in the bot's timezone (GMT-3)
@@ -193,7 +229,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 		return
 	}
 
-	// onRetry edits the loading message so the user sees each fallback attempt.
+	// onRetry edits the loading message so the user sees each internal model fallback.
 	retrySpinners := []string{"🔄", "🔁"}
 	onRetry := func(attempt int, _ string) {
 		spinner := retrySpinners[min(attempt-2, len(retrySpinners)-1)]
@@ -201,16 +237,50 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 			fmt.Sprintf("%s Resumindo o dia (%d mensagens)...", spinner, len(messages)))
 	}
 
-	// Generate summary (retries backup models internally)
-	summary, err := h.aiService.SummarizeMessages(ctx, messages, opts, onRetry)
-	if err != nil {
-		h.logger.Error("Failed to generate summary", "error", err)
-		errorMsg := "❌ Erro ao gerar resumo"
-		if ctx.Err() == context.DeadlineExceeded {
-			errorMsg = "⏱️ Timeout ao gerar resumo - tente com menos mensagens"
+	// Outer retry loop: up to 7 attempts, each exhausting all 3 AI models internally.
+	// Between attempts, display a live per-second countdown so the user knows what's happening.
+	retryDelays := []int{10, 15, 30, 45, 60, 80} // seconds to wait before attempt 2–7
+	var summary string
+	var lastErr error
+	for attempt := 1; attempt <= 7; attempt++ {
+		summary, lastErr = h.aiService.SummarizeMessages(ctx, messages, opts, onRetry)
+		if lastErr == nil {
+			break
 		}
+
+		h.logger.Warn("DailySummary: all models failed on attempt",
+			"attempt", attempt, "error", lastErr)
+
+		if attempt == 7 {
+			break
+		}
+
+		delay := retryDelays[attempt-1]
+
+		for remaining := delay; remaining > 0; remaining-- {
+			unit := "segundos"
+			if remaining == 1 {
+				unit = "segundo"
+			}
+			h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID,
+				fmt.Sprintf("⏳ Gemini indisponível no momento.\nTentando novamente em %d %s...", remaining, unit))
+
+			select {
+			case <-ctx.Done():
+				h.logger.Warn("performDailySummarization: context cancelled during retry countdown")
+				h.reactToCommand(msgTrigger, "❌")
+				h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, "❌ Erro ao gerar resumo.\nGemini indisponível no momento, tente mais tarde.")
+				return
+			case <-time.After(1 * time.Second):
+			}
+		}
+	}
+
+	if lastErr != nil {
+		h.logger.Error("Failed to generate daily summary after all attempts", "error", lastErr)
 		h.reactToCommand(msgTrigger, "❌")
-		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, errorMsg)
+		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID,
+			"❌ Erro ao gerar resumo.\nGemini indisponível no momento, tente mais tarde.")
 		return
 	}
 
