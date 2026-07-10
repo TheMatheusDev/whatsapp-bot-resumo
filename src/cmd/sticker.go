@@ -159,7 +159,7 @@ func (h *Handler) createStickerAsync(evt *events.Message, media whatsmeow.Downlo
 		defer os.Remove(webpPath)
 
 		// --- 3. Upload & send the sticker ---
-		if err := h.uploadAndSendSticker(msgTrigger, webpPath, ext != "jpg"); err != nil {
+		if err := h.uploadAndSendSticker(evt.Info, webpPath, ext != "jpg"); err != nil {
 			h.logger.Error("Sticker: upload/send failed", "error", err)
 			h.whatsappService.ReactToMessage(
 				context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌",
@@ -290,6 +290,10 @@ func (h *Handler) uploadAndSendSticker(msgTrigger watypes.MessageInfo, webpPath 
 			FileSHA256:    hash[:],
 			FileLength:    proto.Uint64(uint64(len(data))),
 			IsAnimated:    proto.Bool(animated),
+			ContextInfo: &waE2E.ContextInfo{
+				StanzaID:    proto.String(string(msgTrigger.ID)),
+				Participant: proto.String(msgTrigger.Sender.ToNonAD().String()),
+			},
 		},
 	}
 
