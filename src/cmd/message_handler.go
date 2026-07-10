@@ -27,7 +27,7 @@ type Handler struct {
 	// botLID is the bare numeric User part of the bot's own JID (e.g. "5521999999999").
 	// It is stored here so saveMessage and summarize can use it as the SenderLID
 	// for bot-originated messages, matching the format stored for human senders.
-	botLID          string
+	botLID string
 
 	// settingsCache caches per-group settings to avoid DB round-trips on every
 	// message. Keys are chatID strings; values are *wstypes.GroupSettings.
@@ -274,7 +274,7 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 	switch command {
 	case "!figurinha", "!sticker":
 		h.handleStickerCommand(syntheticEvt)
-	case "!resuma", "!r":
+	case "!resuma", "!resumo", "!r":
 		h.handleSummarizeCommand(parts[1:], msgTrigger)
 	case "!clt":
 		h.handleSummarizeCltCommand(parts[1:], msgTrigger)
@@ -306,7 +306,7 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 		h.handleAddFarewellCommand(rawArgs, msgTrigger)
 	case "!delfarewell":
 		h.handleDelFarewellCommand(parts[1:], msgTrigger)
-	case "!resumo":
+	case "!resumodia":
 		h.handleDailySummaryToggle(parts[1:], msgTrigger)
 	case "!ranking":
 		h.handleWeeklyRankingToggle(parts[1:], msgTrigger)

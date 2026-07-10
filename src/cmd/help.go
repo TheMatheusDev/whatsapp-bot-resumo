@@ -51,7 +51,7 @@ Prefixos de comando: !, - ou /
 - !addfarewell <msg> → Adiciona mensagem de despedida ({numero} = menciona quem saiu), separe múltiplas com |
 - !delfarewell <n> → Remove despedida pelo índice
 - !farewell → Lista as mensagens de despedida configuradas
-- !resumo → Liga/desliga o resumo diário automático deste grupo (toggle)
+- !resumodia → Liga/desliga o resumo diário automático deste grupo (toggle)
 - !ranking → Liga/desliga o ranking semanal deste grupo (toggle)
 - !cache → Força atualização do cache do grupo
 `

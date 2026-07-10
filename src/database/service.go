@@ -219,7 +219,7 @@ func (s *Service) UpsertContact(contact types.Contact) error {
 // UpsertChat records a chat the first time it is seen; subsequent calls are no-ops.
 // For group chats, a group_configs row is also created on first sight with both
 // daily_summary_enabled and weekly_ranking_enabled set to 1 (opt-out model).
-// Admins can toggle these off at any time via !resumo / !ranking commands.
+// Admins can toggle these off at any time via !resumodia / !ranking commands.
 func (s *Service) UpsertChat(chat types.Chat) error {
 	_, err := s.db.Exec(
 		`INSERT OR IGNORE INTO chats (chat_id, chat_type) VALUES (?, ?)`,

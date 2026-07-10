@@ -338,13 +338,13 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 }
 
 // ---------------------------------------------------------------------------
-// !resumo  (daily summary toggle)
+// !resumodia  (daily summary toggle)
 // ---------------------------------------------------------------------------
 
 // handleDailySummaryToggle flips the automatic daily summary on/off for this
 // group. Only group admins can use this command.
 //
-// Usage: !resumo
+// Usage: !resumodia
 func (h *Handler) handleDailySummaryToggle(args []string, msgTrigger types.MessageInfo) {
 	if !h.requireGroupAdmin(msgTrigger) {
 		return
@@ -477,7 +477,6 @@ func (h *Handler) handleListFarewellCommand(msgTrigger types.MessageInfo) {
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		formatFarewellMessageList(dbMsgs))
 }
-
 
 // ---------------------------------------------------------------------------
 // Helpers
