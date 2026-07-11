@@ -22,9 +22,9 @@ const (
 	stickerMaxVideoBytes = 1_024_000 // 1 MB for animated stickers
 	stickerTargetBytes   = 512_000   // 500 KB — WhatsApp animated sticker limit
 	stickerSize          = "512:512"
-	stickerFPS           = "20"
-	stickerInitialQValue = 60
-	stickerQStep         = 10
+	stickerFPS           = "13"
+	stickerInitialQValue = 85
+	stickerQStep         = 5
 
 	// stickerExifFile is the filename of the pre-generated EXIF blob that is
 	// injected into every sticker via webpmux. The file must live next to the
