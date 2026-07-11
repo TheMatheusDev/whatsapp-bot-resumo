@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	stickerMaxImageBytes = 2_097_000 // ~2 MB for static stickers
-	stickerMaxVideoBytes = 1_024_000 // 1 MB for animated stickers
+	stickerMaxImageBytes = 10_485_760 // 10 MB for static stickers
+	stickerMaxVideoBytes = 10_485_760 // 10 MB for animated stickers
 	stickerTargetBytes   = 512_000   // 500 KB — WhatsApp animated sticker limit
 	stickerSize          = "512:512"
 	stickerFPS           = "13"
@@ -99,7 +99,7 @@ func (h *Handler) handleStickerCommand(evt *events.Message) {
 			)
 			h.whatsappService.SendMessageReply(
 				msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-				fmt.Sprintf("Imagem muito grande (%.1f MB). Limite: 2 MB.", float64(fileLen)/(1024*1024)),
+				fmt.Sprintf("Imagem muito grande (%.1f MB). Limite: 10 MB.", float64(fileLen)/(1024*1024)),
 			)
 			return
 		}
@@ -112,7 +112,7 @@ func (h *Handler) handleStickerCommand(evt *events.Message) {
 			)
 			h.whatsappService.SendMessageReply(
 				msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-				fmt.Sprintf("Vídeo/GIF muito grande (%.1f MB). Limite: 1 MB.", float64(fileLen)/(1024*1024)),
+				fmt.Sprintf("Vídeo/GIF muito grande (%.1f MB). Limite: 10 MB.", float64(fileLen)/(1024*1024)),
 			)
 			return
 		}
