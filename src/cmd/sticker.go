@@ -25,6 +25,12 @@ const (
 	stickerFPS           = "20"
 	stickerInitialQValue = 60
 	stickerQStep         = 10
+
+	// stickerExifFile is the filename of the pre-generated EXIF blob that is
+	// injected into every sticker via webpmux. The file must live next to the
+	// bot executable. It contains the pack name, publisher and pack ID that
+	// WhatsApp displays under "Saved Stickers".
+	stickerExifFile = "raw.exif"
 )
 
 // StickerDeps holds the names of the external binaries required for sticker creation.
@@ -32,17 +38,20 @@ var StickerDeps = struct {
 	FFmpeg  string
 	CWebP   string
 	Convert string
+	WebPMux string
 }{
 	FFmpeg:  "ffmpeg",
 	CWebP:   "cwebp",
 	Convert: "convert",
+	WebPMux: "webpmux",
 }
 
-// CheckStickerDependencies verifies that ffmpeg, cwebp, and convert are available in PATH.
-// Should be called once at bot startup. Returns an error listing all missing binaries.
+// CheckStickerDependencies verifies that ffmpeg, cwebp, convert, and webpmux are
+// available in PATH. Should be called once at bot startup.
+// Returns an error listing all missing binaries.
 func CheckStickerDependencies() error {
 	missing := []string{}
-	for _, bin := range []string{StickerDeps.FFmpeg, StickerDeps.CWebP, StickerDeps.Convert} {
+	for _, bin := range []string{StickerDeps.FFmpeg, StickerDeps.CWebP, StickerDeps.Convert, StickerDeps.WebPMux} {
 		if _, err := exec.LookPath(bin); err != nil {
 			missing = append(missing, bin)
 		}
@@ -51,6 +60,16 @@ func CheckStickerDependencies() error {
 		return fmt.Errorf("sticker dependencies not found in PATH: %s", strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+// stickerExifPath returns the absolute path to raw.exif, resolved relative to
+// the bot executable so the file is found regardless of working directory.
+func stickerExifPath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return stickerExifFile // fallback: relative to working dir
+	}
+	return filepath.Join(filepath.Dir(exe), stickerExifFile)
 }
 
 // handleStickerCommand is the entry point for !figurinha / !sticker.
@@ -158,7 +177,21 @@ func (h *Handler) createStickerAsync(evt *events.Message, media whatsmeow.Downlo
 		}
 		defer os.Remove(webpPath)
 
-		// --- 3. Upload & send the sticker ---
+		// --- 3. Inject WhatsApp sticker pack metadata via webpmux ---
+		// webpmux embeds the raw.exif blob (pack name, publisher, pack ID) into
+		// the WebP file so WhatsApp displays them under "Saved Stickers".
+		// Non-fatal: if webpmux fails the sticker is still sent without metadata.
+		if out, err := exec.Command(
+			StickerDeps.WebPMux,
+			"-set", "exif", stickerExifPath(),
+			webpPath,
+			"-o", webpPath,
+		).CombinedOutput(); err != nil {
+			h.logger.Warn("Sticker: webpmux metadata injection failed (continuing anyway)",
+				"error", err, "output", string(out))
+		}
+
+		// --- 4. Upload & send the sticker ---
 		if err := h.uploadAndSendSticker(evt.Info, webpPath, ext != "jpg"); err != nil {
 			h.logger.Error("Sticker: upload/send failed", "error", err)
 			h.whatsappService.ReactToMessage(
