@@ -59,8 +59,10 @@ func (h *Handler) extractMessageContent(msg *waE2E.Message) string {
 		return "[Document]"
 	}
 
-	if stickerMsg := msg.GetStickerMessage(); stickerMsg != nil {
-		return "[Sticker]"
+	// Stickers are intentionally excluded: they carry no text value for summarisation
+	// and attempting to save them triggers FOREIGN KEY / CHECK constraint violations.
+	if msg.GetStickerMessage() != nil {
+		return ""
 	}
 
 	// Handle other message types as needed
@@ -103,9 +105,9 @@ func (h *Handler) extractQuotedMessageText(msg *waE2E.Message) string {
 		return "[Document]"
 	}
 
-	if stickerMsg := msg.GetStickerMessage(); stickerMsg != nil {
-		_ = stickerMsg
-		return "[Sticker]"
+	// Stickers are excluded from quoted context too — no useful text to extract.
+	if msg.GetStickerMessage() != nil {
+		return ""
 	}
 
 	return "[Unknown message type]"
@@ -134,7 +136,17 @@ func (h *Handler) getSenderName(info types.MessageInfo) string {
 	return info.Sender.User
 }
 
-// getMessageType determines the message type
+// getMessageType determines the message type for storage.
+// Returned values must be in the CHECK constraint set defined in the messages table:
+//
+//	'Conversation', 'ExtendedText', 'Audio', 'Summary', 'Image', 'Video', 'Document'
+//
+// "Unknown" is intentionally kept as the default so that any future WhatsApp
+// message type that is not yet handled here is silently discarded by the
+// isCheckViolation guard in SaveGroupMessageReturningID — rather than
+// being stored with misleading metadata.
+// Note: StickerMessage is excluded upstream in extractMessageContent (returns ""),
+// so it never reaches this function.
 func (h *Handler) getMessageType(msg *waE2E.Message) string {
 	switch {
 	case msg.GetConversation() != "":

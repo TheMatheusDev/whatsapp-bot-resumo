@@ -55,6 +55,11 @@ func NewService(cfg *types.DatabaseConfig, logger types.Logger) (*Service, error
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
+	if err := service.migrateMessagesCheckConstraint(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to migrate schema: %w", err)
+	}
+
 	if err := service.prepareStatements(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to prepare statements: %w", err)
@@ -95,7 +100,7 @@ func (s *Service) initSchema() error {
 			sender_lid   TEXT    NOT NULL,
 			message      TEXT,
 			message_type TEXT    NOT NULL
-			             CHECK (message_type IN ('Conversation','ExtendedText','Audio','Summary')),
+			             CHECK (message_type IN ('Conversation','ExtendedText','Audio','Summary','Image','Video','Document')),
 			timestamp    INTEGER NOT NULL,
 			FOREIGN KEY (chat_id)    REFERENCES chats(chat_id) ON DELETE CASCADE,
 			FOREIGN KEY (sender_lid) REFERENCES contacts(lid)
@@ -147,6 +152,87 @@ func (s *Service) initSchema() error {
 		}
 	}
 
+	return nil
+}
+
+// migrateMessagesCheckConstraint expands the message_type CHECK constraint on an
+// existing messages table to include 'Image', 'Video', and 'Document'.
+// New databases are created with the correct constraint by initSchema; this
+// function is a no-op for them. For existing databases it uses SQLite's
+// 12-step table-recreation procedure since ALTER TABLE cannot modify CHECK constraints.
+func (s *Service) migrateMessagesCheckConstraint() error {
+	// Inspect the current CREATE TABLE statement stored in sqlite_master.
+	var tableSql string
+	err := s.db.QueryRow(
+		`SELECT sql FROM sqlite_master WHERE type='table' AND name='messages'`,
+	).Scan(&tableSql)
+	if err == sql.ErrNoRows {
+		return nil // table not yet created; initSchema will use the correct definition
+	}
+	if err != nil {
+		return fmt.Errorf("migrateMessagesCheckConstraint: read schema: %w", err)
+	}
+
+	// Already contains the expanded set — nothing to do.
+	if strings.Contains(tableSql, "'Image'") {
+		return nil
+	}
+
+	s.logger.Info("Migrating messages table: expanding message_type CHECK constraint to include Image, Video, Document")
+
+	// Step 1: disable FK enforcement for the duration of the migration.
+	if _, err := s.db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("migrateMessagesCheckConstraint: disable FKs: %w", err)
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		s.db.Exec(`PRAGMA foreign_keys = ON`) //nolint:errcheck
+		return fmt.Errorf("migrateMessagesCheckConstraint: begin tx: %w", err)
+	}
+
+	steps := []string{
+		// Step 2: create the replacement table with the updated CHECK constraint.
+		`CREATE TABLE messages_v2 (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			chat_id      TEXT    NOT NULL,
+			sender_lid   TEXT    NOT NULL,
+			message      TEXT,
+			message_type TEXT    NOT NULL
+			             CHECK (message_type IN ('Conversation','ExtendedText','Audio','Summary','Image','Video','Document')),
+			timestamp    INTEGER NOT NULL,
+			FOREIGN KEY (chat_id)    REFERENCES chats(chat_id) ON DELETE CASCADE,
+			FOREIGN KEY (sender_lid) REFERENCES contacts(lid)
+		)`,
+		// Step 3: copy all existing data.
+		`INSERT INTO messages_v2 SELECT * FROM messages`,
+		// Step 4: drop the old table (cascades to its indexes).
+		`DROP TABLE messages`,
+		// Step 5: rename the replacement into place.
+		`ALTER TABLE messages_v2 RENAME TO messages`,
+		// Step 6: recreate indexes.
+		`CREATE INDEX IF NOT EXISTS idx_messages_chat_ts ON messages (chat_id, timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_sender  ON messages (sender_lid)`,
+	}
+
+	for _, step := range steps {
+		if _, err := tx.Exec(step); err != nil {
+			tx.Rollback()                      //nolint:errcheck
+			s.db.Exec(`PRAGMA foreign_keys = ON`) //nolint:errcheck
+			return fmt.Errorf("migrateMessagesCheckConstraint: step failed — %s | error: %w", step, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		s.db.Exec(`PRAGMA foreign_keys = ON`) //nolint:errcheck
+		return fmt.Errorf("migrateMessagesCheckConstraint: commit: %w", err)
+	}
+
+	if _, err := s.db.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		return fmt.Errorf("migrateMessagesCheckConstraint: re-enable FKs: %w", err)
+	}
+
+	s.logger.Info("Messages table migration completed: message_type now accepts Image, Video, Document")
 	return nil
 }
 
