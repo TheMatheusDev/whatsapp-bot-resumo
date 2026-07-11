@@ -95,6 +95,7 @@ func New() (*Bot, error) {
 	}
 	b.whatsappSvc = whatsappSvc
 
+	b.botStartTime = time.Now()
 	handler, err := cmd.NewHandler(cfg, aiService, dbService, whatsappSvc, cache, l, b.botStartTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize handler: %w", err)
