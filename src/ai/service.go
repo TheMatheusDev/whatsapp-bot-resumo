@@ -21,10 +21,14 @@ type Service struct {
 	modelBackup2 string
 	apiLogs      bool
 	logger       types.Logger
+	timezone     *time.Location // used to format message timestamps sent to the AI
 }
 
-// NewService creates a new AI service
-func NewService(apiKey string, model string, modelBackup string, modelBackup2 string, apiLogs bool, logger types.Logger) (*Service, error) {
+// NewService creates a new AI service.
+// timezone is an IANA timezone name (e.g. "America/Sao_Paulo") used to
+// convert message timestamps to local time before sending them to the API.
+// An empty or invalid value falls back to UTC.
+func NewService(apiKey string, model string, modelBackup string, modelBackup2 string, apiLogs bool, logger types.Logger, timezone string) (*Service, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
@@ -39,6 +43,12 @@ func NewService(apiKey string, model string, modelBackup string, modelBackup2 st
 
 	if modelBackup2 == "" {
 		modelBackup2 = "gemini-2.5-flash" // Default second backup
+	}
+
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		logger.Warn("AI service: invalid timezone, falling back to UTC", "timezone", timezone, "error", err)
+		loc = time.UTC
 	}
 
 	ctx := context.Background()
@@ -56,6 +66,7 @@ func NewService(apiKey string, model string, modelBackup string, modelBackup2 st
 		modelBackup2: modelBackup2,
 		apiLogs:      apiLogs,
 		logger:       logger,
+		timezone:     loc,
 	}, nil
 }
 
@@ -108,14 +119,16 @@ func (s *Service) summarize(ctx context.Context, messages []types.Message, opts 
 	return s.generateContent(ctx, fullPrompt, model)
 }
 
-// buildMessagesString converts messages to a formatted string
+// buildMessagesString converts messages to a formatted string.
+// Timestamps are converted to the service's configured timezone before
+// formatting so the AI model sees local times rather than UTC.
 func (s *Service) buildMessagesString(messages []types.Message) string {
 	var builder strings.Builder
 
 	for _, msg := range messages {
 		if msg.Content != "" {
 			// Format: [timestamp] Sender: Message
-			timestamp := msg.Timestamp.Format("15:04:05")
+			timestamp := msg.Timestamp.In(s.timezone).Format("15:04:05")
 			builder.WriteString(fmt.Sprintf("[%s] %s: %s\n", timestamp, msg.Sender, msg.Content))
 		}
 	}
