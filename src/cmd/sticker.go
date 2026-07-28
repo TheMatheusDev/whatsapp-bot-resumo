@@ -90,6 +90,31 @@ func (h *Handler) handleStickerCommand(evt *events.Message) {
 		return
 	}
 
+	// --- View-once guard ---
+	// Refuse to create stickers from view-once (single-view) messages.
+	// We must check both the current message and the quoted message to cover
+	// all user flows: sending a view-once with a !sticker caption, and
+	// replying to a view-once with !sticker.
+	viewOnce := isViewOnceMessage(evt.Message)
+	if !viewOnce {
+		// Also inspect the quoted message for the reply scenario.
+		if ext := evt.Message.GetExtendedTextMessage(); ext != nil {
+			if ctx := ext.GetContextInfo(); ctx != nil {
+				viewOnce = isViewOnceMessage(ctx.GetQuotedMessage())
+			}
+		}
+	}
+	if viewOnce {
+		h.whatsappService.ReactToMessage(
+			context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌",
+		)
+		h.whatsappService.SendMessageReply(
+			msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ Por questões de privacidade mensagens de visualização únicas não podem ser usadas para criação de stickers.",
+		)
+		return
+	}
+
 	// Dispatch based on media type
 	switch m := targetMsg.(type) {
 	case *waE2E.ImageMessage:
@@ -337,6 +362,30 @@ func (h *Handler) uploadAndSendSticker(msgTrigger watypes.MessageInfo, webpPath 
 		return fmt.Errorf("send failed: %w", err)
 	}
 	return nil
+}
+
+// isViewOnceMessage reports whether msg or any message it wraps is a
+// view-once (single-view) message. It covers all known protocol variants:
+//   - ViewOnce flag on ImageMessage / VideoMessage / AudioMessage (V1 simple)
+//   - ViewOnceMessage wrapper (V1 FutureProofMessage)
+//   - ViewOnceMessageV2 wrapper (current default on most clients)
+//   - ViewOnceMessageV2Extension wrapper (edge-case extension)
+func isViewOnceMessage(msg *waE2E.Message) bool {
+	if msg == nil {
+		return false
+	}
+	if img := msg.GetImageMessage(); img != nil && img.GetViewOnce() {
+		return true
+	}
+	if vid := msg.GetVideoMessage(); vid != nil && vid.GetViewOnce() {
+		return true
+	}
+	if aud := msg.GetAudioMessage(); aud != nil && aud.GetViewOnce() {
+		return true
+	}
+	return msg.GetViewOnceMessage() != nil ||
+		msg.GetViewOnceMessageV2() != nil ||
+		msg.GetViewOnceMessageV2Extension() != nil
 }
 
 // extractTargetMedia returns the downloadable media message.
