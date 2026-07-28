@@ -44,7 +44,7 @@ func Load() (*types.Config, error) {
 			BotAdmins: getEnvSlice("BOT_ADMINS", []string{}),
 		},
 		Bot: types.BotConfig{
-			Timezone:           getEnv("TIMEZONE", "GMT-3"),
+			Timezone:           getEnv("TIMEZONE", "America/Sao_Paulo"),
 			CacheTTL:           getEnv("CACHE_TTL", "10m"),
 			LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 			EnableMetrics:      getEnvBool("ENABLE_METRICS", false),

@@ -47,8 +47,12 @@ func NewService(apiKey string, model string, modelBackup string, modelBackup2 st
 
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
-		logger.Warn("AI service: invalid timezone, falling back to UTC", "timezone", timezone, "error", err)
-		loc = time.UTC
+		// "GMT-3" and similar non-IANA names are common in .env files but are
+		// not recognised by time.LoadLocation. Fall back to a fixed UTC-3 zone
+		// (matching the bot's default region) rather than silently using UTC.
+		logger.Warn("AI service: invalid IANA timezone name, falling back to UTC-3",
+			"timezone", timezone, "error", err)
+		loc = time.FixedZone("UTC-3", -3*60*60)
 	}
 
 	ctx := context.Background()
