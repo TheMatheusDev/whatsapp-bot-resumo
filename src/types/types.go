@@ -99,6 +99,14 @@ type AIService interface {
 }
 
 
+// MessageResult is the outcome of persisting a single enqueued message.
+// Callers that need the auto-incremented row ID (e.g. audio transcription)
+// receive it through the channel they supply to EnqueueMessage.
+type MessageResult struct {
+	ID  int64
+	Err error
+}
+
 // DatabaseService defines the interface for database operations
 type DatabaseService interface {
 	// Contact / chat upserts (called on every incoming message)
@@ -106,6 +114,12 @@ type DatabaseService interface {
 	UpsertChat(chat Chat) error
 
 	// Message operations
+	// EnqueueMessage queues contact+chat+message writes for the next batch flush.
+	// The resulting row ID (and any error) is delivered to resultCh once the batch
+	// is committed. Callers that do not need the ID should pass a discard channel.
+	EnqueueMessage(contact Contact, chat Chat, msg Message, groupName string, resultCh chan<- MessageResult)
+	// SaveGroupMessageReturningID is the synchronous, unbatched path — kept for
+	// bot-originated messages (summaries) that must be persisted immediately.
 	SaveGroupMessageReturningID(msg Message, groupName string) (int64, error)
 	UpdateMessageContent(id int64, newContent string) error
 	GetGroupMessages(chatID string, count int) ([]Message, error)
@@ -114,6 +128,10 @@ type DatabaseService interface {
 	// SetBotLID registers the bot's own sender LID so query filters can use
 	// sender_lid != botLID instead of a LIKE scan on contacts.name.
 	SetBotLID(lid string)
+	// FlushPendingMessages blocks until all buffered message entries have been
+	// written to the database. Must be called before any read-heavy command
+	// (summarize, daily/weekly ranking, question) to ensure data consistency.
+	FlushPendingMessages()
 
 	// Group settings operations
 	GetGroupSettings(chatID string) (*GroupSettings, error)
