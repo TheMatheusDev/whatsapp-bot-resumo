@@ -150,19 +150,13 @@ func (h *Handler) handleMessage(evt *events.Message) {
 		return
 	}
 
-	// Upsert the sender into contacts so sender_lid FK is always satisfied.
-	// Use Sender.User (bare numeric part, e.g. "5521999999999") — the @server
-	// suffix is constant and omitting it keeps the stored value minimal.
+	// Build contact + chat objects for the batch writer.
 	contact := wstypes.Contact{
 		LID:       evt.Info.Sender.User,
 		Name:      h.getSenderName(evt.Info),
 		UpdatedAt: time.Now().UTC(),
 	}
-	if err := h.dbService.UpsertContact(contact); err != nil {
-		h.logger.Error("Failed to upsert contact", "error", err, "lid", contact.LID)
-	}
 
-	// Upsert the chat so chat_id FK is always satisfied.
 	chatType := "group"
 	if !evt.Info.IsGroup {
 		chatType = "direct"
@@ -170,9 +164,6 @@ func (h *Handler) handleMessage(evt *events.Message) {
 	chat := wstypes.Chat{
 		ChatID:   evt.Info.Chat.User,
 		ChatType: chatType,
-	}
-	if err := h.dbService.UpsertChat(chat); err != nil {
-		h.logger.Error("Failed to upsert chat", "error", err, "chat_id", chat.ChatID)
 	}
 
 	// Create message object
@@ -185,23 +176,40 @@ func (h *Handler) handleMessage(evt *events.Message) {
 		Timestamp:   evt.Info.Timestamp.In(h.timezone),
 	}
 
-	// Save to database for all groups the bot is in.
-	// Messages sent before bot start are still stored for historical context.
-	msgID, err := h.saveMessage(message, evt.Info.Chat)
-	if err != nil {
-		h.logger.Error("Failed to save message", "error", err)
-	}
+	groupName := h.getGroupName(evt.Info.Chat)
 
-	// If this is a voice message, trigger async transcription
-	if audioMsg := msg.GetAudioMessage(); audioMsg != nil && msgID > 0 {
-		if isVoiceMessage(audioMsg) {
-			audioData, mimeType, err := h.tryDownloadAudioToMemory(audioMsg)
-			if err != nil {
-				h.logger.Error("Failed to download audio to memory for transcription", "error", err)
-			} else {
-				h.transcribeAudioAsync(msgID, audioData, mimeType)
-			}
+	// Enqueue the three writes (contact+chat+message) into the batch writer.
+	// For voice messages we need the real row ID, so we pass a real resultCh.
+	// For all other messages we use a discard channel (fire-and-forget).
+	if audioMsg := msg.GetAudioMessage(); audioMsg != nil && isVoiceMessage(audioMsg) {
+		resultCh := make(chan wstypes.MessageResult, 1)
+		h.dbService.EnqueueMessage(contact, chat, message, groupName, resultCh)
+
+		audioData, mimeType, err := h.tryDownloadAudioToMemory(audioMsg)
+		if err != nil {
+			h.logger.Error("Failed to download audio to memory for transcription", "error", err)
+			// Drain the result channel to prevent the batch writer's goroutine from blocking.
+			go func() { <-resultCh }()
+		} else {
+			// Wait for the batch flush to get the row ID, then transcribe.
+			h.wg.Add(1)
+			go func() {
+				defer h.wg.Done()
+				result := <-resultCh
+				if result.Err != nil {
+					h.logger.Error("Failed to save audio message before transcription", "error", result.Err)
+					return
+				}
+				if result.ID > 0 {
+					h.transcribeAudioAsync(result.ID, audioData, mimeType)
+				}
+			}()
 		}
+	} else {
+		// No result needed — use a discard channel.
+		discardCh := make(chan wstypes.MessageResult, 1)
+		h.dbService.EnqueueMessage(contact, chat, message, groupName, discardCh)
+		go func() { <-discardCh }() // drain so the batch writer goroutine never blocks
 	}
 
 	// Extract the actual command content by stripping media prefixes if present
