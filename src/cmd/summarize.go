@@ -105,9 +105,12 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 		}()
 	}
 
-	// Get messages from database (only groups are supported)
+	// Get messages from database (only groups are supported).
+	// Flush the batch writer first to ensure recently-received messages
+	// that have not yet been persisted are visible to this query.
 	var messages []wstypes.Message
 
+	h.dbService.FlushPendingMessages()
 	messages, err = h.dbService.GetGroupMessages(msgTrigger.Chat.User, opts.Count)
 
 	if err != nil {

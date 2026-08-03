@@ -64,6 +64,9 @@ func (h *Handler) performWeeklyRanking(chatJID types.JID) {
 	// Sunday 23:59:59 = mondayStart + 7 days - 1 second
 	sundayEnd := mondayStart.Add(7*24*time.Hour - time.Second)
 
+	// Flush buffered writes so any messages that arrived right before the
+	// Monday noon trigger are included in the ranking query.
+	h.dbService.FlushPendingMessages()
 	messages, err := h.dbService.GetMessagesBetween(chatJID.User, mondayStart, sundayEnd)
 	if err != nil {
 		h.logger.Error("WeeklyRanking: failed to get messages", "error", err, "chat", chatJID.User)

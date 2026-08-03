@@ -59,6 +59,9 @@ func (h *Handler) performAutoDailySummarization(chatJID types.JID) {
 	now := time.Now().In(h.timezone)
 	fourAMYesterday := time.Date(now.Year(), now.Month(), now.Day()-1, 4, 0, 0, 0, h.timezone)
 
+	// Flush buffered writes so all messages sent before this scheduler tick
+	// are visible to the query that follows.
+	h.dbService.FlushPendingMessages()
 	messages, err := h.dbService.GetMessagesBetween(chatJID.User, fourAMYesterday, time.Now().In(h.timezone))
 	if err != nil {
 		h.logger.Error("AutoDailySummary: failed to get messages", "error", err)
@@ -195,6 +198,10 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 	if now.Hour() < 4 {
 		fourAMToday = fourAMToday.Add(-24 * time.Hour)
 	}
+
+	// Flush buffered writes so messages received moments before the command
+	// are included in the query results.
+	h.dbService.FlushPendingMessages()
 
 	// Get messages since 4 AM
 	messages, err := h.dbService.GetMessagesBetween(msgTrigger.Chat.User, fourAMToday, time.Now().In(h.timezone))
