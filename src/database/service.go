@@ -20,6 +20,7 @@ type Service struct {
 	getMsgStmt    *sql.Stmt
 	stmtMutex     sync.RWMutex
 	botLID        string // sender_lid of the bot itself; used to exclude its own messages from queries
+	batchWriter   *MessageBatchWriter
 }
 
 // NewService creates a new database service connected to bot.db.
@@ -64,6 +65,9 @@ func NewService(cfg *types.DatabaseConfig, logger types.Logger) (*Service, error
 		db.Close()
 		return nil, fmt.Errorf("failed to prepare statements: %w", err)
 	}
+
+	// Start the batch writer with production defaults (50 msgs / 30 s).
+	service.batchWriter = NewMessageBatchWriter(db, logger, 0, 0)
 
 	logger.Info("Database service initialized successfully", "path", cfg.Path)
 	return service, nil
@@ -371,6 +375,32 @@ func (s *Service) SaveGroupMessageReturningID(msg types.Message, groupName strin
 	s.logger.Debug(fmt.Sprintf("Message saved: [ID: %d | Sender: %s | Group: %s]",
 		id, msg.SenderLID, groupName))
 	return id, nil
+}
+
+// EnqueueMessage submits contact, chat, and message writes for the next batch
+// flush. resultCh receives exactly one MessageResult once the batch is committed.
+// This is the hot path for all incoming WhatsApp messages.
+func (s *Service) EnqueueMessage(
+	contact types.Contact,
+	chat types.Chat,
+	msg types.Message,
+	groupName string,
+	resultCh chan<- types.MessageResult,
+) {
+	// Bridge types: database.MessageResult → types.MessageResult via a wrapper channel.
+	internalCh := make(chan MessageResult, 1)
+	s.batchWriter.Enqueue(contact, chat, msg, groupName, internalCh)
+	go func() {
+		r := <-internalCh
+		resultCh <- types.MessageResult{ID: r.ID, Err: r.Err}
+	}()
+}
+
+// FlushPendingMessages blocks until all buffered message entries have been
+// persisted to the database. Call this before any read-heavy command to ensure
+// the latest messages are visible to queries.
+func (s *Service) FlushPendingMessages() {
+	s.batchWriter.FlushSync()
 }
 
 // isCheckViolation returns true when the SQLite error is a CHECK constraint failure.
@@ -759,6 +789,12 @@ func (s *Service) Ping() error {
 
 // Close closes prepared statements and the database connection.
 func (s *Service) Close() error {
+	// Stop the batch writer first — drains the buffer and waits for the
+	// background goroutine to exit before closing the underlying *sql.DB.
+	if s.batchWriter != nil {
+		s.batchWriter.Stop()
+	}
+
 	s.stmtMutex.Lock()
 	defer s.stmtMutex.Unlock()
 
