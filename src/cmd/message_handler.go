@@ -262,6 +262,8 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 		"!version":   true,
 		"!v":         true,
 		"!ping":      true,
+		"!quote":     true,
+		"!q":         true,
 	}
 
 	if !msgTrigger.IsGroup && !dmAllowed[command] {
@@ -274,6 +276,8 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 	switch command {
 	case "!figurinha", "!sticker":
 		h.handleStickerCommand(syntheticEvt)
+	case "!quote", "!q":
+		h.handleQuoteCommand(parts[1:], msgTrigger, msg)
 	case "!resuma", "!resumo", "!r":
 		h.handleSummarizeCommand(parts[1:], msgTrigger)
 	case "!clt":

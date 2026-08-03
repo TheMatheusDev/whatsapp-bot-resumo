@@ -149,6 +149,7 @@ type WhatsAppService interface {
 	UploadMedia(ctx context.Context, data []byte, mediaType whatsmeow.MediaType) (whatsmeow.UploadResponse, error)
 	GetBotJID() watypes.JID
 	SendMentionMessage(ctx context.Context, chatID watypes.JID, text string, mentionedJIDs []string) error
+	GetProfilePictureURL(ctx context.Context, jid watypes.JID) (string, error)
 	Connect(ctx context.Context) error
 	Disconnect()
 	IsConnected() bool

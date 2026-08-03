@@ -348,3 +348,26 @@ func (s *Service) UploadMedia(ctx context.Context, data []byte, mediaType whatsm
 	s.logger.Debug("Media uploaded successfully", "url", resp.URL, "type", mediaType)
 	return resp, nil
 }
+
+// GetProfilePictureURL returns the CDN URL of the user's profile picture.
+// Returns an empty string (no error) when the user has no photo or has
+// restricted visibility. Returns an error only on transport failures.
+func (s *Service) GetProfilePictureURL(ctx context.Context, jid watypes.JID) (string, error) {
+	if s.client == nil {
+		return "", fmt.Errorf("client not initialized")
+	}
+	info, err := s.client.GetProfilePictureInfo(ctx, jid, &whatsmeow.GetProfilePictureParams{
+		Preview: false,
+	})
+	if err != nil {
+		// "item not found" means the user has no photo or restricted access — not an error.
+		if err.Error() == "item-not-found" || err.Error() == "not-authorized" {
+			return "", nil
+		}
+		return "", fmt.Errorf("get profile picture: %w", err)
+	}
+	if info == nil {
+		return "", nil
+	}
+	return info.URL, nil
+}
