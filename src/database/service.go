@@ -12,6 +12,69 @@ import (
 	"whatsapp-summarizer/src/types"
 )
 
+// ── Write batching ──────────────────────────────────────────────────────────
+// Incoming writes (contact/chat upserts + message inserts) are buffered in
+// memory and committed to SQLite in a single transaction per batch, amortizing
+// the per-commit fsync cost (the dominant I/O on flash storage). A batch is
+// flushed when any of the following happens:
+//   - writeBatchSize messages are buffered (every 20 messages)
+//   - writeBatchInterval elapses (time-based safety net for quiet chats)
+//   - before every database read (so buffered messages are never invisible
+//     to queries, e.g. !resuma / !dia / weekly ranking)
+//   - audio messages are saved (they need a real row ID for transcription)
+//   - Close is called (final flush; nothing is lost on graceful shutdown)
+const (
+	writeBatchSize     = 20
+	writeBatchInterval = 30 * time.Second
+)
+
+// SQL for buffered write operations, kept as constants so the batch
+// transaction and the autocommit fallback path share a single source of truth.
+const (
+	insertMessageSQL = `INSERT INTO messages (chat_id, sender_lid, message, message_type, timestamp) VALUES (?, ?, ?, ?, ?)`
+
+	upsertContactSQL = `INSERT INTO contacts (lid, name, updated_at) VALUES (?, ?, ?)
+		 ON CONFLICT(lid) DO UPDATE SET
+		     name       = excluded.name,
+		     updated_at = excluded.updated_at`
+
+	insertChatSQL = `INSERT OR IGNORE INTO chats (chat_id, chat_type) VALUES (?, ?)`
+
+	insertGroupConfigSQL = `INSERT OR IGNORE INTO group_configs
+		    (chat_id, daily_summary_enabled, weekly_ranking_enabled, updated_at, updated_by)
+		 VALUES (?, 1, 1, ?, '')`
+)
+
+// messageTypeSet is the controlled vocabulary of the messages.message_type
+// CHECK constraint (spec §4.4). Rows outside this set are silently discarded.
+var messageTypeSet = map[string]bool{
+	"Conversation": true,
+	"ExtendedText": true,
+	"Audio":        true,
+	"Summary":      true,
+	"Image":        true,
+	"Video":        true,
+	"Document":     true,
+}
+
+// pendingOpKind discriminates the buffered write operations.
+type pendingOpKind int
+
+const (
+	opContact pendingOpKind = iota
+	opChat
+	opMessage
+)
+
+// pendingOp is a single buffered write, drained to SQLite by Flush.
+type pendingOp struct {
+	kind      pendingOpKind
+	contact   types.Contact
+	chat      types.Chat
+	msg       types.Message
+	groupName string // only for opMessage (logging)
+}
+
 // Service implements the DatabaseService interface
 type Service struct {
 	db            *sql.DB
@@ -20,6 +83,17 @@ type Service struct {
 	getMsgStmt    *sql.Stmt
 	stmtMutex     sync.RWMutex
 	botLID        string // sender_lid of the bot itself; used to exclude its own messages from queries
+
+	// Write-batching buffer. All fields are guarded by flushMu. flushMu is held
+	// across batch execution so flushes serialize and the FK ordering between
+	// buffered contact/chat upserts and message inserts is preserved.
+	flushMu         sync.Mutex
+	pending         []pendingOp
+	pendingMsgCount int
+	contactIdx      map[string]int // lid → index in pending (dedup, last write wins)
+	chatIdx         map[string]int // chat_id → index in pending (dedup, last write wins)
+	stopFlushCh     chan struct{}
+	flushWG         sync.WaitGroup
 }
 
 // NewService creates a new database service connected to bot.db.
@@ -46,8 +120,11 @@ func NewService(cfg *types.DatabaseConfig, logger types.Logger) (*Service, error
 	db.SetConnMaxIdleTime(time.Minute * 10)
 
 	service := &Service{
-		db:     db,
-		logger: logger,
+		db:          db,
+		logger:      logger,
+		contactIdx:  make(map[string]int),
+		chatIdx:     make(map[string]int),
+		stopFlushCh: make(chan struct{}),
 	}
 
 	if err := service.initSchema(); err != nil {
@@ -65,8 +142,31 @@ func NewService(cfg *types.DatabaseConfig, logger types.Logger) (*Service, error
 		return nil, fmt.Errorf("failed to prepare statements: %w", err)
 	}
 
+	service.startFlushLoop()
+
 	logger.Info("Database service initialized successfully", "path", cfg.Path)
 	return service, nil
+}
+
+// startFlushLoop runs a periodic flush so quiet chats never hold messages in
+// memory longer than writeBatchInterval (bounds the crash/durability window).
+func (s *Service) startFlushLoop() {
+	s.flushWG.Add(1)
+	go func() {
+		defer s.flushWG.Done()
+		ticker := time.NewTicker(writeBatchInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := s.Flush(); err != nil {
+					s.logger.Error("Periodic flush failed", "error", err)
+				}
+			case <-s.stopFlushCh:
+				return
+			}
+		}
+	}()
 }
 
 // initSchema creates all tables and indexes as specified in database_spec.md.
@@ -248,9 +348,7 @@ func (s *Service) prepareStatements() error {
 func (s *Service) prepareGetMsgStmtLocked() error {
 	var err error
 
-	s.insertMsgStmt, err = s.db.Prepare(
-		`INSERT INTO messages (chat_id, sender_lid, message, message_type, timestamp)
-		 VALUES (?, ?, ?, ?, ?)`)
+	s.insertMsgStmt, err = s.db.Prepare(insertMessageSQL)
 	if err != nil {
 		return fmt.Errorf("failed to prepare insertMsgStmt: %w", err)
 	}
@@ -286,61 +384,205 @@ func (s *Service) SetBotLID(lid string) {
 // ── Contact / Chat upserts ───────────────────────────────────────────────────
 
 // UpsertContact inserts or updates a contact record.
-// The name and updated_at are refreshed on every call.
+// The write is buffered and flushed with the message batch; the last name seen
+// for a LID wins (matching the ON CONFLICT semantics). Errors surface at flush
+// time via Flush.
 func (s *Service) UpsertContact(contact types.Contact) error {
-	updatedAt := contact.UpdatedAt.Unix()
-	_, err := s.db.Exec(
-		`INSERT INTO contacts (lid, name, updated_at) VALUES (?, ?, ?)
-		 ON CONFLICT(lid) DO UPDATE SET
-		     name       = excluded.name,
-		     updated_at = excluded.updated_at`,
-		contact.LID, contact.Name, updatedAt,
-	)
-	if err != nil {
-		return fmt.Errorf("UpsertContact: %w", err)
-	}
+	s.appendPendingOp(pendingOp{kind: opContact, contact: contact}, false)
 	return nil
 }
 
 // UpsertChat records a chat the first time it is seen; subsequent calls are no-ops.
 // For group chats, a group_configs row is also created on first sight with both
 // daily_summary_enabled and weekly_ranking_enabled set to 1 (opt-out model).
-// Admins can toggle these off at any time via !resumodia / !ranking commands.
+// The write is buffered and flushed with the message batch.
 func (s *Service) UpsertChat(chat types.Chat) error {
-	_, err := s.db.Exec(
-		`INSERT OR IGNORE INTO chats (chat_id, chat_type) VALUES (?, ?)`,
-		chat.ChatID, chat.ChatType,
-	)
-	if err != nil {
-		return fmt.Errorf("UpsertChat (chats): %w", err)
+	s.appendPendingOp(pendingOp{kind: opChat, chat: chat}, false)
+	return nil
+}
+
+// appendPendingOp adds an operation to the write buffer, deduplicating repeated
+// contact/chat upserts by their key. When writeBatchSize messages are buffered,
+// the batch is flushed synchronously.
+func (s *Service) appendPendingOp(op pendingOp, isMessage bool) {
+	s.flushMu.Lock()
+
+	switch op.kind {
+	case opContact:
+		if idx, ok := s.contactIdx[op.contact.LID]; ok {
+			s.pending[idx] = op
+		} else {
+			s.contactIdx[op.contact.LID] = len(s.pending)
+			s.pending = append(s.pending, op)
+		}
+	case opChat:
+		if idx, ok := s.chatIdx[op.chat.ChatID]; ok {
+			s.pending[idx] = op
+		} else {
+			s.chatIdx[op.chat.ChatID] = len(s.pending)
+			s.pending = append(s.pending, op)
+		}
+	default:
+		s.pending = append(s.pending, op)
 	}
 
-	// For group chats: ensure a group_configs row exists with both toggles ON.
-	// INSERT OR IGNORE means existing rows (and their current toggle values) are never overwritten.
-	if chat.ChatType == "group" {
-		updatedAt := time.Now().Unix()
-		_, err = s.db.Exec(
-			`INSERT OR IGNORE INTO group_configs
-			    (chat_id, daily_summary_enabled, weekly_ranking_enabled, updated_at, updated_by)
-			 VALUES (?, 1, 1, ?, '')`,
-			chat.ChatID, updatedAt,
-		)
-		if err != nil {
-			return fmt.Errorf("UpsertChat (group_configs): %w", err)
+	if isMessage {
+		s.pendingMsgCount++
+	}
+	needFlush := s.pendingMsgCount >= writeBatchSize
+	s.flushMu.Unlock()
+
+	if needFlush {
+		if err := s.Flush(); err != nil {
+			s.logger.Error("Write batch threshold reached, flush failed", "error", err)
+		}
+	}
+}
+
+// Flush writes all buffered operations to the database in a single transaction.
+// Safe to call concurrently (flushes serialize); called automatically before
+// every database read, on a timer, and on Close.
+func (s *Service) Flush() error {
+	s.flushMu.Lock()
+	defer s.flushMu.Unlock()
+	return s.flushLocked()
+}
+
+// flushLocked drains the pending buffer. Must be called with flushMu held.
+func (s *Service) flushLocked() error {
+	if len(s.pending) == 0 {
+		return nil
+	}
+
+	batch := s.pending
+	s.pending = nil
+	s.contactIdx = make(map[string]int)
+	s.chatIdx = make(map[string]int)
+	s.pendingMsgCount = 0
+
+	return s.executeBatch(batch)
+}
+
+// executeBatch commits the given operations in one transaction. If the
+// transaction fails, the batch is retried operation-by-operation (autocommit)
+// so that a single bad row cannot lose the rest.
+func (s *Service) executeBatch(batch []pendingOp) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("flush: begin tx: %w", err)
+	}
+
+	for i, op := range batch {
+		if err := s.execOp(tx, op); err != nil {
+			tx.Rollback() //nolint:errcheck
+			s.logger.Error("Flush transaction failed, retrying per-operation",
+				"error", err, "op_index", i)
+			return s.executeOpsIndividually(batch[i:])
 		}
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("flush: commit: %w", err)
+	}
+
+	s.logger.Debug("Flushed write batch", "operations", len(batch), "messages", s.batchMessageCount(batch))
 	return nil
+}
+
+// executeOpsIndividually runs ops in autocommit mode so a single failing row
+// (e.g. an unexpected constraint violation) does not lose the remaining ops.
+// Unsupported message types are skipped silently inside execOp.
+func (s *Service) executeOpsIndividually(ops []pendingOp) error {
+	var firstErr error
+	for _, op := range ops {
+		if err := s.execOp(nil, op); err != nil {
+			s.logger.Error("Individual flush operation failed", "error", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+// batchMessageCount returns the number of opMessage ops in a batch (logging only).
+func (s *Service) batchMessageCount(batch []pendingOp) int {
+	count := 0
+	for _, op := range batch {
+		if op.kind == opMessage {
+			count++
+		}
+	}
+	return count
+}
+
+// execOp executes a single buffered operation, inside the batch transaction
+// (tx != nil) or in autocommit mode (tx == nil).
+func (s *Service) execOp(tx *sql.Tx, op pendingOp) error {
+	exec := s.db.Exec
+	if tx != nil {
+		exec = tx.Exec
+	}
+
+	switch op.kind {
+	case opContact:
+		updatedAt := op.contact.UpdatedAt.Unix()
+		_, err := exec(upsertContactSQL, op.contact.LID, op.contact.Name, updatedAt)
+		return err
+	case opChat:
+		if _, err := exec(insertChatSQL, op.chat.ChatID, op.chat.ChatType); err != nil {
+			return err
+		}
+		if op.chat.ChatType == "group" {
+			_, err := exec(insertGroupConfigSQL, op.chat.ChatID, time.Now().Unix())
+			return err
+		}
+		return nil
+	case opMessage:
+		// Unsupported types are discarded silently (spec §4.4). Checked here so a
+		// single bad row cannot abort the batch transaction.
+		if !messageTypeSet[op.msg.MessageType] {
+			s.logger.Debug("Discarding message with unsupported type",
+				"message_type", op.msg.MessageType, "group", op.groupName)
+			return nil
+		}
+		_, err := exec(insertMessageSQL, op.msg.ChatID, op.msg.SenderLID,
+			op.msg.Content, op.msg.MessageType, op.msg.Timestamp.Unix())
+		return err
+	default:
+		return fmt.Errorf("execOp: unknown op kind %d", op.kind)
+	}
 }
 
 // ── Message operations ───────────────────────────────────────────────────────
 
 // SaveGroupMessageReturningID saves a message and returns the inserted row ID.
+// Non-audio messages are buffered in memory and written in batches (see
+// writeBatchSize / writeBatchInterval) to reduce I/O; for those the returned ID
+// is 0 (unknown until the batch is flushed) — callers must not rely on it.
+// Audio messages are flushed synchronously because the transcription pipeline
+// needs the real row ID (UpdateMessageContent).
 // msg.SenderLID must already exist in the contacts table (call UpsertContact first).
 // msg.ChatID must already exist in the chats table (call UpsertChat first).
 // Returns 0 without error when the message_type is not in the controlled vocabulary
 // (unsupported types are silently discarded per spec §4.4).
 func (s *Service) SaveGroupMessageReturningID(msg types.Message, groupName string) (int64, error) {
+	// Audio messages need a real row ID immediately for async transcription.
+	if msg.MessageType == "Audio" {
+		if err := s.Flush(); err != nil {
+			s.logger.Error("Failed to flush before audio insert", "error", err)
+		}
+		return s.execInsert(msg, groupName)
+	}
+
+	s.appendPendingOp(pendingOp{kind: opMessage, msg: msg, groupName: groupName}, true)
+	return 0, nil
+}
+
+// execInsert performs a single message insert via the prepared statement.
+// Returns 0 without error when the message_type is not in the controlled
+// vocabulary (unsupported types are silently discarded per spec §4.4).
+func (s *Service) execInsert(msg types.Message, groupName string) (int64, error) {
 	s.stmtMutex.RLock()
 	stmt := s.insertMsgStmt
 	s.stmtMutex.RUnlock()
@@ -391,8 +633,13 @@ func (s *Service) UpdateMessageContent(id int64, newContent string) error {
 }
 
 // GetGroupMessages retrieves the last `count` messages for a chat (bot excluded),
-// returned in chronological order (oldest first).
+// returned in chronological order (oldest first). Flushes buffered writes first
+// so pending messages are included in the result.
 func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, error) {
+	if err := s.Flush(); err != nil {
+		s.logger.Error("Flush before read failed", "error", err)
+	}
+
 	s.stmtMutex.RLock()
 	stmt := s.getMsgStmt
 	botLID := s.botLID
@@ -434,7 +681,12 @@ func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, e
 }
 
 // GetMessagesBetween retrieves non-bot messages within [from, to] for the given chat.
+// Flushes buffered writes first so pending messages are included in the result.
 func (s *Service) GetMessagesBetween(chatID string, from, to time.Time) ([]types.Message, error) {
+	if err := s.Flush(); err != nil {
+		s.logger.Error("Flush before read failed", "error", err)
+	}
+
 	fromEpoch := from.Unix()
 	toEpoch := to.Unix()
 
@@ -483,8 +735,13 @@ func (s *Service) scanMessages(rows *sql.Rows) ([]types.Message, error) {
 }
 
 // GetAllGroups returns all chats with a message count (bot messages excluded),
-// ordered by message count descending.
+// ordered by message count descending. Flushes buffered writes first so pending
+// messages are counted.
 func (s *Service) GetAllGroups() ([]types.GroupSummary, error) {
+	if err := s.Flush(); err != nil {
+		s.logger.Error("Flush before read failed", "error", err)
+	}
+
 	s.stmtMutex.RLock()
 	botLID := s.botLID
 	s.stmtMutex.RUnlock()
@@ -526,6 +783,10 @@ func (s *Service) GetAllGroups() ([]types.GroupSummary, error) {
 // WelcomeMessages and FarewellMessages in the returned struct are populated from
 // their respective tables.
 func (s *Service) GetGroupSettings(chatID string) (*types.GroupSettings, error) {
+	if err := s.Flush(); err != nil {
+		s.logger.Error("Flush before read failed", "error", err)
+	}
+
 	row := s.db.QueryRow(
 		`SELECT chat_id, rules, daily_summary_enabled, weekly_ranking_enabled,
 		        updated_at, updated_by
@@ -627,6 +888,10 @@ func (s *Service) queryGroupIDsByFlag(column string) ([]string, error) {
 		return nil, fmt.Errorf("queryGroupIDsByFlag: unknown column %q", column)
 	}
 
+	if err := s.Flush(); err != nil {
+		s.logger.Error("Flush before read failed", "error", err)
+	}
+
 	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query group IDs by flag %q: %w", column, err)
@@ -673,6 +938,10 @@ func (s *Service) DeleteWelcomeMessage(id int64) error {
 
 // GetWelcomeMessages returns all welcome messages for a group.
 func (s *Service) GetWelcomeMessages(chatID string) ([]types.WelcomeMessage, error) {
+	if err := s.Flush(); err != nil {
+		s.logger.Error("Flush before read failed", "error", err)
+	}
+
 	rows, err := s.db.Query(
 		`SELECT id, chat_id, message
 		 FROM welcome_messages
@@ -724,6 +993,10 @@ func (s *Service) DeleteFarewellMessage(id int64) error {
 
 // GetFarewellMessages returns all farewell messages for a group.
 func (s *Service) GetFarewellMessages(chatID string) ([]types.FarewellMessage, error) {
+	if err := s.Flush(); err != nil {
+		s.logger.Error("Flush before read failed", "error", err)
+	}
+
 	rows, err := s.db.Query(
 		`SELECT id, chat_id, message
 		 FROM farewell_messages
@@ -757,8 +1030,17 @@ func (s *Service) Ping() error {
 	return s.db.Ping()
 }
 
-// Close closes prepared statements and the database connection.
+// Close stops the periodic flush loop, persists any remaining buffered writes,
+// then closes prepared statements and the database connection.
 func (s *Service) Close() error {
+	if s.stopFlushCh != nil {
+		close(s.stopFlushCh)
+		s.flushWG.Wait()
+	}
+	if err := s.Flush(); err != nil {
+		s.logger.Error("Failed to flush on close", "error", err)
+	}
+
 	s.stmtMutex.Lock()
 	defer s.stmtMutex.Unlock()
 

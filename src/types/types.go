@@ -101,9 +101,15 @@ type AIService interface {
 
 // DatabaseService defines the interface for database operations
 type DatabaseService interface {
-	// Contact / chat upserts (called on every incoming message)
+	// Contact / chat upserts (called on every incoming message; buffered and
+	// flushed in batches with the message inserts to reduce I/O)
 	UpsertContact(contact Contact) error
 	UpsertChat(chat Chat) error
+
+	// Flush persists all writes buffered for batched I/O. It is called
+	// automatically before every database read and on Close, so callers only
+	// need it to bound the in-memory durability window (e.g. before shutdown).
+	Flush() error
 
 	// Message operations
 	SaveGroupMessageReturningID(msg Message, groupName string) (int64, error)
