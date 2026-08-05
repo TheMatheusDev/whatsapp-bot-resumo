@@ -103,6 +103,61 @@ func (s *Service) SummarizeMessages(ctx context.Context, messages []types.Messag
 	return "", fmt.Errorf("all models failed to summarize: %w", lastErr)
 }
 
+// ChatResponse generates a conversational reply when the bot is mentioned or
+// receives a reply in a group. It uses the recent group message history as
+// context (including bot messages) and responds in the group's configured
+// personality. Falls back through models the same way as SummarizeMessages.
+func (s *Service) ChatResponse(ctx context.Context, messages []types.Message, triggerMsg string, triggerSender string, opts types.ChatOptions) (string, error) {
+	if len(messages) == 0 {
+		return "", fmt.Errorf("no messages for chat context")
+	}
+
+	messagesStr := s.buildMessagesString(messages)
+	systemPrompt := s.buildChatSystemPrompt(opts)
+
+	userPrompt := fmt.Sprintf(
+		"Histórico recente da conversa:\n%s\n\n%s escreveu para você: \"%s\"\n\nResponda diretamente a essa mensagem.",
+		messagesStr, triggerSender, triggerMsg,
+	)
+
+	fullPrompt := fmt.Sprintf("%s\n\n%s", systemPrompt, userPrompt)
+	s.logger.Debug("Generated chat prompt", "prompt", fullPrompt)
+
+	models := []string{s.model, s.modelBackup, s.modelBackup2}
+	var lastErr error
+	for i, model := range models {
+		if i > 0 {
+			s.logger.Warn("ChatResponse: retrying with fallback model",
+				"model", model, "attempt", i+1, "prev_error", lastErr)
+		}
+		result, err := s.generateContent(ctx, fullPrompt, model)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+	}
+	return "", fmt.Errorf("all models failed to generate chat response: %w", lastErr)
+}
+
+// buildChatSystemPrompt returns the system prompt for chatbot conversation mode
+// based on the configured personality.
+func (s *Service) buildChatSystemPrompt(opts types.ChatOptions) string {
+	switch opts.Personality {
+	case "profeta":
+		return ChatProfetaPersonality
+	case "farialimer":
+		return ChatFariaLimerPersonality
+	case "zoomer":
+		return ChatZoomerPersonality
+	case "clt":
+		fallthrough
+	default:
+		return ChatCLTPersonality
+	}
+}
+
+
+
 // summarize builds the prompt from messages+opts and calls the Gemini API with
 // the given model name. It is the single shared implementation used by
 // SummarizeMessages for all retry attempts.
