@@ -58,6 +58,12 @@ type SummarizeOptions struct {
 	Question    string `json:"question"`    // optional question to answer along with the summary
 }
 
+// ChatOptions represents options for chatbot conversational responses.
+// Used when the bot is mentioned or receives a reply in a group.
+type ChatOptions struct {
+	Personality string `json:"personality"` // personality: clt (default), profeta, farialimer, zoomer
+}
+
 // GroupInfo represents cached group information
 type GroupInfo struct {
 	Name     string    `json:"name"`
@@ -94,6 +100,11 @@ type OnRetryFunc func(attempt int, model string)
 // AIService defines the interface for AI operations
 type AIService interface {
 	SummarizeMessages(ctx context.Context, messages []Message, opts SummarizeOptions, onRetry OnRetryFunc) (string, error)
+	// ChatResponse generates a conversational reply when the bot is mentioned or
+	// receives a reply. messages is the recent group history (including bot messages),
+	// triggerMsg is the content of the message that triggered the response, and
+	// triggerSender is the display name of the user who triggered it.
+	ChatResponse(ctx context.Context, messages []Message, triggerMsg string, triggerSender string, opts ChatOptions) (string, error)
 	TranscribeAudio(ctx context.Context, audioData []byte, mimeType string) (string, error)
 	Close() error
 }
@@ -123,6 +134,10 @@ type DatabaseService interface {
 	SaveGroupMessageReturningID(msg Message, groupName string) (int64, error)
 	UpdateMessageContent(id int64, newContent string) error
 	GetGroupMessages(chatID string, count int) ([]Message, error)
+	// GetGroupMessagesWithBot retrieves the last count messages for a group,
+	// including messages sent by the bot itself. Used to provide full conversation
+	// context for chatbot responses.
+	GetGroupMessagesWithBot(chatID string, count int) ([]Message, error)
 	GetMessagesBetween(chatID string, from, to time.Time) ([]Message, error)
 	GetAllGroups() ([]GroupSummary, error)
 	// SetBotLID registers the bot's own sender LID so query filters can use
