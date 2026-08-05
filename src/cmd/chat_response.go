@@ -44,22 +44,33 @@ func extractContextInfo(msg *waE2E.Message) *waE2E.ContextInfo {
 // isBotMentioned reports whether the bot's own JID appears in the MentionedJID
 // list of the given message. Returns false when there is no ContextInfo.
 //
-// JID comparison uses the bare User part (no server suffix) to avoid mismatches
-// between @s.whatsapp.net and @lid representations.
+// WhatsApp encodes MentionedJID as "user@server". We strip the server suffix
+// and compare the user part against BOTH the bot's LID and its phone number,
+// because different client versions and the PN→LID migration mean either format
+// can appear in the field.
 func (h *Handler) isBotMentioned(msg *waE2E.Message) bool {
 	ctx := extractContextInfo(msg)
 	if ctx == nil {
 		return false
 	}
 
-	for _, jid := range ctx.GetMentionedJID() {
-		// MentionedJID entries are "user@server"; split on '@' and compare only
-		// the user part to be resilient against PN→LID migration differences.
+	mentioned := ctx.GetMentionedJID()
+	if len(mentioned) == 0 {
+		return false
+	}
+
+	h.logger.Info("isBotMentioned: checking",
+		"bot_lid", h.botLID,
+		"bot_phone", h.botPhoneUser,
+		"mentioned_jids", mentioned)
+
+	for _, jid := range mentioned {
 		user := jid
 		if idx := strings.Index(jid, "@"); idx >= 0 {
 			user = jid[:idx]
 		}
-		if user == h.botLID {
+		if user == h.botLID || (h.botPhoneUser != "" && user == h.botPhoneUser) {
+			h.logger.Info("isBotMentioned: match found", "matched_jid", jid)
 			return true
 		}
 	}
@@ -68,19 +79,34 @@ func (h *Handler) isBotMentioned(msg *waE2E.Message) bool {
 
 // isReplyToBot reports whether the message is a reply to a message originally
 // sent by the bot. It does this by comparing ContextInfo.Participant (the author
-// of the quoted message) against the bot's own LID.
+// of the quoted message) against the bot's own LID and phone number.
 func (h *Handler) isReplyToBot(msg *waE2E.Message) bool {
 	ctx := extractContextInfo(msg)
 	if ctx == nil || ctx.GetStanzaID() == "" {
 		return false
 	}
 
-	participant := ctx.GetParticipant()
-	// Participant is "user@server"; extract the user part for comparison.
-	if idx := strings.Index(participant, "@"); idx >= 0 {
-		participant = participant[:idx]
+	raw := ctx.GetParticipant()
+	if raw == "" {
+		return false
 	}
-	return participant == h.botLID
+
+	participant := raw
+	if idx := strings.Index(raw, "@"); idx >= 0 {
+		participant = raw[:idx]
+	}
+
+	h.logger.Info("isReplyToBot: checking",
+		"bot_lid", h.botLID,
+		"bot_phone", h.botPhoneUser,
+		"participant", raw,
+		"stanza_id", ctx.GetStanzaID())
+
+	matched := participant == h.botLID || (h.botPhoneUser != "" && participant == h.botPhoneUser)
+	if matched {
+		h.logger.Info("isReplyToBot: match found", "participant", raw)
+	}
+	return matched
 }
 
 // checkChatRateLimit returns the remaining cooldown duration for the sender

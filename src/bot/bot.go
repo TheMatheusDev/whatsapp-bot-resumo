@@ -133,7 +133,9 @@ func (b *Bot) Start(ctx context.Context) error {
 	// stripped everywhere; contacts.lid and messages.sender_lid store only the user part.
 	botJID := b.whatsappSvc.GetBotJID()
 	b.dbService.SetBotLID(botJID.User)
-	b.logger.Info("Bot LID registered", "lid", botJID.User)
+	b.logger.Info("Bot LID registered",
+		"lid", botJID.User,
+		"phone_user", b.whatsappSvc.GetBotPhoneUser())
 
 	// Ensure the bot itself is in the contacts table to satisfy foreign keys
 	// when saving bot-originated messages (like summaries).

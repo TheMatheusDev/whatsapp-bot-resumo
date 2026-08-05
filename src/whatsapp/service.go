@@ -262,12 +262,23 @@ func (s *Service) DownloadToFile(ctx context.Context, msg whatsmeow.Downloadable
 	return nil
 }
 
-// GetBotJID returns the JID of the bot itself
+// GetBotJID returns the LID-based JID of the bot itself.
 func (s *Service) GetBotJID() types.JID {
 	if s.client == nil || s.client.Store == nil {
 		return types.JID{}
 	}
 	return s.client.Store.LID.ToNonAD()
+}
+
+// GetBotPhoneUser returns the bare phone-number user part of the bot's JID
+// (from client.Store.ID, e.g. "5521999999999"). This is the format WhatsApp
+// uses in MentionedJID and Participant fields for older or migrating clients,
+// as opposed to the LID returned by GetBotJID.
+func (s *Service) GetBotPhoneUser() string {
+	if s.client == nil || s.client.Store == nil || s.client.Store.ID == nil {
+		return ""
+	}
+	return s.client.Store.ID.ToNonAD().User
 }
 
 // ReactToMessage sends an emoji reaction to a specific message.

@@ -24,10 +24,13 @@ type Handler struct {
 	logger          wstypes.Logger
 	botStartTime    time.Time
 	timezone        *time.Location
-	// botLID is the bare numeric User part of the bot's own JID (e.g. "5521999999999").
-	// It is stored here so saveMessage and summarize can use it as the SenderLID
-	// for bot-originated messages, matching the format stored for human senders.
+	// botLID is the bare numeric User part of the bot's own LID JID.
+	// Used for comparing against Participant/MentionedJID in LID format.
 	botLID string
+	// botPhoneUser is the bare phone-number User part of the bot's own JID
+	// (e.g. "5521999999999"). WhatsApp still uses the phone number in
+	// MentionedJID and Participant for many clients, so we check both.
+	botPhoneUser string
 
 	// settingsCache caches per-group settings to avoid DB round-trips on every
 	// message. Keys are chatID strings; values are *wstypes.GroupSettings.
@@ -95,6 +98,7 @@ func NewHandler(
 		botStartTime:    botStartTime,
 		timezone:        loc,
 		botLID:          whatsappService.GetBotJID().User,
+		botPhoneUser:    whatsappService.GetBotPhoneUser(),
 		shutdownCh:      make(chan struct{}),
 	}, nil
 }

@@ -184,6 +184,10 @@ type WhatsAppService interface {
 	DownloadToMemory(ctx context.Context, msg whatsmeow.DownloadableMessage) ([]byte, error)
 	UploadMedia(ctx context.Context, data []byte, mediaType whatsmeow.MediaType) (whatsmeow.UploadResponse, error)
 	GetBotJID() watypes.JID
+	// GetBotPhoneUser returns the bare phone-number user part of the bot's own JID.
+	// WhatsApp often encodes MentionedJID and Participant using the phone number
+	// (e.g. "5521999999999") rather than the LID, so both must be checked.
+	GetBotPhoneUser() string
 	SendMentionMessage(ctx context.Context, chatID watypes.JID, text string, mentionedJIDs []string) error
 	Connect(ctx context.Context) error
 	Disconnect()
