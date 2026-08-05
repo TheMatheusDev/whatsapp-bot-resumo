@@ -463,6 +463,51 @@ func (s *Service) GetGroupMessages(chatID string, count int) ([]types.Message, e
 	return messages, nil
 }
 
+// GetGroupMessagesWithBot retrieves the last `count` messages for a chat,
+// including messages sent by the bot itself. This is used to provide full
+// conversation context for chatbot responses, so the model can see its own
+// previous replies. Messages are returned in chronological order (oldest first).
+func (s *Service) GetGroupMessagesWithBot(chatID string, count int) ([]types.Message, error) {
+	query := `SELECT m.id, m.chat_id, m.sender_lid, c.name, m.message, m.message_type, m.timestamp
+	          FROM messages m
+	          JOIN contacts c ON c.lid = m.sender_lid
+	          WHERE m.chat_id = ?
+	          ORDER BY m.timestamp DESC
+	          LIMIT ?`
+
+	rows, err := s.db.Query(query, chatID, count)
+	if err != nil {
+		s.logger.Error("Failed to query group messages with bot", "error", err, "chat_id", chatID)
+		return nil, fmt.Errorf("failed to query group messages with bot: %w", err)
+	}
+	defer rows.Close()
+
+	messages := make([]types.Message, 0, count)
+	for rows.Next() {
+		var msg types.Message
+		var tsEpoch int64
+		if err := rows.Scan(&msg.ID, &msg.ChatID, &msg.SenderLID, &msg.Sender,
+			&msg.Content, &msg.MessageType, &tsEpoch); err != nil {
+			return nil, fmt.Errorf("failed to scan message row: %w", err)
+		}
+		msg.Timestamp = time.Unix(tsEpoch, 0).UTC()
+		messages = append(messages, msg)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	// Query returns DESC (newest first); reverse to ASC (oldest first) for AI context.
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+
+	s.logger.Debug("Retrieved group messages with bot", "chat_id", chatID, "count", len(messages))
+	return messages, nil
+}
+
+
+
 // GetMessagesBetween retrieves non-bot messages within [from, to] for the given chat.
 func (s *Service) GetMessagesBetween(chatID string, from, to time.Time) ([]types.Message, error) {
 	fromEpoch := from.Unix()
