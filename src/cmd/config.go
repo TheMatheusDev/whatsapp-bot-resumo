@@ -43,19 +43,28 @@ func (h *Handler) handleConfigCommand(msgTrigger types.MessageInfo) {
 		weeklyStatus = "⛔ desligado"
 	}
 
+	// Chatbot status
+	chatbotStatus := "✅ ligado"
+	if !settings.ChatbotEnabled {
+		chatbotStatus = "⛔ desligado"
+	}
+
 	msg := fmt.Sprintf(`⚙️ *Configurações do grupo*
 
 📜 *Regras:* %s
 👋 *Boas-vindas:* %d mensagem(ns) configurada(s)
 👋 *Despedidas:* %d mensagem(ns) configurada(s)
 🌙 *Resumo diário:* %s
-🏆 *Ranking semanal:* %s`,
+🏆 *Ranking semanal:* %s
+🤖 *Chatbot (menções/replies):* %s`,
 		rulesStatus,
 		welcomeCount,
 		farewellCount,
 		dailyStatus,
 		weeklyStatus,
+		chatbotStatus,
 	)
 
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, msg)
 }
+

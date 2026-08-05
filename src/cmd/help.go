@@ -53,6 +53,7 @@ Prefixos de comando: !, - ou /
 - !farewell → Lista as mensagens de despedida configuradas
 - !resumodia → Liga/desliga o resumo diário automático deste grupo (toggle)
 - !ranking → Liga/desliga o ranking semanal deste grupo (toggle)
+- !chatbot [on|off] → Liga/desliga respostas a menções e replies neste grupo (toggle)
 - !cache → Força atualização do cache do grupo
 `
 
