@@ -61,6 +61,11 @@ func NewService(cfg *types.DatabaseConfig, logger types.Logger) (*Service, error
 		return nil, fmt.Errorf("failed to migrate schema: %w", err)
 	}
 
+	if err := service.migrateChatbotEnabled(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to migrate chatbot_enabled column: %w", err)
+	}
+
 	if err := service.prepareStatements(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to prepare statements: %w", err)
@@ -115,7 +120,7 @@ func (s *Service) initSchema() error {
 		    ON messages (sender_lid)`,
 
 		// ── 4.5 group_configs ────────────────────────────────────────────────────
-		// weekly_ranking_enabled is an extension beyond the spec (existing feature).
+		// weekly_ranking_enabled and chatbot_enabled are extensions beyond the spec.
 		`CREATE TABLE IF NOT EXISTS group_configs (
 			chat_id                TEXT    PRIMARY KEY,
 			rules                  TEXT,
@@ -123,6 +128,8 @@ func (s *Service) initSchema() error {
 			                       CHECK (daily_summary_enabled  IN (0, 1)),
 			weekly_ranking_enabled INTEGER NOT NULL DEFAULT 0
 			                       CHECK (weekly_ranking_enabled IN (0, 1)),
+			chatbot_enabled        INTEGER NOT NULL DEFAULT 1
+			                       CHECK (chatbot_enabled        IN (0, 1)),
 			updated_at             INTEGER NOT NULL
 			                       DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
 			updated_by             TEXT    NOT NULL DEFAULT '',
@@ -240,7 +247,33 @@ func (s *Service) migrateMessagesCheckConstraint() error {
 	return nil
 }
 
+// migrateChatbotEnabled adds the chatbot_enabled column to an existing
+// group_configs table. New databases already have this column via initSchema;
+// this function is a no-op for them. For existing databases it uses
+// ALTER TABLE ADD COLUMN which is safe and atomic in SQLite.
+func (s *Service) migrateChatbotEnabled() error {
+	// Attempt to add the column. SQLite returns an error if it already exists;
+	// we check for that specific message and treat it as success.
+	_, err := s.db.Exec(
+		`ALTER TABLE group_configs ADD COLUMN chatbot_enabled INTEGER NOT NULL DEFAULT 1
+		 CHECK (chatbot_enabled IN (0, 1))`)
+	if err != nil {
+		// "duplicate column name" means the column is already present — no action needed.
+		if strings.Contains(err.Error(), "duplicate column name") {
+			return nil
+		}
+		// "no such table" means group_configs doesn't exist yet; initSchema will create it correctly.
+		if strings.Contains(err.Error(), "no such table") {
+			return nil
+		}
+		return fmt.Errorf("migrateChatbotEnabled: %w", err)
+	}
+	s.logger.Info("group_configs migration completed: chatbot_enabled column added (default 1)")
+	return nil
+}
+
 // prepareStatements prepares hot-path SQL statements.
+
 func (s *Service) prepareStatements() error {
 	s.stmtMutex.Lock()
 	defer s.stmtMutex.Unlock()
@@ -603,14 +636,14 @@ func (s *Service) GetAllGroups() ([]types.GroupSummary, error) {
 func (s *Service) GetGroupSettings(chatID string) (*types.GroupSettings, error) {
 	row := s.db.QueryRow(
 		`SELECT chat_id, rules, daily_summary_enabled, weekly_ranking_enabled,
-		        updated_at, updated_by
+		        chatbot_enabled, updated_at, updated_by
 		 FROM group_configs WHERE chat_id = ?`, chatID)
 
 	var gs types.GroupSettings
-	var dailyEnabled, weeklyEnabled int
+	var dailyEnabled, weeklyEnabled, chatbotEnabled int
 
 	err := row.Scan(&gs.ChatID, &gs.Rules, &dailyEnabled, &weeklyEnabled,
-		&gs.UpdatedAt, &gs.UpdatedBy)
+		&chatbotEnabled, &gs.UpdatedAt, &gs.UpdatedBy)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -620,6 +653,7 @@ func (s *Service) GetGroupSettings(chatID string) (*types.GroupSettings, error) 
 
 	gs.DailySummaryEnabled = dailyEnabled != 0
 	gs.WeeklyRankingEnabled = weeklyEnabled != 0
+	gs.ChatbotEnabled = chatbotEnabled != 0
 
 	// Populate welcome messages
 	wmsgs, err := s.GetWelcomeMessages(chatID)
@@ -657,6 +691,10 @@ func (s *Service) UpsertGroupSettings(settings types.GroupSettings) error {
 	if settings.WeeklyRankingEnabled {
 		weeklyEnabled = 1
 	}
+	chatbotEnabled := 1 // default on
+	if !settings.ChatbotEnabled {
+		chatbotEnabled = 0
+	}
 
 	updatedAt := time.Now().Unix()
 	updatedBy := settings.UpdatedBy
@@ -664,16 +702,17 @@ func (s *Service) UpsertGroupSettings(settings types.GroupSettings) error {
 	_, err := s.db.Exec(
 		`INSERT INTO group_configs
 		    (chat_id, rules, daily_summary_enabled, weekly_ranking_enabled,
-		     updated_at, updated_by)
-		 VALUES (?, ?, ?, ?, ?, ?)
+		     chatbot_enabled, updated_at, updated_by)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(chat_id) DO UPDATE SET
 		     rules                  = excluded.rules,
 		     daily_summary_enabled  = excluded.daily_summary_enabled,
 		     weekly_ranking_enabled = excluded.weekly_ranking_enabled,
+		     chatbot_enabled        = excluded.chatbot_enabled,
 		     updated_at             = excluded.updated_at,
 		     updated_by             = excluded.updated_by`,
 		settings.ChatID, settings.Rules, dailyEnabled, weeklyEnabled,
-		updatedAt, updatedBy,
+		chatbotEnabled, updatedAt, updatedBy,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to upsert group_configs: %w", err)
