@@ -88,6 +88,9 @@ type GroupSettings struct {
 	FarewellMessages     []string `json:"farewell_messages"` // from farewell_messages table
 	DailySummaryEnabled  bool     `json:"daily_summary_enabled"`
 	WeeklyRankingEnabled bool     `json:"weekly_ranking_enabled"`
+	// ChatbotEnabled controls whether the bot responds to @mentions and replies.
+	// Defaults to true for all groups; admins can toggle with !chatbot on/off.
+	ChatbotEnabled       bool     `json:"chatbot_enabled"`
 	UpdatedAt            int64    `json:"updated_at"`
 	UpdatedBy            string   `json:"updated_by"`
 }
