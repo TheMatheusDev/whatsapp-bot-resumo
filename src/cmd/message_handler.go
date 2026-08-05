@@ -55,6 +55,11 @@ type Handler struct {
 	// Prevents a single user from flooding the Gemini API.
 	sumRateLimitCache sync.Map
 
+	// chatRateLimitCache enforces a per-user cooldown on chatbot triggers
+	// (mentions and replies). Separate from sumRateLimitCache so the two
+	// features do not share rate limit state. Cooldown: chatCooldown (5 s).
+	chatRateLimitCache sync.Map
+
 	// shutdownCh is closed when the handler is shutting down. All goroutines
 	// spawned by the handler should select on this channel to detect shutdown.
 	shutdownCh chan struct{}
@@ -233,6 +238,22 @@ func (h *Handler) handleMessage(evt *events.Message) {
 	// Process commands (only for new messages)
 	if h.isCommand(cmdContent) {
 		h.handleCommand(cmdContent, evt.Info, evt.Message)
+		return
+	}
+
+	// Detect mention or reply to the bot (groups only, post-boot messages only).
+	// Messages that start with '!' are already handled as commands above and
+	// must never double-trigger the chatbot — the HasPrefix guard below is a
+	// safety net for any edge case where isCommand returned false but the
+	// content still begins with a command prefix.
+	if evt.Info.IsGroup && !strings.HasPrefix(cmdContent, "!") {
+		if h.isBotMentioned(msg) || h.isReplyToBot(msg) {
+			h.wg.Add(1)
+			go func() {
+				defer h.wg.Done()
+				h.handleChatResponse(evt)
+			}()
+		}
 	}
 }
 
