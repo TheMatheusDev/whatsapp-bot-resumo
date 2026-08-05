@@ -47,6 +47,7 @@ func (h *Handler) loadOrDefaultSettings(chatID string) wstypes.GroupSettings {
 		ChatID:               chatID,
 		DailySummaryEnabled:  true,
 		WeeklyRankingEnabled: true,
+		ChatbotEnabled:       true,
 	}
 }
 
@@ -410,6 +411,64 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 		fmt.Sprintf("🏆 Ranking semanal: %s → *%s*", prevStatus, newStatus))
 	h.logger.Info("Weekly ranking toggled", "chat", msgTrigger.Chat.User, "enabled", settings.WeeklyRankingEnabled)
 }
+
+// ---------------------------------------------------------------------------
+// !chatbot  (chatbot mention/reply toggle)
+// ---------------------------------------------------------------------------
+
+// handleChatbotToggle enables or disables the chatbot feature (mention/reply
+// responses) for the current group. Only group admins can use this command.
+//
+// Usage:
+//
+//	!chatbot        → toggles current state
+//	!chatbot on     → enables explicitly
+//	!chatbot off    → disables explicitly
+func (h *Handler) handleChatbotToggle(args []string, msgTrigger types.MessageInfo) {
+	if !h.requireGroupAdmin(msgTrigger) {
+		return
+	}
+
+	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
+	prevEnabled := settings.ChatbotEnabled
+
+	// Support explicit on/off arguments; fall back to toggle when absent.
+	if len(args) > 0 {
+		switch strings.ToLower(args[0]) {
+		case "on", "ativar", "ligar":
+			settings.ChatbotEnabled = true
+		case "off", "desativar", "desligar":
+			settings.ChatbotEnabled = false
+		default:
+			h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+				"❌ Uso: !chatbot [on|off]\n\n• !chatbot on  → ativa respostas a menções e replies\n• !chatbot off → desativa\n• !chatbot     → alterna o estado atual")
+			return
+		}
+	} else {
+		settings.ChatbotEnabled = !settings.ChatbotEnabled
+	}
+
+	if err := h.saveAndInvalidate(settings); err != nil {
+		h.logger.Error("handleChatbotToggle: failed to save settings", "error", err)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ Erro ao salvar configuração. Tente novamente.")
+		return
+	}
+
+	prevStatus := "✅ ligado"
+	if !prevEnabled {
+		prevStatus = "⛔ desligado"
+	}
+	newStatus := "✅ ligado"
+	if !settings.ChatbotEnabled {
+		newStatus = "⛔ desligado"
+	}
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+		fmt.Sprintf("🤖 Chatbot (menções/replies): %s → *%s*", prevStatus, newStatus))
+	h.logger.Info("Chatbot toggled", "chat", msgTrigger.Chat.User, "enabled", settings.ChatbotEnabled)
+}
+
+
 
 // ---------------------------------------------------------------------------
 // !cache  (flush GroupInfo cache for this group)
