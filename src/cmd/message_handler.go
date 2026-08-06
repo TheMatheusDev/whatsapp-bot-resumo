@@ -103,6 +103,19 @@ func NewHandler(
 	}, nil
 }
 
+// SetBotIdentity stores the bot's own JID identifiers on the handler.
+// Must be called after the WhatsApp client connects, since the JID values
+// (LID and phone number) are only available once the session is established.
+// Both lid (LID user part) and phoneUser (phone number user part) are stored
+// so that isBotMentioned and isReplyToBot can match against either format.
+func (h *Handler) SetBotIdentity(lid, phoneUser string) {
+	h.botLID = lid
+	h.botPhoneUser = phoneUser
+	h.logger.Info("Bot identity set on handler",
+		"bot_lid", lid,
+		"bot_phone", phoneUser)
+}
+
 // Shutdown signals the handler to stop accepting new events and waits for all
 // inflight goroutines to finish. It is safe to call Shutdown more than once.
 func (h *Handler) Shutdown() {

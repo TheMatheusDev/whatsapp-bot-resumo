@@ -132,10 +132,16 @@ func (b *Bot) Start(ctx context.Context) error {
 	// via sender_lid != botLID. Use .User (bare numeric part) — the @server suffix is
 	// stripped everywhere; contacts.lid and messages.sender_lid store only the user part.
 	botJID := b.whatsappSvc.GetBotJID()
+	phoneUser := b.whatsappSvc.GetBotPhoneUser()
 	b.dbService.SetBotLID(botJID.User)
 	b.logger.Info("Bot LID registered",
 		"lid", botJID.User,
-		"phone_user", b.whatsappSvc.GetBotPhoneUser())
+		"phone_user", phoneUser)
+
+	// Inject the bot's JID into the handler. NewHandler is called before
+	// Connect, so JID values are unavailable at construction time; this call
+	// provides them once the session is established.
+	b.handler.SetBotIdentity(botJID.User, phoneUser)
 
 	// Ensure the bot itself is in the contacts table to satisfy foreign keys
 	// when saving bot-originated messages (like summaries).
