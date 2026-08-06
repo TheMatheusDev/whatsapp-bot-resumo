@@ -144,6 +144,14 @@ func (h *Handler) handleChatResponse(evt *events.Message) {
 			"chat", msgTrigger.Chat.User,
 			"sender", msgTrigger.Sender.User,
 			"wait", wait)
+
+		// Notify the user and react with ❌ so they know they must wait.
+		replyMsg := fmt.Sprintf("❌ Você deve aguardar %ds entre interações!", int(chatCooldown.Seconds()))
+		_ = h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, replyMsg)
+
+		reactCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = h.whatsappService.ReactToMessage(reactCtx, msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌")
 		return
 	}
 
