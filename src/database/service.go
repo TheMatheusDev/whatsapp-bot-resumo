@@ -641,8 +641,9 @@ func (s *Service) GetGroupSettings(chatID string) (*types.GroupSettings, error) 
 
 	var gs types.GroupSettings
 	var dailyEnabled, weeklyEnabled, chatbotEnabled int
+	var rules sql.NullString
 
-	err := row.Scan(&gs.ChatID, &gs.Rules, &dailyEnabled, &weeklyEnabled,
+	err := row.Scan(&gs.ChatID, &rules, &dailyEnabled, &weeklyEnabled,
 		&chatbotEnabled, &gs.UpdatedAt, &gs.UpdatedBy)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -651,6 +652,7 @@ func (s *Service) GetGroupSettings(chatID string) (*types.GroupSettings, error) 
 		return nil, fmt.Errorf("failed to scan group_configs row: %w", err)
 	}
 
+	gs.Rules = rules.String
 	gs.DailySummaryEnabled = dailyEnabled != 0
 	gs.WeeklyRankingEnabled = weeklyEnabled != 0
 	gs.ChatbotEnabled = chatbotEnabled != 0
