@@ -63,6 +63,11 @@ type Handler struct {
 	// features do not share rate limit state. Cooldown: chatCooldown (5 s).
 	chatRateLimitCache sync.Map
 
+	// chatLastInteraction tracks the last successful chatbot response time per
+	// group (keys are chatID strings, values are time.Time). Used to switch
+	// between cold (100 msgs) and warm (30 msgs) context windows.
+	chatLastInteraction sync.Map
+
 	// shutdownCh is closed when the handler is shutting down. All goroutines
 	// spawned by the handler should select on this channel to detect shutdown.
 	shutdownCh chan struct{}
