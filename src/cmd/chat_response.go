@@ -68,11 +68,6 @@ func (h *Handler) isBotMentioned(msg *waE2E.Message) bool {
 		return false
 	}
 
-	h.logger.Info("isBotMentioned: checking",
-		"bot_lid", h.botLID,
-		"bot_phone", h.botPhoneUser,
-		"mentioned_jids", mentioned)
-
 	for _, jid := range mentioned {
 		user := jid
 		if idx := strings.Index(jid, "@"); idx >= 0 {
@@ -104,12 +99,6 @@ func (h *Handler) isReplyToBot(msg *waE2E.Message) bool {
 	if idx := strings.Index(raw, "@"); idx >= 0 {
 		participant = raw[:idx]
 	}
-
-	h.logger.Info("isReplyToBot: checking",
-		"bot_lid", h.botLID,
-		"bot_phone", h.botPhoneUser,
-		"participant", raw,
-		"stanza_id", ctx.GetStanzaID())
 
 	matched := participant == h.botLID || (h.botPhoneUser != "" && participant == h.botPhoneUser)
 	if matched {
