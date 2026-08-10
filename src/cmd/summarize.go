@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	wstypes "whatsapp-summarizer/src/types"
+	"whatsapp-summarizer/src/ai"
 	"whatsapp-summarizer/src/utils"
 )
 
@@ -143,6 +144,14 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 		summary, lastErr = h.aiService.SummarizeMessages(ctx, messages, opts, onRetry)
 		if lastErr == nil {
 			break
+		}
+
+		if ai.IsPersonalityError(lastErr) {
+			h.logger.Error("performSummarization: personality error", "error", lastErr, "personality", opts.Personality)
+			h.reactToCommand(msgTrigger, "❌")
+			h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID,
+				fmt.Sprintf("❌ A personalidade *%s* não está disponível ou está mal configurada no servidor (arquivo .toml ausente ou inválido).", opts.Personality))
+			return
 		}
 
 		h.logger.Warn("SummarizeMessages: all models failed on attempt",

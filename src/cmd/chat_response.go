@@ -10,6 +10,7 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 
 	wstypes "whatsapp-summarizer/src/types"
+	"whatsapp-summarizer/src/ai"
 )
 
 // chatCooldown is the minimum interval between chatbot responses per user.
@@ -217,6 +218,13 @@ func (h *Handler) handleChatResponse(evt *events.Message) {
 	response, err := h.aiService.ChatResponse(ctx, messages, triggerMsg, triggerSender, opts)
 	if err != nil {
 		h.logger.Error("handleChatResponse: AI service failed", "error", err)
+		if ai.IsPersonalityError(err) {
+			replyMsg := fmt.Sprintf("❌ A personalidade *%s* não está disponível ou está mal configurada no servidor (arquivo .toml ausente ou inválido).", opts.Personality)
+			_ = h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, replyMsg)
+			reactCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = h.whatsappService.ReactToMessage(reactCtx, msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌")
+		}
 		return
 	}
 

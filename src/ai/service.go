@@ -87,6 +87,22 @@ func (s *Service) SummarizeMessages(ctx context.Context, messages []types.Messag
 		return "", fmt.Errorf("no messages to summarize")
 	}
 
+	systemPrompt, err := s.buildSystemPrompt(opts)
+	if err != nil {
+		return "", err
+	}
+
+	messagesStr := s.buildMessagesString(messages)
+	var userPrompt string
+	if opts.Question != "" {
+		userPrompt = fmt.Sprintf("Responda a pergunta a seguir baseado nas msgs: \"%s\"\n\nMensagens:\n%s", opts.Question, messagesStr)
+	} else {
+		userPrompt = fmt.Sprintf("Resuma as seguintes mensagens:\n%s", messagesStr)
+	}
+
+	fullPrompt := fmt.Sprintf("%s\n\n%s", systemPrompt, userPrompt)
+	s.logger.Debug("Generated full prompt", "prompt", fullPrompt)
+
 	models := []string{s.model, s.modelBackup, s.modelBackup2}
 	var lastErr error
 	for i, model := range models {
@@ -97,7 +113,7 @@ func (s *Service) SummarizeMessages(ctx context.Context, messages []types.Messag
 				onRetry(i+1, model)
 			}
 		}
-		result, err := s.summarize(ctx, messages, opts, model)
+		result, err := s.generateContent(ctx, fullPrompt, model)
 		if err == nil {
 			return result, nil
 		}
@@ -153,31 +169,6 @@ func (s *Service) buildChatSystemPrompt(opts types.ChatOptions) (string, error) 
 		name = "resumobot"
 	}
 	return s.personalityLoader.GetChatPersonality(name)
-}
-
-
-
-// summarize builds the prompt from messages+opts and calls the Gemini API with
-// the given model name. It is the single shared implementation used by
-// SummarizeMessages for all retry attempts.
-func (s *Service) summarize(ctx context.Context, messages []types.Message, opts types.SummarizeOptions, model string) (string, error) {
-	messagesStr := s.buildMessagesString(messages)
-	systemPrompt, err := s.buildSystemPrompt(opts)
-	if err != nil {
-		return "", err
-	}
-
-	var userPrompt string
-	if opts.Question != "" {
-		userPrompt = fmt.Sprintf("Responda a pergunta a seguir baseado nas msgs: \"%s\"\n\nMensagens:\n%s", opts.Question, messagesStr)
-	} else {
-		userPrompt = fmt.Sprintf("Resuma as seguintes mensagens:\n%s", messagesStr)
-	}
-
-	fullPrompt := fmt.Sprintf("%s\n\n%s", systemPrompt, userPrompt)
-	s.logger.Debug("Generated full prompt", "prompt", fullPrompt)
-
-	return s.generateContent(ctx, fullPrompt, model)
 }
 
 // buildMessagesString converts messages to a formatted string.

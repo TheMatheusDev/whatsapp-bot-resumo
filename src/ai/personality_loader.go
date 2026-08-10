@@ -1,13 +1,38 @@
 package ai
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/BurntSushi/toml"
 )
+
+// PersonalityError is returned when a personality is missing or misconfigured.
+type PersonalityError struct {
+	Personality string
+	Message     string
+}
+
+func (e *PersonalityError) Error() string {
+	return e.Message
+}
+
+// IsPersonalityError checks whether err is a *PersonalityError or contains personality configuration error text.
+func IsPersonalityError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var pe *PersonalityError
+	if errors.As(err, &pe) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "personality ") && (strings.Contains(msg, "not found") || strings.Contains(msg, "misconfigured") || strings.Contains(msg, "has no") || strings.Contains(msg, "not available"))
+}
 
 // personalityFile is the structure expected in each <name>.toml file.
 type personalityFile struct {
@@ -111,13 +136,13 @@ func (pl *PersonalityLoader) GetSummarizePersonality(name string) (string, error
 
 	entry, ok := pl.personalities[name]
 	if !ok {
-		return "", fmt.Errorf("personality %q not found — check file %s.toml", name, name)
+		return "", &PersonalityError{Personality: name, Message: fmt.Sprintf("personality %q not found — check file %s.toml", name, name)}
 	}
 	if entry == nil {
-		return "", fmt.Errorf("personality %q is misconfigured — check file %s.toml", name, name)
+		return "", &PersonalityError{Personality: name, Message: fmt.Sprintf("personality %q is misconfigured — check file %s.toml", name, name)}
 	}
 	if entry.summarize == "" {
-		return "", fmt.Errorf("personality %q has no summarize prompt — check file %s.toml", name, name)
+		return "", &PersonalityError{Personality: name, Message: fmt.Sprintf("personality %q has no summarize prompt — check file %s.toml", name, name)}
 	}
 	return entry.summarize, nil
 }
@@ -130,13 +155,13 @@ func (pl *PersonalityLoader) GetChatPersonality(name string) (string, error) {
 
 	entry, ok := pl.personalities[name]
 	if !ok {
-		return "", fmt.Errorf("personality %q not found — check file %s.toml", name, name)
+		return "", &PersonalityError{Personality: name, Message: fmt.Sprintf("personality %q not found — check file %s.toml", name, name)}
 	}
 	if entry == nil {
-		return "", fmt.Errorf("personality %q is misconfigured — check file %s.toml", name, name)
+		return "", &PersonalityError{Personality: name, Message: fmt.Sprintf("personality %q is misconfigured — check file %s.toml", name, name)}
 	}
 	if entry.chat == "" {
-		return "", fmt.Errorf("personality %q has no chat prompt — check file %s.toml", name, name)
+		return "", &PersonalityError{Personality: name, Message: fmt.Sprintf("personality %q has no chat prompt — check file %s.toml", name, name)}
 	}
 	return entry.chat, nil
 }
@@ -156,7 +181,7 @@ func (pl *PersonalityLoader) GetLengthPrompt(name, style string) (string, error)
 
 	entry, ok := pl.personalities[name]
 	if !ok || entry == nil {
-		return "", fmt.Errorf("personality %q is not available for length prompt", name)
+		return "", &PersonalityError{Personality: name, Message: fmt.Sprintf("personality %q is not available for length prompt", name)}
 	}
 
 	switch style {
