@@ -269,4 +269,7 @@ type BotConfig struct {
 	Rules              string              `json:"rules"`
 	OnboardingMessage  string              `json:"onboarding_message"`
 	MediaDownload      MediaDownloadConfig `json:"media_download"`
+	// PersonalitiesDir is the directory where personality .toml files are stored.
+	// Configurable via PERSONALITIES_DIR in .env (default: ./personalities).
+	PersonalitiesDir   string              `json:"personalities_dir"`
 }

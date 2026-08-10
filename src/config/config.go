@@ -59,6 +59,7 @@ func Load() (*types.Config, error) {
 				Document: getEnvBool("DOWNLOAD_DOCUMENT", true),
 				Sticker:  getEnvBool("DOWNLOAD_STICKER", true),
 			},
+			PersonalitiesDir: getEnv("PERSONALITIES_DIR", "./personalities"),
 		},
 	}
 

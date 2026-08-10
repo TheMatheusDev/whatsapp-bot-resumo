@@ -54,12 +54,26 @@ func New() (*Bot, error) {
 
 	l.Info("Configuration loaded successfully")
 
+	// Load personality TOML files. A total failure (no files found) is fatal;
+	// partial errors (individual broken files) are logged as warnings and those
+	// personalities are marked unavailable without stopping the bot.
+	personalityLoader, err := ai.NewPersonalityLoader(cfg.Bot.PersonalitiesDir)
+	if err != nil {
+		l.Warn("PersonalityLoader: some personality files could not be loaded", "error", err)
+		// If the loader itself could not be created (no files at all), abort.
+		if personalityLoader == nil {
+			return nil, fmt.Errorf("failed to load personalities from %q: %w", cfg.Bot.PersonalitiesDir, err)
+		}
+	} else {
+		l.Info("Personality files loaded successfully", "dir", cfg.Bot.PersonalitiesDir)
+	}
+
 	dbService, err := database.NewService(&cfg.Database, l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database service: %w", err)
 	}
 
-	aiService, err := ai.NewService(cfg.Gemini.APIKey, cfg.Gemini.Model, cfg.Gemini.ModelBackup, cfg.Gemini.ModelBackup2, cfg.Gemini.ApiLogs, l, cfg.Bot.Timezone)
+	aiService, err := ai.NewService(cfg.Gemini.APIKey, cfg.Gemini.Model, cfg.Gemini.ModelBackup, cfg.Gemini.ModelBackup2, cfg.Gemini.ApiLogs, l, cfg.Bot.Timezone, personalityLoader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize AI service: %w", err)
 	}
@@ -96,7 +110,7 @@ func New() (*Bot, error) {
 	b.whatsappSvc = whatsappSvc
 
 	b.botStartTime = time.Now()
-	handler, err := cmd.NewHandler(cfg, aiService, dbService, whatsappSvc, cache, l, b.botStartTime)
+	handler, err := cmd.NewHandler(cfg, aiService, dbService, whatsappSvc, cache, l, b.botStartTime, personalityLoader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize handler: %w", err)
 	}

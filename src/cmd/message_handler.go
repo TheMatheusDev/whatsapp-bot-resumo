@@ -11,6 +11,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 
+	"whatsapp-summarizer/src/ai"
 	wstypes "whatsapp-summarizer/src/types"
 )
 
@@ -31,6 +32,11 @@ type Handler struct {
 	// (e.g. "5521999999999"). WhatsApp still uses the phone number in
 	// MentionedJID and Participant for many clients, so we check both.
 	botPhoneUser string
+
+	// personalityLoader holds the hot-swappable personality prompts loaded
+	// from TOML files. Commands that need personality prompts use this loader
+	// instead of hardcoded constants.
+	personalityLoader *ai.PersonalityLoader
 
 	// settingsCache caches per-group settings to avoid DB round-trips on every
 	// message. Keys are chatID strings; values are *wstypes.GroupSettings.
@@ -86,6 +92,7 @@ func NewHandler(
 	cache wstypes.CacheService,
 	logger wstypes.Logger,
 	botStartTime time.Time,
+	personalityLoader *ai.PersonalityLoader,
 ) (*Handler, error) {
 	// Parse timezone from config
 	loc, err := time.LoadLocation(config.Bot.Timezone)
@@ -94,17 +101,18 @@ func NewHandler(
 	}
 
 	return &Handler{
-		config:          config,
-		aiService:       aiService,
-		dbService:       dbService,
-		whatsappService: whatsappService,
-		cache:           cache,
-		logger:          logger,
-		botStartTime:    botStartTime,
-		timezone:        loc,
-		botLID:          whatsappService.GetBotJID().User,
-		botPhoneUser:    whatsappService.GetBotPhoneUser(),
-		shutdownCh:      make(chan struct{}),
+		config:            config,
+		aiService:         aiService,
+		dbService:         dbService,
+		whatsappService:   whatsappService,
+		cache:             cache,
+		logger:            logger,
+		botStartTime:      botStartTime,
+		timezone:          loc,
+		botLID:            whatsappService.GetBotJID().User,
+		botPhoneUser:      whatsappService.GetBotPhoneUser(),
+		shutdownCh:        make(chan struct{}),
+		personalityLoader: personalityLoader,
 	}, nil
 }
 
@@ -372,6 +380,8 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 		h.handleListFarewellCommand(msgTrigger)
 	case "!config":
 		h.handleConfigCommand(msgTrigger)
+	case "!reload":
+		h.handleReloadPersonalitiesCommand(msgTrigger)
 	default:
 		h.logger.Debug("Unknown command", "command", command)
 	}

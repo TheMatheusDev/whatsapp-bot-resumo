@@ -15,20 +15,22 @@ import (
 
 // Service implements the AIService interface
 type Service struct {
-	client       *genai.Client
-	model        string
-	modelBackup  string
-	modelBackup2 string
-	apiLogs      bool
-	logger       types.Logger
-	timezone     *time.Location // used to format message timestamps sent to the AI
+	client              *genai.Client
+	model               string
+	modelBackup         string
+	modelBackup2        string
+	apiLogs             bool
+	logger              types.Logger
+	timezone            *time.Location // used to format message timestamps sent to the AI
+	personalityLoader   *PersonalityLoader
 }
 
 // NewService creates a new AI service.
 // timezone is an IANA timezone name (e.g. "America/Sao_Paulo") used to
 // convert message timestamps to local time before sending them to the API.
 // An empty or invalid value falls back to UTC.
-func NewService(apiKey string, model string, modelBackup string, modelBackup2 string, apiLogs bool, logger types.Logger, timezone string) (*Service, error) {
+// personalityLoader is used to resolve personality prompts at runtime from TOML files.
+func NewService(apiKey string, model string, modelBackup string, modelBackup2 string, apiLogs bool, logger types.Logger, timezone string, personalityLoader *PersonalityLoader) (*Service, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
@@ -64,13 +66,14 @@ func NewService(apiKey string, model string, modelBackup string, modelBackup2 st
 	}
 
 	return &Service{
-		client:       client,
-		model:        model,
-		modelBackup:  modelBackup,
-		modelBackup2: modelBackup2,
-		apiLogs:      apiLogs,
-		logger:       logger,
-		timezone:     loc,
+		client:            client,
+		model:             model,
+		modelBackup:       modelBackup,
+		modelBackup2:      modelBackup2,
+		apiLogs:           apiLogs,
+		logger:            logger,
+		timezone:          loc,
+		personalityLoader: personalityLoader,
 	}, nil
 }
 
@@ -113,7 +116,10 @@ func (s *Service) ChatResponse(ctx context.Context, messages []types.Message, tr
 	}
 
 	messagesStr := s.buildMessagesString(messages)
-	systemPrompt := s.buildChatSystemPrompt(opts)
+	systemPrompt, err := s.buildChatSystemPrompt(opts)
+	if err != nil {
+		return "", err
+	}
 
 	userPrompt := fmt.Sprintf(
 		"Histórico recente da conversa:\n%s\n\n%s escreveu para você: \"%s\"\n\nResponda diretamente a essa mensagem.",
@@ -139,21 +145,14 @@ func (s *Service) ChatResponse(ctx context.Context, messages []types.Message, tr
 	return "", fmt.Errorf("all models failed to generate chat response: %w", lastErr)
 }
 
-// buildChatSystemPrompt returns the system prompt for chatbot conversation mode
-// based on the configured personality.
-func (s *Service) buildChatSystemPrompt(opts types.ChatOptions) string {
-	switch opts.Personality {
-	case "profeta":
-		return ChatProfetaPersonality
-	case "farialimer":
-		return ChatFariaLimerPersonality
-	case "zoomer":
-		return ChatZoomerPersonality
-	case "clt":
-		fallthrough
-	default:
-		return ChatCLTPersonality
+// buildChatSystemPrompt returns the chat system prompt for the configured personality
+// by reading it from the PersonalityLoader.
+func (s *Service) buildChatSystemPrompt(opts types.ChatOptions) (string, error) {
+	name := opts.Personality
+	if name == "" {
+		name = "clt"
 	}
+	return s.personalityLoader.GetChatPersonality(name)
 }
 
 
@@ -163,7 +162,10 @@ func (s *Service) buildChatSystemPrompt(opts types.ChatOptions) string {
 // SummarizeMessages for all retry attempts.
 func (s *Service) summarize(ctx context.Context, messages []types.Message, opts types.SummarizeOptions, model string) (string, error) {
 	messagesStr := s.buildMessagesString(messages)
-	systemPrompt := s.buildSystemPrompt(opts)
+	systemPrompt, err := s.buildSystemPrompt(opts)
+	if err != nil {
+		return "", err
+	}
 
 	var userPrompt string
 	if opts.Question != "" {
@@ -195,34 +197,22 @@ func (s *Service) buildMessagesString(messages []types.Message) string {
 	return builder.String()
 }
 
-// buildSystemPrompt creates the system prompt based on options
-func (s *Service) buildSystemPrompt(opts types.SummarizeOptions) string {
-	// Choose personality
-	var personality string
-	switch opts.Personality {
-	case "profeta":
-		personality = ProfetaBOTPersonality
-	case "farialimer":
-		personality = FariaLimerPersonality
-	case "zoomer":
-		personality = ZoomerPersonality
-	case "clt":
-		fallthrough
-	default:
-		personality = CLTPersonality
+// buildSystemPrompt creates the system prompt based on options by reading
+// personality and length prompts from the PersonalityLoader.
+func (s *Service) buildSystemPrompt(opts types.SummarizeOptions) (string, error) {
+	name := opts.Personality
+	if name == "" {
+		name = "clt"
 	}
 
-	// Choose length prompt
-	var lengthPrompt string
-	switch opts.Style {
-	case "short":
-		lengthPrompt = ShortLengthPrompt
-	case "medium":
-		lengthPrompt = MediumLengthPrompt
-	case "long":
-		lengthPrompt = LongLengthPrompt
-	default:
-		lengthPrompt = ShortLengthPrompt
+	personality, err := s.personalityLoader.GetSummarizePersonality(name)
+	if err != nil {
+		return "", err
+	}
+
+	lengthPrompt, err := s.personalityLoader.GetLengthPrompt(name, opts.Style)
+	if err != nil {
+		return "", err
 	}
 
 	// Add question-specific instructions if a question is provided
@@ -231,7 +221,7 @@ func (s *Service) buildSystemPrompt(opts types.SummarizeOptions) string {
 		questionPrompt = "\n\nVocê deve responder SOMENTE à pergunta fornecida pelo usuário. NÃO faça um resumo das mensagens. A resposta deve ser baseada nas mensagens fornecidas e ser direta e objetiva, respondendo especificamente o que foi perguntado."
 	}
 
-	return fmt.Sprintf("%s\n%s%s", personality, lengthPrompt, questionPrompt)
+	return fmt.Sprintf("%s\n%s%s", personality, lengthPrompt, questionPrompt), nil
 }
 
 // generateContent calls the Gemini API to generate content
