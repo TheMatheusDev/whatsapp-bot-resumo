@@ -15,6 +15,7 @@ Prefixos de comando: !, - ou /
 - !p <número> <pergunta> → Responde a pergunta com base nas últimas X mensagens
 - !d ou !dia → Resume todas as msgs do dia (desde 4h da manhã)	
 - !semana → Ranking de mensagens dos últimos 7 dias (atalho: !s)
+- !mes → Ranking de mensagens dos últimos 30 dias (atalho: !m)
 - !figurinha → Cria um sticker a partir da foto, vídeo ou GIF que você respondeu (atalho: !sticker)
 - !help → Informações do bot
 - !regras → Exibe as regras do grupo

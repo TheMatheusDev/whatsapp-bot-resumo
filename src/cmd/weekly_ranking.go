@@ -99,45 +99,55 @@ func (h *Handler) handleWeeklyRankingNowCommand(msgTrigger types.MessageInfo) {
 	h.wg.Add(1)
 	go func() {
 		defer h.wg.Done()
-		h.performRollingWeeklyRanking(msgTrigger)
+		h.performRollingDaysRanking(msgTrigger, 7, "🏆 *Ranking de mensagens dos últimos 7 dias*")
 	}()
 }
 
-// performRollingWeeklyRanking fetches messages from the last 7 rolling days and sends the ranking.
-func (h *Handler) performRollingWeeklyRanking(msgTrigger types.MessageInfo) {
+// handleMonthlyRankingNowCommand handles the !mes command to trigger a ranking
+// of the last 30 rolling days up to current time.
+func (h *Handler) handleMonthlyRankingNowCommand(msgTrigger types.MessageInfo) {
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		h.performRollingDaysRanking(msgTrigger, 30, "🏆 *Ranking de mensagens dos últimos 30 dias*")
+	}()
+}
+
+// performRollingDaysRanking fetches messages from the last N rolling days and sends the ranking.
+func (h *Handler) performRollingDaysRanking(msgTrigger types.MessageInfo, days int, titleHeader string) {
 	now := time.Now().In(h.timezone)
-	sevenDaysAgo := now.AddDate(0, 0, -7)
+	startDate := now.AddDate(0, 0, -days)
 
 	h.dbService.FlushPendingMessages()
-	messages, err := h.dbService.GetMessagesBetween(msgTrigger.Chat.User, sevenDaysAgo, now)
+	messages, err := h.dbService.GetMessagesBetween(msgTrigger.Chat.User, startDate, now)
 	if err != nil {
-		h.logger.Error("WeeklyRankingNow: failed to get messages", "error", err, "chat", msgTrigger.Chat.User)
+		h.logger.Error("RollingDaysRanking: failed to get messages", "error", err, "chat", msgTrigger.Chat.User, "days", days)
 		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-			"❌ Erro ao buscar mensagens dos últimos 7 dias.")
+			fmt.Sprintf("❌ Erro ao buscar mensagens dos últimos %d dias.", days))
 		return
 	}
 
 	if len(messages) == 0 {
-		h.logger.Info("WeeklyRankingNow: no messages in the last 7 days", "chat", msgTrigger.Chat.User)
+		h.logger.Info("RollingDaysRanking: no messages found", "chat", msgTrigger.Chat.User, "days", days)
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
-			"ℹ️ Nenhuma mensagem registrada nos últimos 7 dias.")
+			fmt.Sprintf("ℹ️ Nenhuma mensagem registrada nos últimos %d dias.", days))
 		return
 	}
 
-	titleHeader := "🏆 *Ranking de mensagens dos últimos 7 dias*"
-	rankingMsg := buildCustomRankingMessage(messages, sevenDaysAgo, now, titleHeader)
+	rankingMsg := buildCustomRankingMessage(messages, startDate, now, titleHeader)
 
 	if err := h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, rankingMsg); err != nil {
-		h.logger.Error("WeeklyRankingNow: failed to send ranking message", "error", err, "chat", msgTrigger.Chat.User)
+		h.logger.Error("RollingDaysRanking: failed to send ranking message", "error", err, "chat", msgTrigger.Chat.User, "days", days)
 		return
 	}
 
 	h.reactToCommand(msgTrigger, "🏆")
-	h.logger.Info("WeeklyRankingNow completed",
+	h.logger.Info("RollingDaysRanking completed",
 		"chat_id", msgTrigger.Chat.User,
+		"days", days,
 		"message_count", len(messages),
-		"start_date", sevenDaysAgo.Format("2006-01-02"),
+		"start_date", startDate.Format("2006-01-02"),
 		"end_date", now.Format("2006-01-02"),
 	)
 }
