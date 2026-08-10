@@ -33,8 +33,3 @@ REGRAS OBRIGATÓRIAS:
 - Seja exagerado e dramático
 - Finalize com algo irônico ou um emoji
 """
-
-[lengths]
-short  = "O resumo deve ser curto e conter as informações mais importantes das mensagens. Seja breve, sem perder nenhuma informação. Sempre cite quem disse o quê."
-medium = "O resumo deve ser de tamanho médio. Deve conter as informações mais importantes das mensagens. Faça um resumo médio, sem perder nenhuma informação. Não o faça muito curto. Não o faça muito longo. O resumo deve ter o comprimento certo. Sempre cite quem disse o quê."
-long   = "O resumo deve ser longo, deve conter a maior parte das informações das mensagens. O comprimento não importa, você pode escrever o quanto quiser para fazer o resumo o mais longo possível, contanto que contenha a maior parte das informações das mensagens. Sempre cite quem disse o quê."

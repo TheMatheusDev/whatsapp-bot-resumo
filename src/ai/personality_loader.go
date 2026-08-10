@@ -141,8 +141,15 @@ func (pl *PersonalityLoader) GetChatPersonality(name string) (string, error) {
 	return entry.chat, nil
 }
 
+const (
+	defaultShortPrompt  = "O resumo deve ser curto e conter as informações mais importantes das mensagens. Seja breve, sem perder nenhuma informação. Sempre cite quem disse o quê."
+	defaultMediumPrompt = "O resumo deve ser de tamanho médio. Deve conter as informações mais importantes das mensagens. Faça um resumo médio, sem perder nenhuma informação. Não o faça muito curto. Não o faça muito longo. O resumo deve ter o comprimento certo. Sempre cite quem disse o quê."
+	defaultLongPrompt   = "O resumo deve ser longo, deve conter a maior parte das informações das mensagens. O comprimento não importa, você pode escrever o quanto quiser para fazer o resumo o mais longo possível, contanto que contenha a maior parte das informações das mensagens. Sempre cite quem disse o quê."
+)
+
 // GetLengthPrompt returns the length prompt for the given style ("short",
-// "medium", "long") from the named personality.
+// "medium", "long") from the named personality, falling back to global defaults
+// if omitted in the personality file.
 func (pl *PersonalityLoader) GetLengthPrompt(name, style string) (string, error) {
 	pl.mu.RLock()
 	defer pl.mu.RUnlock()
@@ -154,25 +161,25 @@ func (pl *PersonalityLoader) GetLengthPrompt(name, style string) (string, error)
 
 	switch style {
 	case "short":
-		if entry.short == "" {
-			return "", fmt.Errorf("personality %q has no 'short' length prompt", name)
+		if entry.short != "" {
+			return entry.short, nil
 		}
-		return entry.short, nil
+		return defaultShortPrompt, nil
 	case "medium":
-		if entry.medium == "" {
-			return "", fmt.Errorf("personality %q has no 'medium' length prompt", name)
+		if entry.medium != "" {
+			return entry.medium, nil
 		}
-		return entry.medium, nil
+		return defaultMediumPrompt, nil
 	case "long":
-		if entry.long == "" {
-			return "", fmt.Errorf("personality %q has no 'long' length prompt", name)
+		if entry.long != "" {
+			return entry.long, nil
 		}
-		return entry.long, nil
+		return defaultLongPrompt, nil
 	default:
-		if entry.short == "" {
-			return "", fmt.Errorf("personality %q has no default 'short' length prompt", name)
+		if entry.short != "" {
+			return entry.short, nil
 		}
-		return entry.short, nil
+		return defaultShortPrompt, nil
 	}
 }
 
