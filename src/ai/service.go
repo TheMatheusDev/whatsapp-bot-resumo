@@ -150,7 +150,7 @@ func (s *Service) ChatResponse(ctx context.Context, messages []types.Message, tr
 func (s *Service) buildChatSystemPrompt(opts types.ChatOptions) (string, error) {
 	name := opts.Personality
 	if name == "" {
-		name = "clt"
+		name = "resumobot"
 	}
 	return s.personalityLoader.GetChatPersonality(name)
 }
@@ -202,7 +202,7 @@ func (s *Service) buildMessagesString(messages []types.Message) string {
 func (s *Service) buildSystemPrompt(opts types.SummarizeOptions) (string, error) {
 	name := opts.Personality
 	if name == "" {
-		name = "clt"
+		name = "resumobot"
 	}
 
 	personality, err := s.personalityLoader.GetSummarizePersonality(name)
