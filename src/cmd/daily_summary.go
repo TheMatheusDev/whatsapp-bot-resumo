@@ -52,7 +52,7 @@ func (h *Handler) performAutoDailySummarization(chatJID types.JID) {
 
 	opts := wstypes.SummarizeOptions{
 		Style:       "medium",
-		Personality: "clt",
+		Personality: h.getGroupDefaultPersonality(chatJID.User),
 	}
 
 	// Calculate 4 AM of the previous day in the bot's timezone (since we run at 00:00)

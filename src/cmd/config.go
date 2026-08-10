@@ -49,6 +49,9 @@ func (h *Handler) handleConfigCommand(msgTrigger types.MessageInfo) {
 		chatbotStatus = "⛔ desligado"
 	}
 
+	// Default personality
+	defaultPersonality := h.getGroupDefaultPersonality(msgTrigger.Chat.User)
+
 	msg := fmt.Sprintf(`⚙️ *Configurações do grupo*
 
 📜 *Regras:* %s
@@ -56,13 +59,15 @@ func (h *Handler) handleConfigCommand(msgTrigger types.MessageInfo) {
 👋 *Despedidas:* %d mensagem(ns) configurada(s)
 🌙 *Resumo diário:* %s
 🏆 *Ranking semanal:* %s
-🤖 *Chatbot (menções/replies):* %s`,
+🤖 *Chatbot (menções/replies):* %s
+🎭 *Personalidade atual:* %s`,
 		rulesStatus,
 		welcomeCount,
 		farewellCount,
 		dailyStatus,
 		weeklyStatus,
 		chatbotStatus,
+		defaultPersonality,
 	)
 
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, msg)

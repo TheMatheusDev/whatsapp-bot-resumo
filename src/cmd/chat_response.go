@@ -209,10 +209,9 @@ func (h *Handler) handleChatResponse(evt *events.Message) {
 		triggerSender = msgTrigger.Sender.User
 	}
 
-	// Personality defaults to CLT; future group-level personality config can be
-	// plumbed through here by reading GroupSettings.
+	// Use the group's configured default personality (falls back to "resumobot" if not set).
 	opts := wstypes.ChatOptions{
-		Personality: "clt",
+		Personality: h.getGroupDefaultPersonality(msgTrigger.Chat.User),
 	}
 
 	response, err := h.aiService.ChatResponse(ctx, messages, triggerMsg, triggerSender, opts)
