@@ -57,6 +57,8 @@ Prefixos de comando: !, - ou /
 - !resumodia → Liga/desliga o resumo diário automático deste grupo (toggle)
 - !ranking → Liga/desliga o ranking semanal deste grupo (toggle)
 - !chatbot [on|off] → Liga/desliga respostas a menções e replies neste grupo (toggle)
+- !personalidade <personalidade> → Define a personalidade padrão do grupo (use !personalidades para ver as disponíveis)
+- !personalidades → Lista todas as personalidades disponíveis
 - !cache → Força atualização do cache do grupo
 `
 

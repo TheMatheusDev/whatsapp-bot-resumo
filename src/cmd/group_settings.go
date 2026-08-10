@@ -48,6 +48,7 @@ func (h *Handler) loadOrDefaultSettings(chatID string) wstypes.GroupSettings {
 		DailySummaryEnabled:  true,
 		WeeklyRankingEnabled: true,
 		ChatbotEnabled:       true,
+		DefaultPersonality:   "resumobot",
 	}
 }
 
@@ -59,6 +60,25 @@ func (h *Handler) saveAndInvalidate(settings wstypes.GroupSettings) error {
 	}
 	h.invalidateGroupSettings(settings.ChatID)
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Personality helpers
+// ---------------------------------------------------------------------------
+
+// defaultPersonalityFallback is the global fallback used when a group has no
+// default_personality configured in the database.
+const defaultPersonalityFallback = "resumobot"
+
+// getGroupDefaultPersonality returns the default personality for a group.
+// If the group has no record in the DB, or the field is empty, it returns
+// defaultPersonalityFallback ("resumobot").
+func (h *Handler) getGroupDefaultPersonality(chatID string) string {
+	settings := h.getGroupSettings(chatID)
+	if settings != nil && settings.DefaultPersonality != "" {
+		return settings.DefaultPersonality
+	}
+	return defaultPersonalityFallback
 }
 
 // ---------------------------------------------------------------------------
@@ -468,7 +488,117 @@ func (h *Handler) handleChatbotToggle(args []string, msgTrigger types.MessageInf
 	h.logger.Info("Chatbot toggled", "chat", msgTrigger.Chat.User, "enabled", settings.ChatbotEnabled)
 }
 
+// ---------------------------------------------------------------------------
+// !personalidade  (set default personality — admin only)
+// !personalidades (list all personalities — everyone)
+// ---------------------------------------------------------------------------
 
+// handleSetPersonalityCommand sets (or displays) the default personality for this
+// group. Only admins can change it; any member can call with no argument to view it.
+//
+// Usage:
+//
+//	!personalidade           → displays current default personality
+//	!personalidade <nome>    → sets the default personality (admin only)
+func (h *Handler) handleSetPersonalityCommand(args []string, msgTrigger types.MessageInfo) {
+	chatID := msgTrigger.Chat.User
+
+	// No argument → show current personality (everyone can do this).
+	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
+		current := h.getGroupDefaultPersonality(chatID)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			fmt.Sprintf("🎭 *Personalidade padrão do grupo:* %s\n\nUse !personalidades para ver as disponíveis.", current))
+		return
+	}
+
+	// Changing requires admin.
+	if !h.requireGroupAdmin(msgTrigger) {
+		return
+	}
+
+	name := strings.ToLower(strings.TrimSpace(args[0]))
+
+	// Validate that the personality exists.
+	available := h.personalityLoader.ListAvailable()
+	healthy, exists := available[name]
+	if !exists {
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			fmt.Sprintf("❌ Personalidade *%s* não encontrada.\n\nUse !personalidades para ver as disponíveis.", name))
+		return
+	}
+	if !healthy {
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			fmt.Sprintf("❌ Personalidade *%s* está com erro de configuração (arquivo .toml inválido).\n\nUse !personalidades para ver as disponíveis.", name))
+		return
+	}
+
+	prev := h.getGroupDefaultPersonality(chatID)
+	settings := h.loadOrDefaultSettings(chatID)
+	settings.DefaultPersonality = name
+
+	if err := h.saveAndInvalidate(settings); err != nil {
+		h.logger.Error("handleSetPersonalityCommand: failed to save settings", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ Erro ao salvar personalidade. Tente novamente.")
+		return
+	}
+
+	h.reactToCommand(msgTrigger, "✅")
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+		fmt.Sprintf("🎭 Personalidade padrão: *%s* → *%s*\n\nEssa personalidade será usada no resumo diário, chatbot e em todos os resumos sem personalidade explícita.", prev, name))
+	h.logger.Info("Default personality changed", "chat", chatID, "from", prev, "to", name)
+}
+
+// handleListPersonalitiesCommand lists all available personalities.
+// Available to every member of the group (no admin required).
+//
+// Usage: !personalidades
+func (h *Handler) handleListPersonalitiesCommand(msgTrigger types.MessageInfo) {
+	available := h.personalityLoader.ListAvailable()
+	if len(available) == 0 {
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ Nenhuma personalidade disponível. Verifique os arquivos .toml no servidor.")
+		return
+	}
+
+	current := h.getGroupDefaultPersonality(msgTrigger.Chat.User)
+
+	var sb strings.Builder
+	sb.WriteString("🎭 *Personalidades disponíveis:*\n\n")
+
+	// Sort names for deterministic output.
+	names := make([]string, 0, len(available))
+	for n := range available {
+		names = append(names, n)
+	}
+	sortStrings(names)
+
+	for _, n := range names {
+		healthy := available[n]
+		status := "✅"
+		if !healthy {
+			status = "⚠️ (erro)"
+		}
+		marker := ""
+		if n == current {
+			marker = " ← *padrão do grupo*"
+		}
+		sb.WriteString(fmt.Sprintf("%s *%s*%s\n", status, n, marker))
+	}
+
+	sb.WriteString("\nPara mudar: !personalidade <nome> (apenas admins).")
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, sb.String())
+}
+
+// sortStrings sorts a string slice in-place (ascending).
+func sortStrings(ss []string) {
+	for i := 1; i < len(ss); i++ {
+		for j := i; j > 0 && ss[j] < ss[j-1]; j-- {
+			ss[j], ss[j-1] = ss[j-1], ss[j]
+		}
+	}
+}
 
 // ---------------------------------------------------------------------------
 // !cache  (flush GroupInfo cache for this group)

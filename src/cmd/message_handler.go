@@ -384,6 +384,10 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 		h.handleConfigCommand(msgTrigger)
 	case "!reload":
 		h.handleReloadPersonalitiesCommand(msgTrigger)
+	case "!personalidade":
+		h.handleSetPersonalityCommand(parts[1:], msgTrigger)
+	case "!personalidades":
+		h.handleListPersonalitiesCommand(msgTrigger)
 	default:
 		h.logger.Debug("Unknown command", "command", command)
 	}
