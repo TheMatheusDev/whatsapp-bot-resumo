@@ -91,6 +91,9 @@ type GroupSettings struct {
 	// ChatbotEnabled controls whether the bot responds to @mentions and replies.
 	// Defaults to true for all groups; admins can toggle with !chatbot on/off.
 	ChatbotEnabled       bool     `json:"chatbot_enabled"`
+	// DefaultPersonality is the personality used when the user does not explicitly
+	// choose one (e.g. !resuma, daily summary, chatbot). Defaults to "resumobot".
+	DefaultPersonality   string   `json:"default_personality"`
 	UpdatedAt            int64    `json:"updated_at"`
 	UpdatedBy            string   `json:"updated_by"`
 }
