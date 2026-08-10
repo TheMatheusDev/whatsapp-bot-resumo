@@ -93,8 +93,62 @@ func (h *Handler) performWeeklyRanking(chatJID types.JID) {
 	)
 }
 
-// buildWeeklyRankingMessage constructs the formatted ranking message string.
+// handleWeeklyRankingNowCommand handles the !semana command to trigger a ranking
+// of the last 7 rolling days up to current time.
+func (h *Handler) handleWeeklyRankingNowCommand(msgTrigger types.MessageInfo) {
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		h.performRollingWeeklyRanking(msgTrigger)
+	}()
+}
+
+// performRollingWeeklyRanking fetches messages from the last 7 rolling days and sends the ranking.
+func (h *Handler) performRollingWeeklyRanking(msgTrigger types.MessageInfo) {
+	now := time.Now().In(h.timezone)
+	sevenDaysAgo := now.AddDate(0, 0, -7)
+
+	h.dbService.FlushPendingMessages()
+	messages, err := h.dbService.GetMessagesBetween(msgTrigger.Chat.User, sevenDaysAgo, now)
+	if err != nil {
+		h.logger.Error("WeeklyRankingNow: failed to get messages", "error", err, "chat", msgTrigger.Chat.User)
+		h.reactToCommand(msgTrigger, "❌")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ Erro ao buscar mensagens dos últimos 7 dias.")
+		return
+	}
+
+	if len(messages) == 0 {
+		h.logger.Info("WeeklyRankingNow: no messages in the last 7 days", "chat", msgTrigger.Chat.User)
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"ℹ️ Nenhuma mensagem registrada nos últimos 7 dias.")
+		return
+	}
+
+	titleHeader := "🏆 *Ranking de mensagens dos últimos 7 dias*"
+	rankingMsg := buildCustomRankingMessage(messages, sevenDaysAgo, now, titleHeader)
+
+	if err := h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, rankingMsg); err != nil {
+		h.logger.Error("WeeklyRankingNow: failed to send ranking message", "error", err, "chat", msgTrigger.Chat.User)
+		return
+	}
+
+	h.reactToCommand(msgTrigger, "🏆")
+	h.logger.Info("WeeklyRankingNow completed",
+		"chat_id", msgTrigger.Chat.User,
+		"message_count", len(messages),
+		"start_date", sevenDaysAgo.Format("2006-01-02"),
+		"end_date", now.Format("2006-01-02"),
+	)
+}
+
+// buildWeeklyRankingMessage constructs the formatted ranking message string for automatic weekly run.
 func buildWeeklyRankingMessage(messages []wstypes.Message, weekStart, weekEnd time.Time) string {
+	return buildCustomRankingMessage(messages, weekStart, weekEnd, "🏆 *Ranking semanal de mensagens*")
+}
+
+// buildCustomRankingMessage constructs the formatted ranking message string with a custom title header.
+func buildCustomRankingMessage(messages []wstypes.Message, weekStart, weekEnd time.Time, titleHeader string) string {
 	// Count messages per sender
 	counts := make(map[string]int)
 	for _, m := range messages {
@@ -123,8 +177,8 @@ func buildWeeklyRankingMessage(messages []wstypes.Message, weekStart, weekEnd ti
 	})
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("🏆 *Ranking semanal de mensagens* (%s a %s):\n",
-		weekStart.Format("02/01"), weekEnd.Format("02/01")))
+	sb.WriteString(fmt.Sprintf("%s (%s a %s):\n",
+		titleHeader, weekStart.Format("02/01"), weekEnd.Format("02/01")))
 
 	for i, entry := range sorted {
 		sb.WriteString(fmt.Sprintf("   %d. %s — %d msgs\n", i+1, entry.Name, entry.Count))

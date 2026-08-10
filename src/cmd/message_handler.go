@@ -347,6 +347,8 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 		h.handleAskQuestionCommand(parts[1:], msgTrigger)
 	case "!dia", "!d":
 		h.handleDailySummaryCommand(parts[1:], msgTrigger)
+	case "!semana", "!s":
+		h.handleWeeklyRankingNowCommand(msgTrigger)
 	case "!help", "!h":
 		h.handleHelpCommand(msgTrigger)
 	case "!version", "!v":

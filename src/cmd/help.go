@@ -14,6 +14,7 @@ Prefixos de comando: !, - ou /
 - !resuma <número> <personalidade> <tamanho do resumo> → Resume mensagens do chat atual (atalho: !r)
 - !p <número> <pergunta> → Responde a pergunta com base nas últimas X mensagens
 - !d ou !dia → Resume todas as msgs do dia (desde 4h da manhã)	
+- !semana → Ranking de mensagens dos últimos 7 dias (atalho: !s)
 - !figurinha → Cria um sticker a partir da foto, vídeo ou GIF que você respondeu (atalho: !sticker)
 - !help → Informações do bot
 - !regras → Exibe as regras do grupo
