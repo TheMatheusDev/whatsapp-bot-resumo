@@ -12,7 +12,7 @@ import (
 // handleAskQuestionCommand handles the --pergunte/-p command
 func (h *Handler) handleAskQuestionCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) < 2 {
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Uso: -p <número> [opções] <pergunta>\n\nOpções: --clt, --curto, --medio, --longo\n\nExemplos:\n• -p 50 Quem foi o usuário mais ativo?\n• -p 100 --clt Qual foi o assunto principal?\n• -p 200 --longo --clt Houve conflitos?")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Uso: -p <número> [opções] <pergunta>\n\nOpções de Personalidade: --clt, --farialimer (--fl), --zoomer (--z), --profeta (--pft), --resumobot (--rb)\nOpções de Tamanho: --curto, --medio, --longo\n\nExemplos:\n• -p 50 Quem foi o usuário mais ativo?\n• -p 100 --clt Qual foi o assunto principal?\n• -p 200 --longo --profeta Houve conflitos?")
 		return
 	}
 

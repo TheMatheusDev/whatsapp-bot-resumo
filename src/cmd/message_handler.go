@@ -341,6 +341,8 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 		h.handleSummarizeFariaLimerCommand(parts[1:], msgTrigger)
 	case "!zoomer", "!z":
 		h.handleSummarizeZoomerCommand(parts[1:], msgTrigger)
+	case "!profeta", "!pft":
+		h.handleSummarizeProfetaCommand(parts[1:], msgTrigger)
 	case "!pergunta", "!p":
 		h.handleAskQuestionCommand(parts[1:], msgTrigger)
 	case "!dia", "!d":

@@ -9,8 +9,8 @@ func TestParseSummarizeOptions_Defaults(t *testing.T) {
 	if style != "short" {
 		t.Errorf("expected default style 'short', got '%s'", style)
 	}
-	if personality != "clt" {
-		t.Errorf("expected default personality 'clt', got '%s'", personality)
+	if personality != "resumobot" {
+		t.Errorf("expected default personality 'resumobot', got '%s'", personality)
 	}
 	if len(nonFlags) != 0 {
 		t.Errorf("expected no non-flag args, got %v", nonFlags)
@@ -53,6 +53,10 @@ func TestParseSummarizeOptions_PersonalityFlags(t *testing.T) {
 		{"farialimer alias", []string{"-fl"}, "farialimer"},
 		{"zoomer", []string{"--zoomer"}, "zoomer"},
 		{"zoomer alias", []string{"-z"}, "zoomer"},
+		{"profeta", []string{"--profeta"}, "profeta"},
+		{"profeta alias", []string{"-pft"}, "profeta"},
+		{"resumobot", []string{"--resumobot"}, "resumobot"},
+		{"resumobot alias", []string{"-rb"}, "resumobot"},
 	}
 
 	for _, tt := range tests {

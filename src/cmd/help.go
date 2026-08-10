@@ -24,14 +24,17 @@ Prefixos de comando: !, - ou /
 - !clt <número> → Resumo com personalidade CLT (trabalhador cansado)
 - !fl <número> → Resumo com executivo da Faria Lima
 - !z <número> → Resumo com zoomer da Geração Z
+- !profeta <número> → Resumo com linguagem poética/bíblica (atalho: !pft)
 
-*Argumentos de Tamanho de Resumo:*
+*Argumentos de Tamanho e Personalidade:*
 - --curto ou -c → Resumo curto
 - --medio ou -m → Resumo médio
 - --longo ou -l → Resumo longo
 - --clt → Personalidade CLT
 - --farialimer ou --fl → Personalidade Faria Lima
-- --zoomer ou --z → Personalidade zoomer
+- --zoomer ou --z → Personalidade Zoomer
+- --profeta ou --pft → Personalidade Profeta
+- --resumobot ou --rb → Personalidade ResumoBot (padrão quando nenhuma é especificada)
 
 *Exemplos:*
 - !r 15 → Resumo de 15 mensagens

@@ -20,7 +20,7 @@ import (
 func ParseSummarizeOptions(args []string, includeNonFlags bool) (style string, personality string, nonFlagArgs []string) {
 	// Set defaults
 	style = "short"
-	personality = "clt"
+	personality = "resumobot"
 
 	for _, arg := range args {
 		argLower := strings.ToLower(arg)
@@ -37,6 +37,10 @@ func ParseSummarizeOptions(args []string, includeNonFlags bool) (style string, p
 			personality = "farialimer"
 		case "--zoomer", "--z", "-zoomer", "-z":
 			personality = "zoomer"
+		case "--profeta", "--pft", "-profeta", "-pft":
+			personality = "profeta"
+		case "--resumobot", "--rb", "-resumobot", "-rb":
+			personality = "resumobot"
 		default:
 			// Not a recognized flag
 			if includeNonFlags {
