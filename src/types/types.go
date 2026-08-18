@@ -88,9 +88,12 @@ type GroupSettings struct {
 	FarewellMessages     []string `json:"farewell_messages"` // from farewell_messages table
 	DailySummaryEnabled  bool     `json:"daily_summary_enabled"`
 	WeeklyRankingEnabled bool     `json:"weekly_ranking_enabled"`
-	// ChatbotEnabled controls whether the bot responds to @mentions and replies.
-	// Defaults to true for all groups; admins can toggle with !chatbot on/off.
-	ChatbotEnabled       bool     `json:"chatbot_enabled"`
+	// ChatbotMentionsEnabled controls whether the bot responds to @mentions.
+	// Defaults to true for all groups; admins can toggle with !chatbot mencao on/off.
+	ChatbotMentionsEnabled bool   `json:"chatbot_mentions_enabled"`
+	// ChatbotRepliesEnabled controls whether the bot responds to replies to its messages.
+	// Defaults to true for all groups; admins can toggle with !chatbot reply on/off.
+	ChatbotRepliesEnabled  bool   `json:"chatbot_replies_enabled"`
 	// DefaultPersonality is the personality used when the user does not explicitly
 	// choose one (e.g. !resuma, daily summary, chatbot). Defaults to "resumobot".
 	DefaultPersonality   string   `json:"default_personality"`

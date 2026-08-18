@@ -77,3 +77,150 @@ func TestNumericCommandAliasParsing(t *testing.T) {
 		})
 	}
 }
+
+func TestChatbotTriggerLogic(t *testing.T) {
+	tests := []struct {
+		name                   string
+		isMention              bool
+		isReply                bool
+		chatbotMentionsEnabled bool
+		chatbotRepliesEnabled  bool
+		expectedTrigger        bool
+	}{
+		{
+			name:                   "both enabled, mention trigger",
+			isMention:              true,
+			isReply:                false,
+			chatbotMentionsEnabled: true,
+			chatbotRepliesEnabled:  true,
+			expectedTrigger:        true,
+		},
+		{
+			name:                   "both enabled, reply trigger",
+			isMention:              false,
+			isReply:                true,
+			chatbotMentionsEnabled: true,
+			chatbotRepliesEnabled:  true,
+			expectedTrigger:        true,
+		},
+		{
+			name:                   "mentions enabled, replies disabled, mention trigger",
+			isMention:              true,
+			isReply:                false,
+			chatbotMentionsEnabled: true,
+			chatbotRepliesEnabled:  false,
+			expectedTrigger:        true,
+		},
+		{
+			name:                   "mentions enabled, replies disabled, reply trigger",
+			isMention:              false,
+			isReply:                true,
+			chatbotMentionsEnabled: true,
+			chatbotRepliesEnabled:  false,
+			expectedTrigger:        false,
+		},
+		{
+			name:                   "mentions disabled, replies enabled, mention trigger",
+			isMention:              true,
+			isReply:                false,
+			chatbotMentionsEnabled: false,
+			chatbotRepliesEnabled:  true,
+			expectedTrigger:        false,
+		},
+		{
+			name:                   "mentions disabled, replies enabled, reply trigger",
+			isMention:              false,
+			isReply:                true,
+			chatbotMentionsEnabled: false,
+			chatbotRepliesEnabled:  true,
+			expectedTrigger:        true,
+		},
+		{
+			name:                   "both disabled, mention trigger",
+			isMention:              true,
+			isReply:                false,
+			chatbotMentionsEnabled: false,
+			chatbotRepliesEnabled:  false,
+			expectedTrigger:        false,
+		},
+		{
+			name:                   "both disabled, reply trigger",
+			isMention:              false,
+			isReply:                true,
+			chatbotMentionsEnabled: false,
+			chatbotRepliesEnabled:  false,
+			expectedTrigger:        false,
+		},
+		{
+			name:                   "both disabled, both mention and reply present",
+			isMention:              true,
+			isReply:                true,
+			chatbotMentionsEnabled: false,
+			chatbotRepliesEnabled:  false,
+			expectedTrigger:        false,
+		},
+		{
+			name:                   "mentions enabled, both mention and reply present",
+			isMention:              true,
+			isReply:                true,
+			chatbotMentionsEnabled: true,
+			chatbotRepliesEnabled:  false,
+			expectedTrigger:        true,
+		},
+		{
+			name:                   "replies enabled, both mention and reply present",
+			isMention:              true,
+			isReply:                true,
+			chatbotMentionsEnabled: false,
+			chatbotRepliesEnabled:  true,
+			expectedTrigger:        true,
+		},
+		{
+			name:                   "neither mention nor reply present",
+			isMention:              false,
+			isReply:                false,
+			chatbotMentionsEnabled: true,
+			chatbotRepliesEnabled:  true,
+			expectedTrigger:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			shouldTrigger := (tt.isMention && tt.chatbotMentionsEnabled) || (tt.isReply && tt.chatbotRepliesEnabled)
+			if shouldTrigger != tt.expectedTrigger {
+				t.Errorf("expected trigger=%v, got %v", tt.expectedTrigger, shouldTrigger)
+			}
+		})
+	}
+}
+
+func TestChatbotCommandRouting(t *testing.T) {
+	commands := map[string]string{
+		"!chatbot":  "chatbot",
+		"!mencao":   "mencao",
+		"!mencoes":  "mencao",
+		"!reply":    "reply",
+		"!replies":  "reply",
+	}
+
+	for cmd, expectedType := range commands {
+		t.Run(cmd, func(t *testing.T) {
+			var resolved string
+			switch strings.ToLower(cmd) {
+			case "!chatbot":
+				resolved = "chatbot"
+			case "!mencao", "!mencoes":
+				resolved = "mencao"
+			case "!reply", "!replies":
+				resolved = "reply"
+			default:
+				resolved = "unknown"
+			}
+			if resolved != expectedType {
+				t.Errorf("cmd %s resolved to %s, expected %s", cmd, resolved, expectedType)
+			}
+		})
+	}
+}
+

@@ -27,7 +27,10 @@ func (h *Handler) handleHelpCommand(args []string, msgTrigger types.MessageInfo)
 🤖 *Automações (Liga/Desliga):*
 • *!resumodia* ➔ Alterna resumo diário automático
 • *!ranking* ➔ Alterna ranking semanal automático
-• *!chatbot* ➔ Alterna respostas por menção/reply
+• *!chatbot* ➔ Mostra o status do chatbot e instruções
+• *!chatbot mencao [on|off]* (ou *!mencao*) ➔ Alterna respostas por menção (@bot)
+• *!chatbot reply [on|off]* (ou *!reply*) ➔ Alterna respostas a replies do bot
+• *!chatbot on* / *!chatbot off* ➔ Ativa/desativa ambos os modos
 
 🎭 *Personalidade Padrão:*
 • *!personalidade <nome>* ➔ Define a personalidade do grupo

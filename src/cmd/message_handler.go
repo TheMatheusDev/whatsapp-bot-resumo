@@ -278,12 +278,17 @@ func (h *Handler) handleMessage(evt *events.Message) {
 	// safety net for any edge case where isCommand returned false but the
 	// content still begins with a command prefix.
 	if evt.Info.IsGroup && !strings.HasPrefix(cmdContent, "!") {
-		if h.isBotMentioned(msg) || h.isReplyToBot(msg) {
-			h.wg.Add(1)
-			go func() {
-				defer h.wg.Done()
-				h.handleChatResponse(evt)
-			}()
+		isMention := h.isBotMentioned(msg)
+		isReply := h.isReplyToBot(msg)
+		if isMention || isReply {
+			settings := h.loadOrDefaultSettings(evt.Info.Chat.User)
+			if (isMention && settings.ChatbotMentionsEnabled) || (isReply && settings.ChatbotRepliesEnabled) {
+				h.wg.Add(1)
+				go func() {
+					defer h.wg.Done()
+					h.handleChatResponse(evt)
+				}()
+			}
 		}
 	}
 }
@@ -378,6 +383,10 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 		h.handleWeeklyRankingToggle(parts[1:], msgTrigger)
 	case "!chatbot":
 		h.handleChatbotToggle(parts[1:], msgTrigger)
+	case "!mencao", "!mencoes":
+		h.handleChatbotMentionsToggle(parts[1:], msgTrigger)
+	case "!reply", "!replies":
+		h.handleChatbotRepliesToggle(parts[1:], msgTrigger)
 	case "!cache":
 		h.handleAdminCacheCommand(msgTrigger)
 	// --- per-group read-only commands (admin only) ---

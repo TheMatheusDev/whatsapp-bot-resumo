@@ -43,10 +43,16 @@ func (h *Handler) handleConfigCommand(msgTrigger types.MessageInfo) {
 		weeklyStatus = "⛔ desligado"
 	}
 
-	// Chatbot status
-	chatbotStatus := "✅ ligado"
-	if !settings.ChatbotEnabled {
-		chatbotStatus = "⛔ desligado"
+	// Chatbot mentions status
+	chatbotMentionsStatus := "✅ ligado"
+	if !settings.ChatbotMentionsEnabled {
+		chatbotMentionsStatus = "⛔ desligado"
+	}
+
+	// Chatbot replies status
+	chatbotRepliesStatus := "✅ ligado"
+	if !settings.ChatbotRepliesEnabled {
+		chatbotRepliesStatus = "⛔ desligado"
 	}
 
 	// Default personality
@@ -59,14 +65,16 @@ func (h *Handler) handleConfigCommand(msgTrigger types.MessageInfo) {
 👋 *Despedidas:* %d mensagem(ns) configurada(s)
 🌙 *Resumo diário:* %s
 🏆 *Ranking semanal:* %s
-🤖 *Chatbot (menções/replies):* %s
+🤖 *Chatbot (menções):* %s
+💬 *Chatbot (replies):* %s
 🎭 *Personalidade atual:* %s`,
 		rulesStatus,
 		welcomeCount,
 		farewellCount,
 		dailyStatus,
 		weeklyStatus,
-		chatbotStatus,
+		chatbotMentionsStatus,
+		chatbotRepliesStatus,
 		defaultPersonality,
 	)
 

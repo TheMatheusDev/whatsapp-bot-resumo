@@ -156,13 +156,17 @@ func (h *Handler) handleChatResponse(evt *events.Message) {
 		return
 	}
 
-	// Check whether the chatbot feature is enabled for this group.
-	// When ChatbotEnabled is false the bot ignores all mentions and replies.
-	// Groups without a DB record default to enabled (ChatbotEnabled = true).
+	// Check whether the chatbot feature is enabled for this group and trigger type.
 	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
-	if !settings.ChatbotEnabled {
-		h.logger.Debug("handleChatResponse: chatbot disabled for group",
-			"chat", msgTrigger.Chat.User)
+	isMention := h.isBotMentioned(evt.Message)
+	isReply := h.isReplyToBot(evt.Message)
+	if !((isMention && settings.ChatbotMentionsEnabled) || (isReply && settings.ChatbotRepliesEnabled)) {
+		h.logger.Debug("handleChatResponse: chatbot disabled for this trigger in group",
+			"chat", msgTrigger.Chat.User,
+			"is_mention", isMention,
+			"is_reply", isReply,
+			"mentions_enabled", settings.ChatbotMentionsEnabled,
+			"replies_enabled", settings.ChatbotRepliesEnabled)
 		return
 	}
 
