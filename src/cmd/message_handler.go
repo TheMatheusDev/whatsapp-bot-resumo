@@ -353,7 +353,7 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 	case "!mes", "!m":
 		h.handleMonthlyRankingNowCommand(msgTrigger)
 	case "!help", "!h":
-		h.handleHelpCommand(msgTrigger)
+		h.handleHelpCommand(parts[1:], msgTrigger)
 	case "!version", "!v":
 		h.handleVersionCommand(msgTrigger)
 	case "!ping":
