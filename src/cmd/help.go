@@ -11,7 +11,7 @@ Resume mensagens via Google Gemini com personalidades e estilos!
 Prefixos de comando: !, - ou /
 
 *Comandos:*
-- !resuma <número> <personalidade> <tamanho do resumo> → Resume mensagens do chat atual (atalho: !r)
+- !resuma <número> <personalidade> <tamanho do resumo> → Resume mensagens do chat atual (atalhos: !r ou !<número>)
 - !p <número> <pergunta> → Responde a pergunta com base nas últimas X mensagens
 - !d ou !dia → Resume todas as msgs do dia (desde 4h da manhã)	
 - !semana → Ranking de mensagens dos últimos 7 dias (atalho: !s)
@@ -39,8 +39,8 @@ Prefixos de comando: !, - ou /
 - --resumobot ou --rb → Personalidade ResumoBot (padrão quando nenhuma é especificada)
 
 *Exemplos:*
-- !r 15 → Resumo de 15 mensagens
-- !r 5000 --clt → Resumo com personalidade CLT de 5000 mensagens
+- !50 ou !r 50 → Resumo de 50 mensagens
+- !5000 --clt ou !r 5000 --clt → Resumo com personalidade CLT de 5000 mensagens
 - !clt 100 → Resumo com personalidade de CLT de 100 mensagens (atalho)
 - !p 50 Como está o humor do grupo? → Responde a pergunta de acordo com as últimas 50 mensagens
 - !p 100 --clt Teve alguma treta? → Responde a pergunta com personalidade CLT

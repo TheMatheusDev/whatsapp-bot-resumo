@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -393,6 +394,14 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 	case "!personalidades":
 		h.handleListPersonalitiesCommand(msgTrigger)
 	default:
+		// Check if command is an alias in the format !<count> (e.g. !50, !100 --clt)
+		if strings.HasPrefix(command, "!") && len(command) > 1 {
+			if _, err := strconv.Atoi(command[1:]); err == nil {
+				args := append([]string{command[1:]}, parts[1:]...)
+				h.handleSummarizeCommand(args, msgTrigger)
+				return
+			}
+		}
 		h.logger.Debug("Unknown command", "command", command)
 	}
 }

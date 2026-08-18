@@ -46,7 +46,7 @@ Prefixo de comando: `!`.
 Ademais, quase todos os comandos possuem uma versão curta com a primeira letra, ex: `!r` para `!resuma`, `!p` para `!pergunte`. Opções de personalidade possuem comandos curtos como: `!fl` para `!farialimer`, `!z` para `!zoomer`.
 **Comandos:**
 
-- `!resuma <número>` (versão curta: `!r`) → Resume mensagens do chat atual
+- `!resuma <número>` (versão curta: `!r` ou `!<número>`) → Resume mensagens do chat atual
 - `!clt <número>` → Atalho para resumo CLT
 - `!farialimer <número>` (versão curta: `!fl`) → Atalho para resumo Faria Limer
 - `!zoomer <número>` (versão curta: `!z`) → Atalho para resumo Zoomer
