@@ -16,6 +16,7 @@ var profetaCountMessages = CountValidationMessages{
 // handleSummarizeProfetaCommand handles the !profeta command (shortcut for -r with --profeta flag)
 func (h *Handler) handleSummarizeProfetaCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Número de mensagens não especificado!\n\nUso: !profeta <número de mensagens> [opções]\n\nOpções: --curto, --medio, --longo")
 		return
 	}

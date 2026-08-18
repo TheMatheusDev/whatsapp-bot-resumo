@@ -240,6 +240,7 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 
 	// Check if there are enough messages
 	if len(messages) < 10 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, fmt.Sprintf("ℹ️ Apenas %d mensagens hoje. Muito pouco para resumir...", len(messages)))
 		return
 	}

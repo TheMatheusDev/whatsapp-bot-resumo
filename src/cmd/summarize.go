@@ -20,12 +20,14 @@ const summarizeCooldown = 30 * time.Second
 // handleSummarizeCommand handles the summarize command
 func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Número de mensagens não especificado")
 		return
 	}
 
 	// Enforce per-user rate limit to prevent Gemini API flooding.
 	if wait := h.checkSummarizeRateLimit(msgTrigger); wait > 0 {
+		h.reactToCommand(msgTrigger, "⏳")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			fmt.Sprintf("⏳ Aguarde *%.0fs* antes de pedir outro resumo.", wait.Seconds()))
 		return

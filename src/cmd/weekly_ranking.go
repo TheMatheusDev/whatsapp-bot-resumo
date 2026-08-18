@@ -130,6 +130,7 @@ func (h *Handler) performRollingDaysRanking(msgTrigger types.MessageInfo, days i
 
 	if len(messages) == 0 {
 		h.logger.Info("RollingDaysRanking: no messages found", "chat", msgTrigger.Chat.User, "days", days)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			fmt.Sprintf("ℹ️ Nenhuma mensagem registrada nos últimos %d dias.", days))
 		return
@@ -142,7 +143,7 @@ func (h *Handler) performRollingDaysRanking(msgTrigger types.MessageInfo, days i
 		return
 	}
 
-	h.reactToCommand(msgTrigger, "🏆")
+	h.reactToCommand(msgTrigger, "✅")
 	h.logger.Info("RollingDaysRanking completed",
 		"chat_id", msgTrigger.Chat.User,
 		"days", days,

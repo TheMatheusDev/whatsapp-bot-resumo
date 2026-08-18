@@ -16,6 +16,7 @@ var fariaLimerCountMessages = CountValidationMessages{
 // handleSummarizeFariaLimerCommand handles the farialimer command (shortcut for -r with --farialimer flag)
 func (h *Handler) handleSummarizeFariaLimerCommand(args []string, msgTrigger types.MessageInfo) {
 	if len(args) == 0 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Número de mensagens não especificado")
 		return
 	}

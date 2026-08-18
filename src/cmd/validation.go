@@ -25,21 +25,25 @@ var DefaultCountMessages = CountValidationMessages{
 func (h *Handler) parseAndValidateCount(msgTrigger types.MessageInfo, countStr string, msgs CountValidationMessages) (int, bool) {
 	count, err := strconv.Atoi(countStr)
 	if err != nil || count <= 0 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Número de mensagens inválido")
 		return 0, false
 	}
 
 	if count <= 3 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, msgs.TooFewJoke)
 		return 0, false
 	}
 
 	if count <= 10 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, msgs.TooFew)
 		return 0, false
 	}
 
 	if count > 9000 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, msgs.TooMany)
 		return 0, false
 	}

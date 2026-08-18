@@ -29,6 +29,7 @@ func (h *Handler) requireGroupAdmin(msgTrigger types.MessageInfo) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if !h.isGroupAdmin(ctx, msgTrigger.Chat, msgTrigger.Sender.User) {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, errNotAdmin)
 		return false
 	}
@@ -147,6 +148,7 @@ func (h *Handler) handleAddWelcomeCommand(rawArgs string, msgTrigger types.Messa
 	}
 
 	if strings.TrimSpace(rawArgs) == "" {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Informe o texto da mensagem de boas-vindas.\n"+
 				"Exemplo: !addwelcome Olá {numero}! Leia: {regras}\n"+
@@ -156,6 +158,7 @@ func (h *Handler) handleAddWelcomeCommand(rawArgs string, msgTrigger types.Messa
 
 	newMessages := splitPipe(rawArgs)
 	if len(newMessages) == 0 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Nenhuma mensagem válida encontrada.")
 		return
@@ -167,6 +170,7 @@ func (h *Handler) handleAddWelcomeCommand(rawArgs string, msgTrigger types.Messa
 	settings := h.loadOrDefaultSettings(chatID)
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleAddWelcomeCommand: failed to ensure group_configs row", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar mensagem. Tente novamente.")
 		return
@@ -175,6 +179,7 @@ func (h *Handler) handleAddWelcomeCommand(rawArgs string, msgTrigger types.Messa
 	for _, msg := range newMessages {
 		if err := h.dbService.AddWelcomeMessage(chatID, msg); err != nil {
 			h.logger.Error("handleAddWelcomeCommand: failed to add welcome message", "error", err)
+			h.reactToCommand(msgTrigger, "❌")
 			h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 				"❌ Erro ao salvar mensagem. Tente novamente.")
 			return
@@ -182,6 +187,7 @@ func (h *Handler) handleAddWelcomeCommand(rawArgs string, msgTrigger types.Messa
 	}
 
 	allMsgs, _ := h.dbService.GetWelcomeMessages(chatID)
+	h.reactToCommand(msgTrigger, "✅")
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		formatAddedMessages("boas-vindas", newMessages, len(allMsgs)))
 }
@@ -196,6 +202,7 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 	}
 
 	if len(args) == 0 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Informe o ID da mensagem a remover. Use !welcome para ver a lista.")
 		return
@@ -203,6 +210,7 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 
 	targetID, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil || targetID < 1 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ ID inválido. Use !welcome para ver os IDs disponíveis.")
 		return
@@ -212,6 +220,7 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 	msgs, err := h.dbService.GetWelcomeMessages(msgTrigger.Chat.User)
 	if err != nil {
 		h.logger.Error("handleDelWelcomeCommand: failed to fetch messages", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao buscar mensagens. Tente novamente.")
 		return
@@ -225,6 +234,7 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 		}
 	}
 	if target == nil {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			fmt.Sprintf("❌ Nenhuma mensagem de boas-vindas com ID %d. Use !welcome para ver a lista.", targetID))
 		return
@@ -232,12 +242,14 @@ func (h *Handler) handleDelWelcomeCommand(args []string, msgTrigger types.Messag
 
 	if err := h.dbService.DeleteWelcomeMessage(target.ID); err != nil {
 		h.logger.Error("handleDelWelcomeCommand: failed to delete", "error", err, "id", target.ID)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao remover. Tente novamente.")
 		return
 	}
 
 	h.invalidateGroupSettings(msgTrigger.Chat.User)
+	h.reactToCommand(msgTrigger, "✅")
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("✅ Mensagem de boas-vindas [%d] removida:\n\n_%s_\n\nTotal restante: %d",
 			target.ID, target.Message, len(msgs)-1))
@@ -263,6 +275,7 @@ func (h *Handler) handleAddFarewellCommand(rawArgs string, msgTrigger types.Mess
 	}
 
 	if strings.TrimSpace(rawArgs) == "" {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Informe o texto da mensagem de despedida.\n"+
 				"Exemplo: !addfarewell Até mais, {numero}! 👋 Leia: {regras}\n"+
@@ -272,6 +285,7 @@ func (h *Handler) handleAddFarewellCommand(rawArgs string, msgTrigger types.Mess
 
 	newMessages := splitPipe(rawArgs)
 	if len(newMessages) == 0 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Nenhuma mensagem válida encontrada.")
 		return
@@ -283,6 +297,7 @@ func (h *Handler) handleAddFarewellCommand(rawArgs string, msgTrigger types.Mess
 	settings := h.loadOrDefaultSettings(chatID)
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleAddFarewellCommand: failed to ensure group_configs row", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar mensagem. Tente novamente.")
 		return
@@ -291,6 +306,7 @@ func (h *Handler) handleAddFarewellCommand(rawArgs string, msgTrigger types.Mess
 	for _, msg := range newMessages {
 		if err := h.dbService.AddFarewellMessage(chatID, msg); err != nil {
 			h.logger.Error("handleAddFarewellCommand: failed to add farewell message", "error", err)
+			h.reactToCommand(msgTrigger, "❌")
 			h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 				"❌ Erro ao salvar mensagem. Tente novamente.")
 			return
@@ -298,6 +314,7 @@ func (h *Handler) handleAddFarewellCommand(rawArgs string, msgTrigger types.Mess
 	}
 
 	allMsgs, _ := h.dbService.GetFarewellMessages(chatID)
+	h.reactToCommand(msgTrigger, "✅")
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		formatAddedMessages("despedida", newMessages, len(allMsgs)))
 }
@@ -312,6 +329,7 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 	}
 
 	if len(args) == 0 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Informe o ID da mensagem a remover. Use !farewell para ver a lista.")
 		return
@@ -319,6 +337,7 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 
 	targetID, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil || targetID < 1 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ ID inválido. Use !farewell para ver os IDs disponíveis.")
 		return
@@ -328,6 +347,7 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 	msgs, err := h.dbService.GetFarewellMessages(msgTrigger.Chat.User)
 	if err != nil {
 		h.logger.Error("handleDelFarewellCommand: failed to fetch messages", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao buscar mensagens. Tente novamente.")
 		return
@@ -341,6 +361,7 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 		}
 	}
 	if target == nil {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			fmt.Sprintf("❌ Nenhuma mensagem de despedida com ID %d. Use !farewell para ver a lista.", targetID))
 		return
@@ -348,12 +369,14 @@ func (h *Handler) handleDelFarewellCommand(args []string, msgTrigger types.Messa
 
 	if err := h.dbService.DeleteFarewellMessage(target.ID); err != nil {
 		h.logger.Error("handleDelFarewellCommand: failed to delete", "error", err, "id", target.ID)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao remover. Tente novamente.")
 		return
 	}
 
 	h.invalidateGroupSettings(msgTrigger.Chat.User)
+	h.reactToCommand(msgTrigger, "✅")
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("✅ Mensagem de despedida [%d] removida:\n\n_%s_\n\nTotal restante: %d",
 			target.ID, target.Message, len(msgs)-1))
@@ -378,6 +401,7 @@ func (h *Handler) handleDailySummaryToggle(args []string, msgTrigger types.Messa
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleDailySummaryToggle: failed to save settings", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar configuração. Tente novamente.")
 		return
@@ -391,6 +415,7 @@ func (h *Handler) handleDailySummaryToggle(args []string, msgTrigger types.Messa
 	if !settings.DailySummaryEnabled {
 		newStatus = "⛔ desligado"
 	}
+	h.reactToCommand(msgTrigger, "✅")
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("🌙 Resumo diário automático: %s → *%s*", prevStatus, newStatus))
 	h.logger.Info("Daily summary toggled", "chat", msgTrigger.Chat.User, "enabled", settings.DailySummaryEnabled)
@@ -415,6 +440,7 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleWeeklyRankingToggle: failed to save settings", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar configuração. Tente novamente.")
 		return
@@ -428,6 +454,7 @@ func (h *Handler) handleWeeklyRankingToggle(args []string, msgTrigger types.Mess
 	if !settings.WeeklyRankingEnabled {
 		newStatus = "⛔ desligado"
 	}
+	h.reactToCommand(msgTrigger, "✅")
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("🏆 Ranking semanal: %s → *%s*", prevStatus, newStatus))
 	h.logger.Info("Weekly ranking toggled", "chat", msgTrigger.Chat.User, "enabled", settings.WeeklyRankingEnabled)
@@ -489,10 +516,12 @@ func (h *Handler) handleChatbotToggle(args []string, msgTrigger types.MessageInf
 		settings.ChatbotRepliesEnabled = true
 		if err := h.saveAndInvalidate(settings); err != nil {
 			h.logger.Error("handleChatbotToggle: failed to save settings", "error", err)
+			h.reactToCommand(msgTrigger, "❌")
 			h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 				"❌ Erro ao salvar configuração. Tente novamente.")
 			return
 		}
+		h.reactToCommand(msgTrigger, "✅")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"🤖 Chatbot ativado para menções e replies:\n• Menções (@bot): *✅ ligado*\n• Replies (respostas): *✅ ligado*")
 		h.logger.Info("Chatbot all toggles enabled", "chat", msgTrigger.Chat.User)
@@ -502,14 +531,17 @@ func (h *Handler) handleChatbotToggle(args []string, msgTrigger types.MessageInf
 		settings.ChatbotRepliesEnabled = false
 		if err := h.saveAndInvalidate(settings); err != nil {
 			h.logger.Error("handleChatbotToggle: failed to save settings", "error", err)
+			h.reactToCommand(msgTrigger, "❌")
 			h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 				"❌ Erro ao salvar configuração. Tente novamente.")
 			return
 		}
+		h.reactToCommand(msgTrigger, "✅")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"⛔ Chatbot desativado para menções e replies:\n• Menções (@bot): *⛔ desligado*\n• Replies (respostas): *⛔ desligado*")
 		h.logger.Info("Chatbot all toggles disabled", "chat", msgTrigger.Chat.User)
 	default:
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Subcomando inválido.\n\n• *!chatbot* ➔ Ver status\n• *!chatbot mencao [on|off]* ➔ Alterna respostas a menções\n• *!chatbot reply [on|off]* ➔ Alterna respostas a replies\n• *!chatbot on* ➔ Ativa ambos\n• *!chatbot off* ➔ Desativa ambos")
 	}
@@ -532,6 +564,7 @@ func (h *Handler) handleChatbotMentionsToggle(args []string, msgTrigger types.Me
 		case "off", "desativar", "desligar":
 			settings.ChatbotMentionsEnabled = false
 		default:
+			h.reactToCommand(msgTrigger, "❌")
 			h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 				"❌ Uso: !chatbot mencao [on|off]\n\n• !chatbot mencao on  → ativa respostas a menções\n• !chatbot mencao off → desativa\n• !chatbot mencao     → alterna o estado atual")
 			return
@@ -542,6 +575,7 @@ func (h *Handler) handleChatbotMentionsToggle(args []string, msgTrigger types.Me
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleChatbotMentionsToggle: failed to save settings", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar configuração. Tente novamente.")
 		return
@@ -555,6 +589,7 @@ func (h *Handler) handleChatbotMentionsToggle(args []string, msgTrigger types.Me
 	if !settings.ChatbotMentionsEnabled {
 		newStatus = "⛔ desligado"
 	}
+	h.reactToCommand(msgTrigger, "✅")
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("🤖 Chatbot (menções): %s → *%s*", prevStatus, newStatus))
 	h.logger.Info("Chatbot mentions toggled", "chat", msgTrigger.Chat.User, "enabled", settings.ChatbotMentionsEnabled)
@@ -577,6 +612,7 @@ func (h *Handler) handleChatbotRepliesToggle(args []string, msgTrigger types.Mes
 		case "off", "desativar", "desligar":
 			settings.ChatbotRepliesEnabled = false
 		default:
+			h.reactToCommand(msgTrigger, "❌")
 			h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 				"❌ Uso: !chatbot reply [on|off]\n\n• !chatbot reply on  → ativa respostas a replies\n• !chatbot reply off → desativa\n• !chatbot reply     → alterna o estado atual")
 			return
@@ -587,6 +623,7 @@ func (h *Handler) handleChatbotRepliesToggle(args []string, msgTrigger types.Mes
 
 	if err := h.saveAndInvalidate(settings); err != nil {
 		h.logger.Error("handleChatbotRepliesToggle: failed to save settings", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao salvar configuração. Tente novamente.")
 		return
@@ -600,6 +637,7 @@ func (h *Handler) handleChatbotRepliesToggle(args []string, msgTrigger types.Mes
 	if !settings.ChatbotRepliesEnabled {
 		newStatus = "⛔ desligado"
 	}
+	h.reactToCommand(msgTrigger, "✅")
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("💬 Chatbot (replies): %s → *%s*", prevStatus, newStatus))
 	h.logger.Info("Chatbot replies toggled", "chat", msgTrigger.Chat.User, "enabled", settings.ChatbotRepliesEnabled)
@@ -639,11 +677,13 @@ func (h *Handler) handleSetPersonalityCommand(args []string, msgTrigger types.Me
 	available := h.personalityLoader.ListAvailable()
 	healthy, exists := available[name]
 	if !exists {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			fmt.Sprintf("❌ Personalidade *%s* não encontrada.\n\nUse !personalidades para ver as disponíveis.", name))
 		return
 	}
 	if !healthy {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			fmt.Sprintf("❌ Personalidade *%s* está com erro de configuração (arquivo .toml inválido).\n\nUse !personalidades para ver as disponíveis.", name))
 		return
@@ -674,6 +714,7 @@ func (h *Handler) handleSetPersonalityCommand(args []string, msgTrigger types.Me
 func (h *Handler) handleListPersonalitiesCommand(msgTrigger types.MessageInfo) {
 	available := h.personalityLoader.ListAvailable()
 	if len(available) == 0 {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Nenhuma personalidade disponível. Verifique os arquivos .toml no servidor.")
 		return
@@ -733,6 +774,7 @@ func (h *Handler) handleAdminCacheCommand(msgTrigger types.MessageInfo) {
 	}
 
 	h.invalidateGroupInfoCache(msgTrigger.Chat.String())
+	h.reactToCommand(msgTrigger, "✅")
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		"🔄 Cache de admins atualizado! A próxima validação buscará dados frescos do WhatsApp.")
 	h.logger.Info("Admin cache flushed manually", "chat", msgTrigger.Chat.User)
@@ -753,6 +795,7 @@ func (h *Handler) handleListWelcomeCommand(msgTrigger types.MessageInfo) {
 	dbMsgs, err := h.dbService.GetWelcomeMessages(msgTrigger.Chat.User)
 	if err != nil {
 		h.logger.Error("handleListWelcomeCommand: DB error", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao buscar mensagens.")
 		return
@@ -776,6 +819,7 @@ func (h *Handler) handleListFarewellCommand(msgTrigger types.MessageInfo) {
 	dbMsgs, err := h.dbService.GetFarewellMessages(msgTrigger.Chat.User)
 	if err != nil {
 		h.logger.Error("handleListFarewellCommand: DB error", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Erro ao buscar mensagens.")
 		return

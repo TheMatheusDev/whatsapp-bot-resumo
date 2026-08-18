@@ -20,6 +20,7 @@ func (h *Handler) handleRulesCommand(msgTrigger types.MessageInfo) {
 	}
 
 	if rules == "" {
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Nenhuma regra foi definida para este grupo.")
 		return

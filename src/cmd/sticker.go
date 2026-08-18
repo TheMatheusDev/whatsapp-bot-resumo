@@ -80,9 +80,7 @@ func (h *Handler) handleStickerCommand(evt *events.Message) {
 	// Extract the target message (either the media in the current message or the replied one)
 	targetMsg := extractTargetMedia(evt.Message)
 	if targetMsg == nil {
-		h.whatsappService.ReactToMessage(
-			context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌",
-		)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(
 			msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"Responda a uma foto, vídeo ou GIF com !figurinha para criar o sticker.",
@@ -105,9 +103,7 @@ func (h *Handler) handleStickerCommand(evt *events.Message) {
 		}
 	}
 	if viewOnce {
-		h.whatsappService.ReactToMessage(
-			context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌",
-		)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(
 			msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"❌ Por questões de privacidade mensagens de visualização únicas não podem ser usadas para criação de stickers.",
@@ -119,9 +115,7 @@ func (h *Handler) handleStickerCommand(evt *events.Message) {
 	switch m := targetMsg.(type) {
 	case *waE2E.ImageMessage:
 		if fileLen := m.GetFileLength(); fileLen > stickerMaxImageBytes {
-			h.whatsappService.ReactToMessage(
-				context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌",
-			)
+			h.reactToCommand(msgTrigger, "❌")
 			h.whatsappService.SendMessageReply(
 				msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 				fmt.Sprintf("Imagem muito grande (%.1f MB). Limite: 10 MB.", float64(fileLen)/(1024*1024)),
@@ -132,9 +126,7 @@ func (h *Handler) handleStickerCommand(evt *events.Message) {
 
 	case *waE2E.VideoMessage:
 		if fileLen := m.GetFileLength(); fileLen > stickerMaxVideoBytes {
-			h.whatsappService.ReactToMessage(
-				context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌",
-			)
+			h.reactToCommand(msgTrigger, "❌")
 			h.whatsappService.SendMessageReply(
 				msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 				fmt.Sprintf("Vídeo/GIF muito grande (%.1f MB). Limite: 10 MB.", float64(fileLen)/(1024*1024)),
@@ -142,15 +134,11 @@ func (h *Handler) handleStickerCommand(evt *events.Message) {
 			return
 		}
 		// Warn the user upfront that video processing takes longer
-		h.whatsappService.ReactToMessage(
-			context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "⏳",
-		)
+		h.reactToCommand(msgTrigger, "⏳")
 		h.createStickerAsync(evt, m, "video", resolveVideoExt(m.GetMimetype()))
 
 	default:
-		h.whatsappService.ReactToMessage(
-			context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌",
-		)
+		h.reactToCommand(msgTrigger, "❌")
 		h.whatsappService.SendMessageReply(
 			msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 			"Tipo de mídia não suportado. Responda a uma *foto*, *vídeo* ou *GIF*.",
@@ -171,9 +159,7 @@ func (h *Handler) createStickerAsync(evt *events.Message, media whatsmeow.Downlo
 		inputPath, err := h.downloadMedia(media, "sticker_src_"+prefix, ext, 90*time.Second)
 		if err != nil {
 			h.logger.Error("Sticker: failed to download source media", "error", err)
-			h.whatsappService.ReactToMessage(
-				context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌",
-			)
+			h.reactToCommand(msgTrigger, "❌")
 			h.whatsappService.SendMessageReply(
 				msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 				"Falha ao baixar a mídia. Tente novamente.",
@@ -191,9 +177,7 @@ func (h *Handler) createStickerAsync(evt *events.Message, media whatsmeow.Downlo
 		}
 		if err != nil {
 			h.logger.Error("Sticker: conversion failed", "error", err, "input", inputPath)
-			h.whatsappService.ReactToMessage(
-				context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌",
-			)
+			h.reactToCommand(msgTrigger, "❌")
 			h.whatsappService.SendMessageReply(
 				msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 				err.Error(),
@@ -219,9 +203,7 @@ func (h *Handler) createStickerAsync(evt *events.Message, media whatsmeow.Downlo
 		// --- 4. Upload & send the sticker ---
 		if err := h.uploadAndSendSticker(evt.Info, webpPath, ext != "jpg"); err != nil {
 			h.logger.Error("Sticker: upload/send failed", "error", err)
-			h.whatsappService.ReactToMessage(
-				context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌",
-			)
+			h.reactToCommand(msgTrigger, "❌")
 			h.whatsappService.SendMessageReply(
 				msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 				"Falha ao enviar o sticker. Tente novamente.",
@@ -230,9 +212,7 @@ func (h *Handler) createStickerAsync(evt *events.Message, media whatsmeow.Downlo
 		}
 
 		// React with ✅ to confirm the sticker was created successfully
-		h.whatsappService.ReactToMessage(
-			context.Background(), msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "✅",
-		)
+		h.reactToCommand(msgTrigger, "✅")
 		h.logger.Info("Sticker: created and sent successfully", "chat", msgTrigger.Chat.String())
 	}()
 }
