@@ -62,16 +62,6 @@ func Load() (*types.Config, error) {
 			PersonalitiesDir: getEnv("PERSONALITIES_DIR", "./personalities"),
 		},
 	}
-
-	// Resolve {regras} placeholder in welcome/farewell messages
-	rules := config.Bot.Rules
-	for i, msg := range config.Bot.WelcomeMessages {
-		config.Bot.WelcomeMessages[i] = strings.ReplaceAll(msg, "{regras}", rules)
-	}
-	for i, msg := range config.Bot.FarewellMessages {
-		config.Bot.FarewellMessages[i] = strings.ReplaceAll(msg, "{regras}", rules)
-	}
-
 	if err := Validate(config); err != nil {
 		return nil, err
 	}
