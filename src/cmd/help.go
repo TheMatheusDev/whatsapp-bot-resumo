@@ -5,64 +5,28 @@ import (
 )
 
 func (h *Handler) handleHelpCommand(msgTrigger types.MessageInfo) {
-	infoText := `
-ℹ️ *ResumoBOT:*
-Resume mensagens via Google Gemini com personalidades e estilos!
-Prefixos de comando: !, - ou /
+	infoText := `🤖 *Como usar o ResumoBOT*
 
-*Comandos:*
-- !resuma <número> <personalidade> <tamanho do resumo> → Resume mensagens do chat atual (atalhos: !r ou !<número>)
-- !p <número> <pergunta> → Responde a pergunta com base nas últimas X mensagens
-- !d ou !dia → Resume todas as msgs do dia (desde 4h da manhã)	
-- !semana → Ranking de mensagens dos últimos 7 dias (atalho: !s)
-- !mes → Ranking de mensagens dos últimos 30 dias (atalho: !m)
-- !figurinha → Cria um sticker a partir da foto, vídeo ou GIF que você respondeu (atalho: !sticker)
-- !help → Informações do bot
-- !regras → Exibe as regras do grupo
-- !version → Versão do bot
-- !ping → Verifica se o bot está online (inclui uptime)
+Aqui estão os comandos mais usados:
 
-*Comandos de Personalidade:*
-- !clt <número> → Resumo com personalidade CLT (trabalhador cansado)
-- !fl <número> → Resumo com executivo da Faria Lima
-- !z <número> → Resumo com zoomer da Geração Z
-- !profeta <número> → Resumo com linguagem poética/bíblica (atalho: !pft)
+📄 *1. Resumos*
+• *!50* ou *!r 50* ➔ Resume as últimas 50 mensagens
+• *!d* ➔ Resume tudo o que rolou hoje
 
-*Argumentos de Tamanho e Personalidade:*
-- --curto ou -c → Resumo curto
-- --medio ou -m → Resumo médio
-- --longo ou -l → Resumo longo
-- --clt → Personalidade CLT
-- --farialimer ou --fl → Personalidade Faria Lima
-- --zoomer ou --z → Personalidade Zoomer
-- --profeta ou --pft → Personalidade Profeta
-- --resumobot ou --rb → Personalidade ResumoBot (padrão quando nenhuma é especificada)
+❓ *2. Fazer Perguntas*
+• *!p 50 Teve alguma novidade?* ➔ Pergunta sobre as últimas 50 mensagens
 
-*Exemplos:*
-- !50 ou !r 50 → Resumo de 50 mensagens
-- !5000 --clt ou !r 5000 --clt → Resumo com personalidade CLT de 5000 mensagens
-- !clt 100 → Resumo com personalidade de CLT de 100 mensagens (atalho)
-- !p 50 Como está o humor do grupo? → Responde a pergunta de acordo com as últimas 50 mensagens
-- !p 100 --clt Teve alguma treta? → Responde a pergunta com personalidade CLT
-- !d → Resumo diário
-- !d --farialimer --longo → Resumo longo do dia com personalidade Faria Limmer
+🎨 *3. Criar Figurinha*
+• *!sticker* ➔ Responda a uma foto, vídeo ou GIF
 
-⚙️ *Configurações do Grupo (somente admins):*
-- !config → Exibe todas as configurações do grupo
-- !setregras <texto> → Define as regras do grupo
-- !addwelcome <msg> → Adiciona mensagem de boas-vindas ({numero} = menciona quem entrou, {regras} = para inserir regras), separe múltiplas com |
-- !delwelcome <n> → Remove boas-vindas pelo índice
-- !welcome → Lista as mensagens de boas-vindas configuradas
-- !addfarewell <msg> → Adiciona mensagem de despedida ({numero} = menciona quem saiu), separe múltiplas com |
-- !delfarewell <n> → Remove despedida pelo índice
-- !farewell → Lista as mensagens de despedida configuradas
-- !resumodia → Liga/desliga o resumo diário automático deste grupo (toggle)
-- !ranking → Liga/desliga o ranking semanal deste grupo (toggle)
-- !chatbot [on|off] → Liga/desliga respostas a menções e replies neste grupo (toggle)
-- !personalidade <personalidade> → Define a personalidade padrão do grupo (use !personalidades para ver as disponíveis)
-- !personalidades → Lista todas as personalidades disponíveis
-- !cache → Força atualização do cache do grupo
-`
+🎭 *Personalidades de Resumo:*
+Experimente pedir um resumo com estilo diferente:
+• *!clt 50* (trabalhador cansado)
+• *!fl 50* (faria limer)
+• *!z 50* (geração Z)
+• *!profeta 50* (poético/bíblico)
+
+⚙️ _É admin? Use *!help admin* para ver comandos de configuração._`
 
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, infoText)
 }
