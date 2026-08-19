@@ -20,7 +20,7 @@ import (
 const (
 	stickerMaxImageBytes = 10_485_760 // 10 MB for static stickers
 	stickerMaxVideoBytes = 10_485_760 // 10 MB for animated stickers
-	stickerTargetBytes   = 512_000   // 500 KB — WhatsApp animated sticker limit
+	stickerTargetBytes   = 512_000    // 500 KB — WhatsApp animated sticker limit
 	stickerSize          = "512:512"
 	stickerFPS           = "13"
 	stickerInitialQValue = 85
@@ -270,7 +270,7 @@ func (h *Handler) convertVideoToSticker(inputPath string) (string, error) {
 			"-loop", "0",
 			"-preset", "picture",
 			"-an",
-			"-vsync", "0",
+			"-fps_mode", "cfr",
 			"-s", stickerSize,
 			outputPath,
 		)
