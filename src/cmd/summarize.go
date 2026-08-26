@@ -15,7 +15,7 @@ import (
 )
 
 // summarizeCooldown is the minimum interval between summarize requests per user.
-const summarizeCooldown = 30 * time.Second
+const summarizeCooldown = 5 * time.Second
 
 // handleSummarizeCommand handles the summarize command
 func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.MessageInfo) {
