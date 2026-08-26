@@ -178,7 +178,7 @@ func (h *Handler) handleChatResponse(evt *events.Message) {
 		"is_group", msgTrigger.IsGroup,
 		"msg_id", msgTrigger.ID)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
 	// Flush so the triggering message is visible to the context query.

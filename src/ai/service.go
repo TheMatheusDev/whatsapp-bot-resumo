@@ -152,12 +152,27 @@ func (s *Service) ChatResponse(ctx context.Context, messages []types.Message, tr
 	tools := GetChatbotTools()
 	models := []string{s.model, s.modelBackup, s.modelBackup2}
 	var lastErr error
+	const attemptTimeout = 35 * time.Second
+
 	for i, model := range models {
+		// Stop if the caller's context was explicitly cancelled
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("chat response cancelled: %w", ctx.Err())
+		default:
+		}
+
 		if i > 0 {
 			s.logger.Warn("ChatResponse: retrying with fallback model",
 				"model", model, "attempt", i+1, "prev_error", lastErr)
 		}
-		result, err := s.generateChatContentWithTools(ctx, fullPrompt, model, tools)
+
+		// Use a dedicated per-attempt timeout so that a timeout in one model
+		// does not exhaust the context for subsequent fallback models.
+		attemptCtx, cancel := context.WithTimeout(ctx, attemptTimeout)
+		result, err := s.generateChatContentWithTools(attemptCtx, fullPrompt, model, tools)
+		cancel()
+
 		if err == nil {
 			return result, nil
 		}
@@ -286,8 +301,13 @@ func (s *Service) generateChatContentWithTools(ctx context.Context, prompt strin
 
 	config := &genai.GenerateContentConfig{
 		Temperature:     genai.Ptr(float32(0.7)),
-		MaxOutputTokens: 65536,
+		MaxOutputTokens: 8192,
 		Tools:           tools,
+		ToolConfig: &genai.ToolConfig{
+			FunctionCallingConfig: &genai.FunctionCallingConfig{
+				Mode: genai.FunctionCallingConfigModeAuto,
+			},
+		},
 	}
 
 	resp, err := s.client.Models.GenerateContent(ctx, model, contents, config)

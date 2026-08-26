@@ -36,6 +36,11 @@ func TestGetChatbotTools(t *testing.T) {
 		if decl.Description == "" {
 			t.Errorf("tool %q has empty description", decl.Name)
 		}
+		if decl.Parameters == nil {
+			t.Errorf("tool %q has nil Parameters (Gemini API requires TypeObject schema)", decl.Name)
+		} else if decl.Parameters.Type != genai.TypeObject {
+			t.Errorf("tool %q Parameters.Type is %v, expected %v", decl.Name, decl.Parameters.Type, genai.TypeObject)
+		}
 	}
 
 	for name, found := range expectedTools {
