@@ -157,22 +157,25 @@ func (h *Handler) handleChatResponse(evt *events.Message) {
 	}
 
 	// Check whether the chatbot feature is enabled for this group and trigger type.
-	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
-	isMention := h.isBotMentioned(evt.Message)
-	isReply := h.isReplyToBot(evt.Message)
-	if !((isMention && settings.ChatbotMentionsEnabled) || (isReply && settings.ChatbotRepliesEnabled)) {
-		h.logger.Debug("handleChatResponse: chatbot disabled for this trigger in group",
-			"chat", msgTrigger.Chat.User,
-			"is_mention", isMention,
-			"is_reply", isReply,
-			"mentions_enabled", settings.ChatbotMentionsEnabled,
-			"replies_enabled", settings.ChatbotRepliesEnabled)
-		return
+	if msgTrigger.IsGroup {
+		settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
+		isMention := h.isBotMentioned(evt.Message)
+		isReply := h.isReplyToBot(evt.Message)
+		if !((isMention && settings.ChatbotMentionsEnabled) || (isReply && settings.ChatbotRepliesEnabled)) {
+			h.logger.Debug("handleChatResponse: chatbot disabled for this trigger in group",
+				"chat", msgTrigger.Chat.User,
+				"is_mention", isMention,
+				"is_reply", isReply,
+				"mentions_enabled", settings.ChatbotMentionsEnabled,
+				"replies_enabled", settings.ChatbotRepliesEnabled)
+			return
+		}
 	}
 
 	h.logger.Info("handleChatResponse: triggered",
 		"chat", msgTrigger.Chat.User,
 		"sender", msgTrigger.Sender.User,
+		"is_group", msgTrigger.IsGroup,
 		"msg_id", msgTrigger.ID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -219,7 +222,7 @@ func (h *Handler) handleChatResponse(evt *events.Message) {
 		Personality: h.getGroupDefaultPersonality(msgTrigger.Chat.User),
 	}
 
-	response, err := h.aiService.ChatResponse(ctx, messages, triggerMsg, triggerSender, opts)
+	chatResult, err := h.aiService.ChatResponse(ctx, messages, triggerMsg, triggerSender, opts)
 	if err != nil {
 		h.logger.Error("handleChatResponse: AI service failed", "error", err)
 		if ai.IsPersonalityError(err) {
@@ -229,6 +232,26 @@ func (h *Handler) handleChatResponse(evt *events.Message) {
 			defer cancel()
 			_ = h.whatsappService.ReactToMessage(reactCtx, msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌")
 		}
+		return
+	}
+
+	// If the model requested tool calls, dispatch the tool call.
+	if len(chatResult.ToolCalls) > 0 {
+		toolCall := chatResult.ToolCalls[0]
+		h.logger.Info("handleChatResponse: executing tool call",
+			"tool", toolCall.Name,
+			"args", toolCall.Args)
+
+		if executed := h.DispatchToolCall(toolCall, msgTrigger, evt.Message); executed {
+			// Record the interaction timestamp so subsequent triggers use the warm window.
+			h.chatLastInteraction.Store(msgTrigger.Chat.User, time.Now())
+			return
+		}
+	}
+
+	response := chatResult.Text
+	if strings.TrimSpace(response) == "" {
+		h.logger.Warn("handleChatResponse: empty response text and no tool executed")
 		return
 	}
 

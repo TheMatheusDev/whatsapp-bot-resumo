@@ -272,23 +272,32 @@ func (h *Handler) handleMessage(evt *events.Message) {
 		return
 	}
 
-	// Detect mention or reply to the bot (groups only, post-boot messages only).
+	// Detect mention or reply to the bot in groups, or any conversational message in DMs (post-boot messages only).
 	// Messages that start with '!' are already handled as commands above and
 	// must never double-trigger the chatbot — the HasPrefix guard below is a
 	// safety net for any edge case where isCommand returned false but the
 	// content still begins with a command prefix.
-	if evt.Info.IsGroup && !strings.HasPrefix(cmdContent, "!") {
-		isMention := h.isBotMentioned(msg)
-		isReply := h.isReplyToBot(msg)
-		if isMention || isReply {
-			settings := h.loadOrDefaultSettings(evt.Info.Chat.User)
-			if (isMention && settings.ChatbotMentionsEnabled) || (isReply && settings.ChatbotRepliesEnabled) {
-				h.wg.Add(1)
-				go func() {
-					defer h.wg.Done()
-					h.handleChatResponse(evt)
-				}()
+	if !strings.HasPrefix(cmdContent, "!") {
+		if evt.Info.IsGroup {
+			isMention := h.isBotMentioned(msg)
+			isReply := h.isReplyToBot(msg)
+			if isMention || isReply {
+				settings := h.loadOrDefaultSettings(evt.Info.Chat.User)
+				if (isMention && settings.ChatbotMentionsEnabled) || (isReply && settings.ChatbotRepliesEnabled) {
+					h.wg.Add(1)
+					go func() {
+						defer h.wg.Done()
+						h.handleChatResponse(evt)
+					}()
+				}
 			}
+		} else {
+			// Direct message (DM) - user is directly talking to the bot
+			h.wg.Add(1)
+			go func() {
+				defer h.wg.Done()
+				h.handleChatResponse(evt)
+			}()
 		}
 	}
 }
