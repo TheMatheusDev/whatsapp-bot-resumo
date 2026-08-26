@@ -123,28 +123,33 @@ func (s *Service) SummarizeMessages(ctx context.Context, messages []types.Messag
 }
 
 // ChatResponse generates a conversational reply when the bot is mentioned or
-// receives a reply in a group. It uses the recent group message history as
+// receives a reply in a group or DM. It uses the recent message history as
 // context (including bot messages) and responds in the group's configured
-// personality. Falls back through models the same way as SummarizeMessages.
-func (s *Service) ChatResponse(ctx context.Context, messages []types.Message, triggerMsg string, triggerSender string, opts types.ChatOptions) (string, error) {
+// personality, supporting Tool Calling (Function Calling). Falls back through models the same way as SummarizeMessages.
+func (s *Service) ChatResponse(ctx context.Context, messages []types.Message, triggerMsg string, triggerSender string, opts types.ChatOptions) (*types.ChatResult, error) {
 	if len(messages) == 0 {
-		return "", fmt.Errorf("no messages for chat context")
+		return nil, fmt.Errorf("no messages for chat context")
 	}
 
 	messagesStr := s.buildMessagesString(messages)
 	systemPrompt, err := s.buildChatSystemPrompt(opts)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+
+	toolsInstruction := "\n\nVocê tem acesso a ferramentas (tools) para executar ações solicitadas pelos usuários, como resumir mensagens, ver rankings, consultar regras, criar figurinhas e listar personalidades. " +
+		"Se o usuário estiver pedindo uma dessas ações, acione a ferramenta correspondente com os parâmetros adequados. " +
+		"Se for apenas uma conversa, comentário, pergunta geral ou saudação, responda diretamente em texto."
 
 	userPrompt := fmt.Sprintf(
 		"Histórico recente da conversa:\n%s\n\n%s escreveu para você: \"%s\"\n\nResponda diretamente a essa mensagem.",
 		messagesStr, triggerSender, triggerMsg,
 	)
 
-	fullPrompt := fmt.Sprintf("%s\n\n%s", systemPrompt, userPrompt)
-	s.logger.Debug("Generated chat prompt", "prompt", fullPrompt)
+	fullPrompt := fmt.Sprintf("%s%s\n\n%s", systemPrompt, toolsInstruction, userPrompt)
+	s.logger.Debug("Generated chat prompt with tools", "prompt", fullPrompt)
 
+	tools := GetChatbotTools()
 	models := []string{s.model, s.modelBackup, s.modelBackup2}
 	var lastErr error
 	for i, model := range models {
@@ -152,13 +157,13 @@ func (s *Service) ChatResponse(ctx context.Context, messages []types.Message, tr
 			s.logger.Warn("ChatResponse: retrying with fallback model",
 				"model", model, "attempt", i+1, "prev_error", lastErr)
 		}
-		result, err := s.generateContent(ctx, fullPrompt, model)
+		result, err := s.generateChatContentWithTools(ctx, fullPrompt, model, tools)
 		if err == nil {
 			return result, nil
 		}
 		lastErr = err
 	}
-	return "", fmt.Errorf("all models failed to generate chat response: %w", lastErr)
+	return nil, fmt.Errorf("all models failed to generate chat response: %w", lastErr)
 }
 
 // buildChatSystemPrompt returns the chat system prompt for the configured personality
@@ -264,6 +269,63 @@ func (s *Service) generateContent(ctx context.Context, prompt string, model stri
 
 	s.logger.Info("Successfully generated summary", "length", len(content))
 	return content, nil
+}
+
+// generateChatContentWithTools calls the Gemini API with chatbot tools enabled.
+// It checks both for text responses and tool calls (function calling).
+func (s *Service) generateChatContentWithTools(ctx context.Context, prompt string, model string, tools []*genai.Tool) (*types.ChatResult, error) {
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Minute*2)
+		defer cancel()
+	}
+
+	contents := []*genai.Content{
+		genai.NewContentFromText(prompt, genai.RoleUser),
+	}
+
+	config := &genai.GenerateContentConfig{
+		Temperature:     genai.Ptr(float32(0.7)),
+		MaxOutputTokens: 65536,
+		Tools:           tools,
+	}
+
+	resp, err := s.client.Models.GenerateContent(ctx, model, contents, config)
+	if err != nil {
+		s.logger.Error("Failed to generate chat content", "error", err)
+		return nil, fmt.Errorf("failed to generate chat content: %w", err)
+	}
+
+	if s.apiLogs {
+		s.saveAPIResponse(resp)
+	}
+
+	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+		return nil, fmt.Errorf("empty response from Gemini API")
+	}
+
+	chatResult := &types.ChatResult{}
+	for _, part := range resp.Candidates[0].Content.Parts {
+		if part.FunctionCall != nil {
+			chatResult.ToolCalls = append(chatResult.ToolCalls, types.ToolCall{
+				ID:   part.FunctionCall.ID,
+				Name: part.FunctionCall.Name,
+				Args: part.FunctionCall.Args,
+			})
+		}
+		if part.Text != "" {
+			chatResult.Text += part.Text
+		}
+	}
+
+	if len(chatResult.ToolCalls) == 0 && strings.TrimSpace(chatResult.Text) == "" {
+		return nil, fmt.Errorf("empty content and no tool calls in Gemini response")
+	}
+
+	s.logger.Info("Successfully generated chat response",
+		"tool_calls_count", len(chatResult.ToolCalls),
+		"text_len", len(chatResult.Text))
+	return chatResult, nil
 }
 
 // saveAPIResponse saves the Gemini API response to a file for debugging

@@ -106,14 +106,28 @@ type GroupSettings struct {
 // this to update a loading message in WhatsApp. Passing nil is safe.
 type OnRetryFunc func(attempt int, model string)
 
+// ToolCall represents a function call requested by the AI model.
+type ToolCall struct {
+	ID   string         `json:"id"`
+	Name string         `json:"name"`
+	Args map[string]any `json:"args"`
+}
+
+// ChatResult represents the outcome of a ChatResponse call:
+// either conversational text, or one or more ToolCalls requested by the model.
+type ChatResult struct {
+	Text      string     `json:"text"`
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+}
+
 // AIService defines the interface for AI operations
 type AIService interface {
 	SummarizeMessages(ctx context.Context, messages []Message, opts SummarizeOptions, onRetry OnRetryFunc) (string, error)
-	// ChatResponse generates a conversational reply when the bot is mentioned or
-	// receives a reply. messages is the recent group history (including bot messages),
+	// ChatResponse generates a conversational reply when the bot is mentioned,
+	// receives a reply, or in DM. messages is the recent history (including bot messages),
 	// triggerMsg is the content of the message that triggered the response, and
 	// triggerSender is the display name of the user who triggered it.
-	ChatResponse(ctx context.Context, messages []Message, triggerMsg string, triggerSender string, opts ChatOptions) (string, error)
+	ChatResponse(ctx context.Context, messages []Message, triggerMsg string, triggerSender string, opts ChatOptions) (*ChatResult, error)
 	TranscribeAudio(ctx context.Context, audioData []byte, mimeType string) (string, error)
 	Close() error
 }
