@@ -31,4 +31,8 @@ func TestConfigPreservesPlaceholders(t *testing.T) {
 	if len(cfg.Bot.FarewellMessages) != 1 || cfg.Bot.FarewellMessages[0] != "Tchau {numero}! Regras eram:\n{regras}" {
 		t.Errorf("Expected FarewellMessages[0] to retain '{regras}', got: %q", cfg.Bot.FarewellMessages[0])
 	}
+
+	if cfg.Gemini.ModelTranscribe != "gemini-3.5-transcribe" {
+		t.Errorf("Expected ModelTranscribe to default to 'gemini-3.5-transcribe', got: %q", cfg.Gemini.ModelTranscribe)
+	}
 }

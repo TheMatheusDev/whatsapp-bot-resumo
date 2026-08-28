@@ -233,11 +233,12 @@ type Config struct {
 
 // GeminiConfig holds Gemini AI configuration
 type GeminiConfig struct {
-	APIKey       string `json:"api_key"`
-	Model        string `json:"model"`
-	ModelBackup  string `json:"model_backup"`
-	ModelBackup2 string `json:"model_backup2"`
-	ApiLogs      bool   `json:"api_logs"`
+	APIKey          string `json:"api_key"`
+	Model           string `json:"model"`
+	ModelBackup     string `json:"model_backup"`
+	ModelBackup2    string `json:"model_backup2"`
+	ModelTranscribe string `json:"model_transcribe"`
+	ApiLogs         bool   `json:"api_logs"`
 }
 
 // DatabaseConfig holds database configuration
