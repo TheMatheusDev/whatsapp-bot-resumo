@@ -224,3 +224,64 @@ func TestChatbotCommandRouting(t *testing.T) {
 	}
 }
 
+func TestTranscribeCommandRouting(t *testing.T) {
+	commands := map[string]string{
+		"!transcreva":   "transcribe",
+		"!transcreve":   "transcribe",
+		"!t":            "transcribe",
+		"!transcricao":  "transcribe_toggle",
+		"!transcricoes": "transcribe_toggle",
+	}
+
+	for cmd, expectedType := range commands {
+		t.Run(cmd, func(t *testing.T) {
+			var resolved string
+			switch strings.ToLower(cmd) {
+			case "!transcreva", "!transcreve", "!t":
+				resolved = "transcribe"
+			case "!transcricao", "!transcricoes":
+				resolved = "transcribe_toggle"
+			default:
+				resolved = "unknown"
+			}
+			if resolved != expectedType {
+				t.Errorf("cmd %s resolved to %s, expected %s", cmd, resolved, expectedType)
+			}
+		})
+	}
+}
+
+func TestTranscribeDMAllowed(t *testing.T) {
+	dmAllowed := map[string]bool{
+		"!figurinha":  true,
+		"!sticker":    true,
+		"!transcreva": true,
+		"!transcreve": true,
+		"!t":          true,
+		"!help":       true,
+		"!h":          true,
+		"!version":    true,
+		"!v":          true,
+		"!ping":       true,
+	}
+
+	tests := []struct {
+		cmd     string
+		allowed bool
+	}{
+		{"!transcreva", true},
+		{"!transcreve", true},
+		{"!t", true},
+		{"!transcricao", false},
+		{"!resuma", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.cmd, func(t *testing.T) {
+			if dmAllowed[tt.cmd] != tt.allowed {
+				t.Errorf("expected dmAllowed[%s]=%v, got %v", tt.cmd, tt.allowed, dmAllowed[tt.cmd])
+			}
+		})
+	}
+}
+

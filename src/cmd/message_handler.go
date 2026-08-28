@@ -237,7 +237,7 @@ func (h *Handler) handleMessage(evt *events.Message) {
 					return
 				}
 				if result.ID > 0 {
-					h.transcribeAudioAsync(result.ID, audioData, mimeType)
+					h.transcribeAudioAsync(result.ID, audioData, mimeType, evt.Info)
 				}
 			}()
 		}
@@ -320,13 +320,16 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 	// Commands allowed in Direct Messages (DMs).
 	// Every other command requires a group context.
 	dmAllowed := map[string]bool{
-		"!figurinha": true,
-		"!sticker":   true,
-		"!help":      true,
-		"!h":         true,
-		"!version":   true,
-		"!v":         true,
-		"!ping":      true,
+		"!figurinha":  true,
+		"!sticker":    true,
+		"!transcreva": true,
+		"!transcreve": true,
+		"!t":          true,
+		"!help":       true,
+		"!h":          true,
+		"!version":    true,
+		"!v":          true,
+		"!ping":       true,
 	}
 
 	if !msgTrigger.IsGroup && !dmAllowed[command] {
@@ -339,6 +342,8 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 	switch command {
 	case "!figurinha", "!sticker":
 		h.handleStickerCommand(syntheticEvt)
+	case "!transcreva", "!transcreve", "!t":
+		h.handleTranscribeCommand(syntheticEvt)
 	case "!resuma", "!resumo", "!r":
 		h.handleSummarizeCommand(parts[1:], msgTrigger)
 	case "!clt":
@@ -381,6 +386,8 @@ func (h *Handler) handleCommand(content string, msgTrigger types.MessageInfo, ms
 		h.handleDailySummaryToggle(parts[1:], msgTrigger)
 	case "!ranking":
 		h.handleWeeklyRankingToggle(parts[1:], msgTrigger)
+	case "!transcricao", "!transcricoes":
+		h.handleAudioTranscribeToggle(parts[1:], msgTrigger)
 	case "!chatbot":
 		h.handleChatbotToggle(parts[1:], msgTrigger)
 	case "!mencao", "!mencoes":
