@@ -27,6 +27,7 @@ func (h *Handler) handleHelpCommand(args []string, msgTrigger types.MessageInfo)
 🤖 *Automações (Liga/Desliga):*
 • *!resumodia* ➔ Alterna resumo diário automático
 • *!ranking* ➔ Alterna ranking semanal automático
+• *!transcricao [on|off]* ➔ Alterna resposta automática a áudios de voz
 • *!chatbot* ➔ Mostra o status do chatbot e instruções
 • *!chatbot mencao [on|off]* (ou *!mencao*) ➔ Alterna respostas por menção (@bot)
 • *!chatbot reply [on|off]* (ou *!reply*) ➔ Alterna respostas a replies do bot
@@ -60,10 +61,13 @@ Aqui estão os comandos mais usados:
 ❓ *2. Fazer Perguntas*
 • *!p 50 Teve alguma novidade?* ➔ Pergunta sobre as últimas 50 mensagens
 
-🎨 *3. Criar Figurinha*
+🎙️ *3. Transcrever Áudio*
+• *!transcreva* ou *!t* ➔ Responda a uma mensagem de voz
+
+🎨 *4. Criar Figurinha*
 • *!sticker* ➔ Responda a uma foto, vídeo ou GIF
 
-🏆 *4. Rankings*
+🏆 *5. Rankings*
 • *!semana* ou *!s* ➔ Ranking dos últimos 7 dias
 • *!mes* ou *!m* ➔ Ranking dos últimos 30 dias
 

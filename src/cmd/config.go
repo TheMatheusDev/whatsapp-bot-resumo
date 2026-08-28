@@ -55,6 +55,12 @@ func (h *Handler) handleConfigCommand(msgTrigger types.MessageInfo) {
 		chatbotRepliesStatus = "⛔ desligado"
 	}
 
+	// Audio transcription status
+	audioTranscribeStatus := "✅ ligado"
+	if !settings.AudioTranscribeEnabled {
+		audioTranscribeStatus = "⛔ desligado"
+	}
+
 	// Default personality
 	defaultPersonality := h.getGroupDefaultPersonality(msgTrigger.Chat.User)
 
@@ -67,6 +73,7 @@ func (h *Handler) handleConfigCommand(msgTrigger types.MessageInfo) {
 🏆 *Ranking semanal:* %s
 🤖 *Chatbot (menções):* %s
 💬 *Chatbot (replies):* %s
+🎙️ *Transcrição de áudios:* %s
 🎭 *Personalidade atual:* %s`,
 		rulesStatus,
 		welcomeCount,
@@ -75,6 +82,7 @@ func (h *Handler) handleConfigCommand(msgTrigger types.MessageInfo) {
 		weeklyStatus,
 		chatbotMentionsStatus,
 		chatbotRepliesStatus,
+		audioTranscribeStatus,
 		defaultPersonality,
 	)
 

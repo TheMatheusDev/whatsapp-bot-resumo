@@ -50,6 +50,7 @@ func (h *Handler) loadOrDefaultSettings(chatID string) wstypes.GroupSettings {
 		WeeklyRankingEnabled:   true,
 		ChatbotMentionsEnabled: true,
 		ChatbotRepliesEnabled:  true,
+		AudioTranscribeEnabled: true,
 		DefaultPersonality:     "resumobot",
 	}
 }
@@ -641,6 +642,63 @@ func (h *Handler) handleChatbotRepliesToggle(args []string, msgTrigger types.Mes
 	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
 		fmt.Sprintf("💬 Chatbot (replies): %s → *%s*", prevStatus, newStatus))
 	h.logger.Info("Chatbot replies toggled", "chat", msgTrigger.Chat.User, "enabled", settings.ChatbotRepliesEnabled)
+}
+
+// ---------------------------------------------------------------------------
+// !transcricao  (audio transcription auto-reply toggle)
+// ---------------------------------------------------------------------------
+
+// handleAudioTranscribeToggle toggles or sets automatic audio transcription replies for this group.
+// Only group admins can use this command.
+//
+// Usage:
+//	!transcricao          → toggles between on and off
+//	!transcricao on       → enables automatic audio transcription replies
+//	!transcricao off      → disables automatic audio transcription replies
+func (h *Handler) handleAudioTranscribeToggle(args []string, msgTrigger types.MessageInfo) {
+	if !h.requireGroupAdmin(msgTrigger) {
+		return
+	}
+
+	settings := h.loadOrDefaultSettings(msgTrigger.Chat.User)
+	prevEnabled := settings.AudioTranscribeEnabled
+
+	if len(args) > 0 {
+		switch strings.ToLower(args[0]) {
+		case "on", "ativar", "ligar", "1", "sim", "true":
+			settings.AudioTranscribeEnabled = true
+		case "off", "desativar", "desligar", "0", "nao", "não", "false":
+			settings.AudioTranscribeEnabled = false
+		default:
+			h.reactToCommand(msgTrigger, "❌")
+			h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+				"❌ Uso: !transcricao [on|off]\n\n• !transcricao on  → ativa resposta automática a áudios de voz\n• !transcricao off → desativa\n• !transcricao     → alterna o estado atual")
+			return
+		}
+	} else {
+		settings.AudioTranscribeEnabled = !settings.AudioTranscribeEnabled
+	}
+
+	if err := h.saveAndInvalidate(settings); err != nil {
+		h.logger.Error("handleAudioTranscribeToggle: failed to save settings", "error", err)
+		h.reactToCommand(msgTrigger, "❌")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			"❌ Erro ao salvar configuração. Tente novamente.")
+		return
+	}
+
+	prevStatus := "✅ ligado"
+	if !prevEnabled {
+		prevStatus = "⛔ desligado"
+	}
+	newStatus := "✅ ligado"
+	if !settings.AudioTranscribeEnabled {
+		newStatus = "⛔ desligado"
+	}
+	h.reactToCommand(msgTrigger, "✅")
+	h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+		fmt.Sprintf("🎙️ Resposta automática de áudios: %s → *%s*", prevStatus, newStatus))
+	h.logger.Info("Audio transcription toggled", "chat", msgTrigger.Chat.User, "enabled", settings.AudioTranscribeEnabled)
 }
 
 // ---------------------------------------------------------------------------
