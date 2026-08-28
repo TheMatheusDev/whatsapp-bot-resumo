@@ -1,9 +1,13 @@
 package ai
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -15,14 +19,17 @@ import (
 
 // Service implements the AIService interface
 type Service struct {
-	client              *genai.Client
-	model               string
-	modelBackup         string
-	modelBackup2        string
-	apiLogs             bool
-	logger              types.Logger
-	timezone            *time.Location // used to format message timestamps sent to the AI
-	personalityLoader   *PersonalityLoader
+	client            *genai.Client
+	apiKey            string
+	model             string
+	modelBackup       string
+	modelBackup2      string
+	modelTranscribe   string
+	apiLogs           bool
+	logger            types.Logger
+	timezone          *time.Location // used to format message timestamps sent to the AI
+	personalityLoader *PersonalityLoader
+	httpClient        *http.Client
 }
 
 // NewService creates a new AI service.
@@ -30,7 +37,7 @@ type Service struct {
 // convert message timestamps to local time before sending them to the API.
 // An empty or invalid value falls back to UTC.
 // personalityLoader is used to resolve personality prompts at runtime from TOML files.
-func NewService(apiKey string, model string, modelBackup string, modelBackup2 string, apiLogs bool, logger types.Logger, timezone string, personalityLoader *PersonalityLoader) (*Service, error) {
+func NewService(apiKey string, model string, modelBackup string, modelBackup2 string, modelTranscribe string, apiLogs bool, logger types.Logger, timezone string, personalityLoader *PersonalityLoader) (*Service, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
@@ -45,6 +52,10 @@ func NewService(apiKey string, model string, modelBackup string, modelBackup2 st
 
 	if modelBackup2 == "" {
 		modelBackup2 = "gemini-2.5-flash" // Default second backup
+	}
+
+	if modelTranscribe == "" {
+		modelTranscribe = "gemini-3.5-transcribe" // Default transcription model
 	}
 
 	loc, err := time.LoadLocation(timezone)
@@ -67,13 +78,16 @@ func NewService(apiKey string, model string, modelBackup string, modelBackup2 st
 
 	return &Service{
 		client:            client,
+		apiKey:            apiKey,
 		model:             model,
 		modelBackup:       modelBackup,
 		modelBackup2:      modelBackup2,
+		modelTranscribe:   modelTranscribe,
 		apiLogs:           apiLogs,
 		logger:            logger,
 		timezone:          loc,
 		personalityLoader: personalityLoader,
+		httpClient:        &http.Client{Timeout: 2 * time.Minute},
 	}, nil
 }
 
@@ -306,11 +320,166 @@ func (s *Service) saveAPIResponse(resp *genai.GenerateContentResponse) {
 	s.logger.Info("API response saved to APIresponse.txt")
 }
 
-// TranscribeAudio transcribes audio data using the Gemini API with model fallback
+// saveRawAPIResponse saves raw API responses to APIresponse.txt for debugging
+func (s *Service) saveRawAPIResponse(title string, data []byte) {
+	file, err := os.OpenFile("APIresponse.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		s.logger.Error("Failed to open APIresponse.txt", "error", err)
+		return
+	}
+	defer file.Close()
+
+	fmt.Fprintf(file, "=== %s - %s ===\n\n", title, time.Now().Format(time.RFC3339))
+	fmt.Fprintf(file, "%s\n\n", string(data))
+	s.logger.Info("API response saved to APIresponse.txt")
+}
+
+type interactionAudioInput struct {
+	Type     string `json:"type"`
+	Data     string `json:"data,omitempty"`
+	URI      string `json:"uri,omitempty"`
+	MIMEType string `json:"mime_type"`
+}
+
+type interactionTranscriptionConfig struct {
+	Mode          string   `json:"mode,omitempty"`
+	LanguageCodes []string `json:"language_codes,omitempty"`
+}
+
+type interactionGenerationConfig struct {
+	TranscriptionConfig *interactionTranscriptionConfig `json:"transcription_config,omitempty"`
+}
+
+type interactionRequest struct {
+	Model            string                       `json:"model"`
+	Input            []interactionAudioInput      `json:"input"`
+	GenerationConfig *interactionGenerationConfig `json:"generation_config,omitempty"`
+}
+
+type interactionContentPart struct {
+	Type string `json:"type"`
+	Text string `json:"text,omitempty"`
+}
+
+type interactionStep struct {
+	ID      string                   `json:"id"`
+	Type    string                   `json:"type"`
+	Content []interactionContentPart `json:"content,omitempty"`
+}
+
+type interactionResponse struct {
+	ID         string            `json:"id"`
+	Status     string            `json:"status"`
+	OutputText string            `json:"output_text,omitempty"`
+	Steps      []interactionStep `json:"steps,omitempty"`
+	Error      interface{}       `json:"error,omitempty"`
+}
+
+// transcribeWithInteractions sends an audio transcription request to the Gemini Interactions API
+func (s *Service) transcribeWithInteractions(ctx context.Context, audioData []byte, mimeType string, model string) (string, error) {
+	reqBody := interactionRequest{
+		Model: model,
+		Input: []interactionAudioInput{
+			{
+				Type:     "audio",
+				Data:     base64.StdEncoding.EncodeToString(audioData),
+				MIMEType: mimeType,
+			},
+		},
+		GenerationConfig: &interactionGenerationConfig{
+			TranscriptionConfig: &interactionTranscriptionConfig{
+				Mode: "smart",
+			},
+		},
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal interaction request: %w", err)
+	}
+
+	url := "https://generativelanguage.googleapis.com/v1beta/interactions"
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create http request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-goog-api-key", s.apiKey)
+
+	resp, err := s.httpClient.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("interactions api request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if s.apiLogs {
+		s.saveRawAPIResponse("Interactions API Response", bodyBytes)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("interactions api returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var interactionResp interactionResponse
+	if err := json.Unmarshal(bodyBytes, &interactionResp); err != nil {
+		return "", fmt.Errorf("failed to unmarshal interactions response: %w", err)
+	}
+
+	if interactionResp.OutputText != "" {
+		return strings.TrimSpace(interactionResp.OutputText), nil
+	}
+
+	// Extract text from steps if output_text is not directly populated
+	var textBuilder strings.Builder
+	for _, step := range interactionResp.Steps {
+		if step.Type == "model_output" {
+			for _, content := range step.Content {
+				if content.Text != "" {
+					textBuilder.WriteString(content.Text)
+				}
+			}
+		}
+	}
+
+	result := strings.TrimSpace(textBuilder.String())
+	if result == "" {
+		return "", fmt.Errorf("empty transcription text in interactions response")
+	}
+
+	return result, nil
+}
+
+// TranscribeAudio transcribes audio data using gemini-3.5-transcribe via the Interactions API,
+// with model fallback to GenerateContent if necessary.
 func (s *Service) TranscribeAudio(ctx context.Context, audioData []byte, mimeType string) (string, error) {
+	// Add timeout if not already set
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+	}
+
+	// Try primary transcription model first (gemini-3.5-transcribe)
+	s.logger.Info("Transcribing audio with dedicated model", "model", s.modelTranscribe)
+	transcription, err := s.transcribeWithInteractions(ctx, audioData, mimeType, s.modelTranscribe)
+	if err == nil && transcription != "" {
+		s.logger.Info("Audio transcribed successfully with dedicated model", "model", s.modelTranscribe, "length", len(transcription))
+		return transcription, nil
+	}
+
+	s.logger.Warn("Dedicated transcription failed, attempting fallback models",
+		"model", s.modelTranscribe,
+		"error", err)
+
+	// Fallback path: generateContent with general-purpose models
 	prompt := "Transcreva de forma precisa o áudio em anexo. Seja direto, não adicione nenhum comentário ou narração. Apenas o texto falado"
 
-	// Build content with audio inline data
 	contents := []*genai.Content{
 		{
 			Role: genai.RoleUser,
@@ -326,21 +495,16 @@ func (s *Service) TranscribeAudio(ctx context.Context, audioData []byte, mimeTyp
 		MaxOutputTokens: 8192,
 	}
 
-	// Try primary model
 	models := []string{s.model, s.modelBackup, s.modelBackup2}
-	var lastErr error
+	var lastErr error = err
 
 	for i, model := range models {
-		if i == 0 {
-			s.logger.Info("Transcribing audio with primary model", "model", model)
-		} else {
-			s.logger.Warn("Retrying transcription with fallback model", "model", model, "attempt", i+1)
-		}
+		s.logger.Warn("Retrying transcription with fallback model", "model", model, "attempt", i+1)
 
 		resp, err := s.client.Models.GenerateContent(ctx, model, contents, config)
 		if err != nil {
 			lastErr = fmt.Errorf("model %s failed: %w", model, err)
-			s.logger.Error("Transcription failed with model", "model", model, "error", err)
+			s.logger.Error("Transcription failed with fallback model", "model", model, "error", err)
 			continue
 		}
 
@@ -350,13 +514,13 @@ func (s *Service) TranscribeAudio(ctx context.Context, audioData []byte, mimeTyp
 			continue
 		}
 
-		text := resp.Candidates[0].Content.Parts[0].Text
+		text := strings.TrimSpace(resp.Candidates[0].Content.Parts[0].Text)
 		if text == "" {
 			lastErr = fmt.Errorf("model %s returned empty text", model)
 			continue
 		}
 
-		s.logger.Info("Audio transcribed successfully", "model", model, "length", len(text))
+		s.logger.Info("Audio transcribed successfully with fallback model", "model", model, "length", len(text))
 		return text, nil
 	}
 
