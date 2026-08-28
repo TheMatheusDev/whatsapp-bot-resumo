@@ -94,6 +94,9 @@ type GroupSettings struct {
 	// ChatbotRepliesEnabled controls whether the bot responds to replies to its messages.
 	// Defaults to true for all groups; admins can toggle with !chatbot reply on/off.
 	ChatbotRepliesEnabled  bool   `json:"chatbot_replies_enabled"`
+	// AudioTranscribeEnabled controls whether the bot automatically transcribes and replies to voice notes.
+	// Defaults to true for all groups; admins can toggle with !transcricao on/off.
+	AudioTranscribeEnabled bool   `json:"audio_transcribe_enabled"`
 	// DefaultPersonality is the personality used when the user does not explicitly
 	// choose one (e.g. !resuma, daily summary, chatbot). Defaults to "resumobot".
 	DefaultPersonality   string   `json:"default_personality"`
