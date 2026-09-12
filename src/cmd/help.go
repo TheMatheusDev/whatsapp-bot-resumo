@@ -54,29 +54,30 @@ func (h *Handler) handleHelpCommand(args []string, msgTrigger types.MessageInfo)
 
 Aqui estão os comandos mais usados:
 
-📄 *1. Resumos*
+📄 *1. Resumos e Perguntas*
 • *!50* ou *!r 50* ➔ Resume as últimas 50 mensagens
+• *!50 <pergunta>* ou *!r 50 <pergunta>* ➔ Pergunta sobre as últimas 50 mensagens
+• *!r <pergunta>* ➔ Pergunta sobre as mensagens recentes (padrão: 300)
 • *!d* ➔ Resume tudo o que rolou hoje
+• *!d <pergunta>* ➔ Pergunta sobre o que rolou hoje
 
-❓ *2. Fazer Perguntas*
-• *!p 50 Teve alguma novidade?* ➔ Pergunta sobre as últimas 50 mensagens
-
-🎙️ *3. Transcrever Áudio*
+🎙️ *2. Transcrever Áudio*
 • *!transcreva* ou *!t* ➔ Responda a uma mensagem de voz
 
-🎨 *4. Criar Figurinha*
+🎨 *3. Criar Figurinha*
 • *!sticker* ➔ Responda a uma foto, vídeo ou GIF
 
-🏆 *5. Rankings*
+🏆 *4. Rankings*
 • *!semana* ou *!s* ➔ Ranking dos últimos 7 dias
 • *!mes* ou *!m* ➔ Ranking dos últimos 30 dias
 
 🎭 *Personalidades de Resumo:*
-Experimente pedir um resumo com estilo diferente:
-• *!clt 50* (trabalhador cansado)
-• *!fl 50* (faria limer)
-• *!z 50* (geração Z)
-• *!profeta 50* (poético/bíblico)
+Experimente pedir um resumo ou pergunta com estilo diferente:
+• *!clt [número] [pergunta]* (trabalhador cansado)
+• *!fl [número] [pergunta]* (faria limer)
+• *!z [número] [pergunta]* (geração Z)
+• *!profeta [número] [pergunta]* (poético/bíblico)
+💡 _Você também pode usar flags como --clt, --fl, --curto, --longo em qualquer comando de resumo._
 
 ⚙️ _É admin? Use *!help admin* para ver os comandos de gerenciamento do grupo._`
 
