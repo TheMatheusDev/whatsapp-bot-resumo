@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"fmt"
+	"strconv"
+
 	"go.mau.fi/whatsmeow/types"
 
 	wstypes "whatsapp-summarizer/src/types"
@@ -15,24 +18,27 @@ var zoomerCountMessages = CountValidationMessages{
 
 // handleSummarizeZoomerCommand handles the zoomer command (shortcut for -r with --zoomer flag)
 func (h *Handler) handleSummarizeZoomerCommand(args []string, msgTrigger types.MessageInfo) {
-	if len(args) == 0 {
-		h.reactToCommand(msgTrigger, "❌")
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ número de mensagens não especificado")
+	if wait := h.checkSummarizeRateLimit(msgTrigger); wait > 0 {
+		h.reactToCommand(msgTrigger, "⏳")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			fmt.Sprintf("⏳ Aguarde *%.0fs* antes de pedir outro resumo.", wait.Seconds()))
 		return
 	}
 
-	count, ok := h.parseAndValidateCount(msgTrigger, args[0], zoomerCountMessages)
-	if !ok {
-		return
+	count, style, _, question, hasExplicitCount := utils.ParseSummarizeArgs(args, DefaultSummarizeMessageCount)
+	if hasExplicitCount {
+		var ok bool
+		count, ok = h.parseAndValidateCount(msgTrigger, strconv.Itoa(count), zoomerCountMessages)
+		if !ok {
+			return
+		}
 	}
-
-	// Parse style options
-	style, _, _ := utils.ParseSummarizeOptions(args[1:], false)
 
 	opts := wstypes.SummarizeOptions{
 		Count:       count,
 		Style:       style,
 		Personality: "zoomer",
+		Question:    question,
 	}
 
 	go h.performSummarization(opts, msgTrigger)

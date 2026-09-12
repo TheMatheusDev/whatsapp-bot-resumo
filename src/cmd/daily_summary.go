@@ -173,7 +173,7 @@ func (h *Handler) performAutoDailySummarization(chatJID types.JID) {
 // handleDailySummaryCommand handles the daily summary command (summarization since 4 AM)
 func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.MessageInfo) {
 	// Parse options using utility function
-	style, personality, _ := utils.ParseSummarizeOptions(args, false)
+	style, personality, nonFlags := utils.ParseSummarizeOptions(args, true)
 
 	// Override default style for daily summary
 	if style == "short" {
@@ -183,6 +183,7 @@ func (h *Handler) handleDailySummaryCommand(args []string, msgTrigger types.Mess
 	opts := wstypes.SummarizeOptions{
 		Style:       style,
 		Personality: personality,
+		Question:    strings.Join(nonFlags, " "),
 	}
 
 	// Start summarization in goroutine
@@ -222,6 +223,9 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 
 	// Send initial "reading messages..." message as reply
 	loadingMessage := fmt.Sprintf("ℹ️ Resumindo o dia (%d mensagens)...", len(messages))
+	if opts.Question != "" {
+		loadingMessage = fmt.Sprintf("ℹ️ Lendo mensagens de hoje (%d mensagens)...", len(messages))
+	}
 	msgResp, err := h.whatsappService.SendRawMessage(context.Background(), msgTrigger.Chat, &waE2E.Message{
 		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
 			Text: proto.String(loadingMessage),
@@ -302,6 +306,9 @@ func (h *Handler) performDailySummarization(opts wstypes.SummarizeOptions, msgTr
 
 	// Add header
 	header := "ℹ️ *Resumo do dia:*\n"
+	if opts.Question != "" {
+		header = "ℹ️ *Resposta por IA (Hoje):*\n"
+	}
 
 	// Add metadata footer
 	messageCount := len(messages)

@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"fmt"
+	"strconv"
+
 	"go.mau.fi/whatsmeow/types"
 
 	wstypes "whatsapp-summarizer/src/types"
@@ -15,24 +18,27 @@ var profetaCountMessages = CountValidationMessages{
 
 // handleSummarizeProfetaCommand handles the !profeta command (shortcut for -r with --profeta flag)
 func (h *Handler) handleSummarizeProfetaCommand(args []string, msgTrigger types.MessageInfo) {
-	if len(args) == 0 {
-		h.reactToCommand(msgTrigger, "❌")
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Número de mensagens não especificado!\n\nUso: !profeta <número de mensagens> [opções]\n\nOpções: --curto, --medio, --longo")
+	if wait := h.checkSummarizeRateLimit(msgTrigger); wait > 0 {
+		h.reactToCommand(msgTrigger, "⏳")
+		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID,
+			fmt.Sprintf("⏳ Aguarde *%.0fs* antes de pedir outro resumo.", wait.Seconds()))
 		return
 	}
 
-	count, ok := h.parseAndValidateCount(msgTrigger, args[0], profetaCountMessages)
-	if !ok {
-		return
+	count, style, _, question, hasExplicitCount := utils.ParseSummarizeArgs(args, DefaultSummarizeMessageCount)
+	if hasExplicitCount {
+		var ok bool
+		count, ok = h.parseAndValidateCount(msgTrigger, strconv.Itoa(count), profetaCountMessages)
+		if !ok {
+			return
+		}
 	}
-
-	// Parse style options
-	style, _, _ := utils.ParseSummarizeOptions(args[1:], false)
 
 	opts := wstypes.SummarizeOptions{
 		Count:       count,
 		Style:       style,
 		Personality: "profeta",
+		Question:    question,
 	}
 
 	go h.performSummarization(opts, msgTrigger)
