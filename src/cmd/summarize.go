@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
@@ -14,17 +15,14 @@ import (
 	"whatsapp-summarizer/src/utils"
 )
 
+// DefaultSummarizeMessageCount is the fallback message count when omitted by the user.
+const DefaultSummarizeMessageCount = 300
+
 // summarizeCooldown is the minimum interval between summarize requests per user.
 const summarizeCooldown = 5 * time.Second
 
 // handleSummarizeCommand handles the summarize command
 func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.MessageInfo) {
-	if len(args) == 0 {
-		h.reactToCommand(msgTrigger, "❌")
-		h.whatsappService.SendMessageReply(msgTrigger.Chat, msgTrigger.Sender, msgTrigger.ID, "❌ Número de mensagens não especificado")
-		return
-	}
-
 	// Enforce per-user rate limit to prevent Gemini API flooding.
 	if wait := h.checkSummarizeRateLimit(msgTrigger); wait > 0 {
 		h.reactToCommand(msgTrigger, "⏳")
@@ -33,13 +31,21 @@ func (h *Handler) handleSummarizeCommand(args []string, msgTrigger types.Message
 		return
 	}
 
-	count, ok := h.parseAndValidateCount(msgTrigger, args[0], DefaultCountMessages)
-	if !ok {
-		return
+	count, style, personality, question, hasExplicitCount := utils.ParseSummarizeArgs(args, DefaultSummarizeMessageCount)
+	if hasExplicitCount {
+		var ok bool
+		count, ok = h.parseAndValidateCount(msgTrigger, strconv.Itoa(count), DefaultCountMessages)
+		if !ok {
+			return
+		}
 	}
 
-	// Parse options using utility function
-	opts := utils.ParseSummarizeOptionsToStruct(args[1:], count)
+	opts := wstypes.SummarizeOptions{
+		Count:       count,
+		Style:       style,
+		Personality: personality,
+		Question:    question,
+	}
 
 	// Start summarization in goroutine
 	go h.performSummarization(opts, msgTrigger)
@@ -195,7 +201,11 @@ func (h *Handler) performSummarization(opts wstypes.SummarizeOptions, msgTrigger
 	}
 
 	// Edit the loading message with the final summary
-	finalSummary := fmt.Sprintf("ℹ️ Resumo por IA:\n%s", summary)
+	header := "ℹ️ Resumo por IA:"
+	if opts.Question != "" {
+		header = "ℹ️ Resposta por IA:"
+	}
+	finalSummary := fmt.Sprintf("%s\n%s", header, summary)
 	err = h.whatsappService.EditMessage(msgTrigger.Chat, msgResp.ID, finalSummary)
 	if err != nil {
 		h.logger.Error("Failed to edit message with summary", "error", err)
