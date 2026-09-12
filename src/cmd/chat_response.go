@@ -18,17 +18,8 @@ import (
 const chatCooldown = 5 * time.Second
 
 // chatContextMessages is the number of recent messages (including bot messages)
-// sent to the AI model as conversation context when no recent interaction exists (cold).
-const chatContextMessages = 100
-
-// chatContextMessagesWarm is the reduced context size used when the group already
-// had a chatbot interaction within the last chatWarmWindow. The model already has
-// recent context from the previous call, so fewer messages suffice.
-const chatContextMessagesWarm = 30
-
-// chatWarmWindow is the duration after a chatbot response during which
-// subsequent interactions in the same group use the smaller context window.
-const chatWarmWindow = 1 * time.Minute
+// sent to the AI model as conversation context.
+const chatContextMessages = 200
 
 // extractContextInfo returns the ContextInfo embedded in any supported message
 // type, or nil if none is present. Used to detect mentions and replies.
@@ -133,7 +124,7 @@ func (h *Handler) checkChatRateLimit(chatUser, senderUser string) time.Duration 
 // Flow:
 //  1. Enforce per-user rate limit (5 s cooldown).
 //  2. Flush the batch writer so the triggering message is already in the DB.
-//  3. Fetch the last 100 messages including bot messages for context.
+//  3. Fetch the last 200 messages including bot messages for context.
 //  4. Call AIService.ChatResponse with the group's personality.
 //  5. Send the response as a reply to the user's triggering message.
 func (h *Handler) handleChatResponse(evt *events.Message) {
@@ -181,15 +172,7 @@ func (h *Handler) handleChatResponse(evt *events.Message) {
 	// Flush so the triggering message is visible to the context query.
 	h.dbService.FlushPendingMessages()
 
-	// Use a smaller context window when the group had a recent chatbot interaction
-	// (warm conversation) to save API tokens. Cold conversations get the full 100.
 	contextSize := chatContextMessages
-	if v, ok := h.chatLastInteraction.Load(msgTrigger.Chat.User); ok {
-		if last, ok := v.(time.Time); ok && time.Since(last) < chatWarmWindow {
-			contextSize = chatContextMessagesWarm
-		}
-	}
-
 	messages, err := h.dbService.GetGroupMessagesWithBot(msgTrigger.Chat.User, contextSize)
 	if err != nil {
 		h.logger.Error("handleChatResponse: failed to fetch context messages", "error", err)
@@ -252,10 +235,6 @@ func (h *Handler) handleChatResponse(evt *events.Message) {
 		Timestamp:   time.Now().In(h.timezone),
 	}
 	h.saveMessage(botMsg, msgTrigger.Chat) //nolint:errcheck
-
-	// Record the interaction timestamp so subsequent triggers within
-	// chatWarmWindow use the smaller context window.
-	h.chatLastInteraction.Store(msgTrigger.Chat.User, time.Now())
 
 	h.logger.Info("handleChatResponse: response sent",
 		"chat", msgTrigger.Chat.User,
