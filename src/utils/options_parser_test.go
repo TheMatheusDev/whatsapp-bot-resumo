@@ -97,7 +97,7 @@ func TestParseSummarizeOptions_CombinedFlags(t *testing.T) {
 }
 
 func TestParseSummarizeOptionsToStruct(t *testing.T) {
-	opts := ParseSummarizeOptionsToStruct([]string{"--medio", "--clt"}, 50)
+	opts := ParseSummarizeOptionsToStruct([]string{"--medio", "--clt", "qual", "o", "assunto?"}, 50)
 	if opts.Count != 50 {
 		t.Errorf("expected count 50, got %d", opts.Count)
 	}
@@ -106,6 +106,9 @@ func TestParseSummarizeOptionsToStruct(t *testing.T) {
 	}
 	if opts.Personality != "clt" {
 		t.Errorf("expected personality 'clt', got '%s'", opts.Personality)
+	}
+	if opts.Question != "qual o assunto?" {
+		t.Errorf("expected question 'qual o assunto?', got '%s'", opts.Question)
 	}
 }
 
@@ -116,5 +119,140 @@ func TestParseSummarizeOptions_CaseInsensitive(t *testing.T) {
 	}
 	if personality != "clt" {
 		t.Errorf("expected personality 'clt', got '%s'", personality)
+	}
+}
+
+func TestParseSummarizeArgs(t *testing.T) {
+	tests := []struct {
+		name                 string
+		args                 []string
+		defaultCount         int
+		expectedCount        int
+		expectedStyle        string
+		expectedPersonality  string
+		expectedQuestion     string
+		expectedExplicitFlag bool
+	}{
+		{
+			name:                 "empty args uses defaultCount and empty question",
+			args:                 []string{},
+			defaultCount:         300,
+			expectedCount:        300,
+			expectedStyle:        "short",
+			expectedPersonality:  "resumobot",
+			expectedQuestion:     "",
+			expectedExplicitFlag: false,
+		},
+		{
+			name:                 "flags only uses defaultCount",
+			args:                 []string{"--clt", "--longo"},
+			defaultCount:         300,
+			expectedCount:        300,
+			expectedStyle:        "long",
+			expectedPersonality:  "clt",
+			expectedQuestion:     "",
+			expectedExplicitFlag: false,
+		},
+		{
+			name:                 "explicit count only",
+			args:                 []string{"50"},
+			defaultCount:         300,
+			expectedCount:        50,
+			expectedStyle:        "short",
+			expectedPersonality:  "resumobot",
+			expectedQuestion:     "",
+			expectedExplicitFlag: true,
+		},
+		{
+			name:                 "explicit count with question",
+			args:                 []string{"50", "Quem", "falou", "de", "férias?"},
+			defaultCount:         300,
+			expectedCount:        50,
+			expectedStyle:        "short",
+			expectedPersonality:  "resumobot",
+			expectedQuestion:     "Quem falou de férias?",
+			expectedExplicitFlag: true,
+		},
+		{
+			name:                 "explicit count, question, and trailing flags",
+			args:                 []string{"50", "Quem", "falou", "de", "férias?", "--clt", "--longo"},
+			defaultCount:         300,
+			expectedCount:        50,
+			expectedStyle:        "long",
+			expectedPersonality:  "clt",
+			expectedQuestion:     "Quem falou de férias?",
+			expectedExplicitFlag: true,
+		},
+		{
+			name:                 "leading flags, explicit count, and question",
+			args:                 []string{"--clt", "50", "Quem", "falou", "de", "férias?"},
+			defaultCount:         300,
+			expectedCount:        50,
+			expectedStyle:        "short",
+			expectedPersonality:  "clt",
+			expectedQuestion:     "Quem falou de férias?",
+			expectedExplicitFlag: true,
+		},
+		{
+			name:                 "interspersed flags, count, and question",
+			args:                 []string{"--medio", "100", "Qual", "--fl", "foi", "o", "lucro?"},
+			defaultCount:         300,
+			expectedCount:        100,
+			expectedStyle:        "medium",
+			expectedPersonality:  "farialimer",
+			expectedQuestion:     "Qual foi o lucro?",
+			expectedExplicitFlag: true,
+		},
+		{
+			name:                 "no explicit count uses defaultCount and treats all non-flags as question",
+			args:                 []string{"Qual", "foi", "o", "assunto", "principal?"},
+			defaultCount:         300,
+			expectedCount:        300,
+			expectedStyle:        "short",
+			expectedPersonality:  "resumobot",
+			expectedQuestion:     "Qual foi o assunto principal?",
+			expectedExplicitFlag: false,
+		},
+		{
+			name:                 "no explicit count with trailing flags",
+			args:                 []string{"Qual", "o", "assunto?", "--clt"},
+			defaultCount:         300,
+			expectedCount:        300,
+			expectedStyle:        "short",
+			expectedPersonality:  "clt",
+			expectedQuestion:     "Qual o assunto?",
+			expectedExplicitFlag: false,
+		},
+		{
+			name:                 "question containing numbers does not treat inner number as count",
+			args:                 []string{"Quem", "fez", "2", "gols", "ontem?"},
+			defaultCount:         300,
+			expectedCount:        300,
+			expectedStyle:        "short",
+			expectedPersonality:  "resumobot",
+			expectedQuestion:     "Quem fez 2 gols ontem?",
+			expectedExplicitFlag: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			count, style, personality, question, hasExplicit := ParseSummarizeArgs(tt.args, tt.defaultCount)
+			if count != tt.expectedCount {
+				t.Errorf("expected count %d, got %d", tt.expectedCount, count)
+			}
+			if style != tt.expectedStyle {
+				t.Errorf("expected style '%s', got '%s'", tt.expectedStyle, style)
+			}
+			if personality != tt.expectedPersonality {
+				t.Errorf("expected personality '%s', got '%s'", tt.expectedPersonality, personality)
+			}
+			if question != tt.expectedQuestion {
+				t.Errorf("expected question '%s', got '%s'", tt.expectedQuestion, question)
+			}
+			if hasExplicit != tt.expectedExplicitFlag {
+				t.Errorf("expected hasExplicitCount %v, got %v", tt.expectedExplicitFlag, hasExplicit)
+			}
+		})
 	}
 }
