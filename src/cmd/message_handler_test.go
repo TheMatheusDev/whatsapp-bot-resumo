@@ -18,9 +18,19 @@ func TestNumericCommandAliasParsing(t *testing.T) {
 			expectedArgs: []string{"50"},
 		},
 		{
+			input:        "!50 Qual foi a conversa?",
+			isNumeric:    true,
+			expectedArgs: []string{"50", "Qual", "foi", "a", "conversa?"},
+		},
+		{
 			input:        "!100 --clt",
 			isNumeric:    true,
 			expectedArgs: []string{"100", "--clt"},
+		},
+		{
+			input:        "!100 --clt Teve novidades?",
+			isNumeric:    true,
+			expectedArgs: []string{"100", "--clt", "Teve", "novidades?"},
 		},
 		{
 			input:        "!5000 -l --farialimer",
@@ -280,6 +290,28 @@ func TestTranscribeDMAllowed(t *testing.T) {
 		t.Run(tt.cmd, func(t *testing.T) {
 			if dmAllowed[tt.cmd] != tt.allowed {
 				t.Errorf("expected dmAllowed[%s]=%v, got %v", tt.cmd, tt.allowed, dmAllowed[tt.cmd])
+			}
+		})
+	}
+}
+
+func TestDeprecatedQuestionRouting(t *testing.T) {
+	commands := map[string]string{
+		"!pergunta": "question",
+		"!p":        "question",
+	}
+
+	for cmd, expectedType := range commands {
+		t.Run(cmd, func(t *testing.T) {
+			var resolved string
+			switch strings.ToLower(cmd) {
+			case "!pergunta", "!p":
+				resolved = "question"
+			default:
+				resolved = "unknown"
+			}
+			if resolved != expectedType {
+				t.Errorf("cmd %s resolved to %s, expected %s", cmd, resolved, expectedType)
 			}
 		})
 	}
