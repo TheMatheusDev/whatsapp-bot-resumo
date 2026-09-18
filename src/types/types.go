@@ -198,6 +198,7 @@ type WhatsAppService interface {
 	// (e.g. "5521999999999") rather than the LID, so both must be checked.
 	GetBotPhoneUser() string
 	SendMentionMessage(ctx context.Context, chatID watypes.JID, text string, mentionedJIDs []string) error
+	SendPresence(ctx context.Context, state watypes.Presence) error
 	Connect(ctx context.Context) error
 	Disconnect()
 	IsConnected() bool

@@ -3,7 +3,9 @@ package whatsapp
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/mdp/qrterminal/v3"
@@ -12,19 +14,29 @@ import (
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	watypes "go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"google.golang.org/protobuf/proto"
 
 	wstypes "whatsapp-summarizer/src/types"
 )
 
+const (
+	// MinHeartbeatInterval defines the minimum duration between presence heartbeats.
+	MinHeartbeatInterval = 3 * time.Hour
+	// MaxHeartbeatInterval defines the maximum duration between presence heartbeats.
+	MaxHeartbeatInterval = 5 * time.Hour
+)
+
 // Service implements the WhatsAppService interface
 type Service struct {
-	client       *whatsmeow.Client
-	container    *sqlstore.Container
-	logger       wstypes.Logger
-	eventHandler func(interface{})
-	connected    bool
+	client          *whatsmeow.Client
+	container       *sqlstore.Container
+	logger          wstypes.Logger
+	eventHandler    func(interface{})
+	connected       bool
+	heartbeatMu     sync.Mutex
+	heartbeatCancel context.CancelFunc
 }
 
 // NewService creates a new WhatsApp service
@@ -50,12 +62,18 @@ func (s *Service) Initialize(ctx context.Context) error {
 	clientLog := waLog.Stdout("WhatsApp", "WARN", true)
 	s.client = whatsmeow.NewClient(deviceStore, clientLog)
 
+	// Set force active delivery receipts so WhatsApp servers and senders know messages are received (two gray ticks)
+	s.client.SetForceActiveDeliveryReceipts(true)
+
+	// Register internal event handler for connection lifecycle (PresenceAvailable, LoggedOut, heartbeat)
+	s.client.AddEventHandler(s.handleInternalEvent)
+
 	// Add event handler
 	if s.eventHandler != nil {
 		s.client.AddEventHandler(s.eventHandler)
 	}
 
-	s.logger.Info("WhatsApp client initialized")
+	s.logger.Info("WhatsApp client initialized with active delivery receipts")
 	return nil
 }
 
@@ -200,13 +218,110 @@ func (s *Service) EditMessage(chatID types.JID, messageID types.MessageID, newCo
 	return nil
 }
 
+// handleInternalEvent processes WhatsApp connection events to manage presence and keepalive
+func (s *Service) handleInternalEvent(evt interface{}) {
+	switch evt.(type) {
+	case *events.Connected:
+		s.connected = true
+		s.logger.Info("WhatsApp connected event received, updating presence to Available...")
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := s.client.SendPresence(ctx, watypes.PresenceAvailable); err != nil {
+			s.logger.Warn("Failed to send presence on connect", "error", err)
+		} else {
+			s.logger.Info("Presence successfully marked as Available on WhatsApp")
+		}
+		s.startHeartbeat()
+	case *events.LoggedOut:
+		s.connected = false
+		s.stopHeartbeat()
+		s.logger.Error("WhatsApp session logged out from primary phone or unlinked by server")
+	}
+}
+
+// startHeartbeat starts the background presence heartbeat goroutine if not already running
+func (s *Service) startHeartbeat() {
+	s.heartbeatMu.Lock()
+	defer s.heartbeatMu.Unlock()
+	if s.heartbeatCancel != nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.heartbeatCancel = cancel
+	go s.runPresenceHeartbeat(ctx)
+}
+
+// stopHeartbeat stops the background presence heartbeat goroutine
+func (s *Service) stopHeartbeat() {
+	s.heartbeatMu.Lock()
+	defer s.heartbeatMu.Unlock()
+	if s.heartbeatCancel != nil {
+		s.heartbeatCancel()
+		s.heartbeatCancel = nil
+	}
+}
+
+// randomDuration generates a pseudo-random duration between min and max
+func randomDuration(min, max time.Duration) time.Duration {
+	if max <= min {
+		return min
+	}
+	delta := max - min
+	return min + time.Duration(rand.Int63n(int64(delta)))
+}
+
+// runPresenceHeartbeat periodically updates presence to PresenceAvailable at random intervals (3h to 5h)
+func (s *Service) runPresenceHeartbeat(ctx context.Context) {
+	s.logger.Info("Starting periodic WhatsApp presence heartbeat (random 3h to 5h interval)")
+	for {
+		interval := randomDuration(MinHeartbeatInterval, MaxHeartbeatInterval)
+		s.logger.Debug("Next presence heartbeat scheduled", "interval", interval.String())
+
+		select {
+		case <-ctx.Done():
+			s.logger.Debug("Presence heartbeat loop stopped")
+			return
+		case <-time.After(interval):
+			if !s.IsConnected() {
+				s.logger.Debug("Presence heartbeat skipped: client not connected")
+				continue
+			}
+			opCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			s.logger.Info("Executing periodic presence heartbeat: sending PresenceAvailable...")
+			if err := s.client.SendPresence(opCtx, watypes.PresenceAvailable); err != nil {
+				s.logger.Warn("Failed to send periodic presence", "error", err)
+			} else {
+				s.logger.Info("Periodic presence heartbeat completed successfully")
+			}
+			cancel()
+		}
+	}
+}
+
 // Disconnect disconnects from WhatsApp
 func (s *Service) Disconnect() {
+	s.stopHeartbeat()
 	if s.client != nil {
+		if s.connected {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = s.client.SendPresence(ctx, watypes.PresenceUnavailable)
+			cancel()
+		}
 		s.client.Disconnect()
 		s.connected = false
 		s.logger.Info("Disconnected from WhatsApp")
 	}
+}
+
+// SendPresence updates the client's presence status on WhatsApp
+func (s *Service) SendPresence(ctx context.Context, state watypes.Presence) error {
+	if s.client == nil {
+		return fmt.Errorf("client not initialized")
+	}
+	if !s.connected {
+		return fmt.Errorf("not connected to WhatsApp")
+	}
+	return s.client.SendPresence(ctx, state)
 }
 
 // IsConnected returns the connection status
